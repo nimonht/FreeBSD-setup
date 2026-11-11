@@ -1,0 +1,51 @@
+{
+    "general": {
+        "apps": {
+            "terminal": [
+                "foot"
+            ],
+            "audio": [
+                "pavucontrol"
+            ],
+            "explorer": [
+                "thunar"
+            ]
+        },
+        "idle": {
+            "timeouts": [
+                {
+                    "timeout": 300,
+                    "idleAction": "lock"
+                },
+                {
+                    "timeout": 600,
+                    "idleAction": "dpms off",
+                    "returnAction": "dpms on"
+                }
+            ]
+        }
+    },
+    "session": {
+        "commands": {
+            "logout": [
+                "hyprctl",
+                "dispatch",
+                "exit"
+            ],
+            "shutdown": [
+                "shutdown",
+                "-p",
+                "now"
+            ],
+            "hibernate": [
+                "doas",
+                "zzz"
+            ],
+            "reboot": [
+                "shutdown",
+                "-r",
+                "now"
+            ]
+        }
+    }
+}
