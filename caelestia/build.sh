@@ -11,6 +11,7 @@
 #   qt6-m3shapes    -> built from source
 #   /proc/...       -> /compat/linux/proc/... (linprocfs, mounted by linux_enable)
 #   sys/sysmacros.h -> sys/types.h
+#   std::jthread    -> -fexperimental-library (still experimental in FreeBSD's libc++)
 #
 # Run as root (setup.sh does). Environment:
 #   SHELL_REF / CLI_REF   git ref to build ("latest-tag", a tag, branch, commit)
@@ -42,7 +43,7 @@ checkout() {
 		[ -n "$ref" ] || ref=origin/HEAD
 	fi
 	git -C "$2" checkout -q -f "$ref" 2>/dev/null || git -C "$2" checkout -q -f "origin/$ref"
-	git -C "$2" clean -qfdx
+	git -C "$2" clean -qfdx -e build
 	say "$(basename "$2") at $(git -C "$2" describe --tags --always)"
 }
 
@@ -119,9 +120,10 @@ cmake -S "$S" -B "$S/build" -G Ninja \
 	-DSENSORS_LIBRARY="$WORK/shim/lib/libsensors.a" \
 	-DSENSORS_INCLUDE_DIR="$WORK/shim/include" \
 	-DCMAKE_PREFIX_PATH="$PREFIX" \
-	-DCMAKE_CXX_FLAGS="-I$PREFIX/include" \
-	-DCMAKE_SHARED_LINKER_FLAGS="-L$PREFIX/lib" \
-	-DCMAKE_EXE_LINKER_FLAGS="-L$PREFIX/lib" > "$WORK/shell.log" 2>&1 || die "shell configure failed: $WORK/shell.log"
+	-DCMAKE_CXX_FLAGS="-I$PREFIX/include -fexperimental-library" \
+	-DCMAKE_SHARED_LINKER_FLAGS="-L$PREFIX/lib -fexperimental-library" \
+	-DCMAKE_MODULE_LINKER_FLAGS="-L$PREFIX/lib -fexperimental-library" \
+	-DCMAKE_EXE_LINKER_FLAGS="-L$PREFIX/lib -fexperimental-library" > "$WORK/shell.log" 2>&1 || die "shell configure failed: $WORK/shell.log"
 cmake --build "$S/build" -j "$JOBS" >> "$WORK/shell.log" 2>&1 || die "shell build failed: $WORK/shell.log"
 cmake --install "$S/build" >> "$WORK/shell.log" 2>&1 || die "shell install failed: $WORK/shell.log"
 
