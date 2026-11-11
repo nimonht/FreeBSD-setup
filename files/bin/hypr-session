@@ -44,8 +44,11 @@ command -v start-pipewire >/dev/null 2>&1 && start-pipewire
 
 cd "$HOME" || exit 1
 log="$XDG_RUNTIME_DIR/hypr-session.log"
+# start-hyprland is Hyprland's own launcher (crash recovery, safe mode).
+launcher=Hyprland
+command -v start-hyprland >/dev/null 2>&1 && launcher=start-hyprland
 if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-	exec dbus-run-session -- Hyprland "$@" >"$log" 2>&1
+	exec dbus-run-session -- "$launcher" "$@" >"$log" 2>&1
 else
-	exec Hyprland "$@" >"$log" 2>&1
+	exec "$launcher" "$@" >"$log" 2>&1
 fi

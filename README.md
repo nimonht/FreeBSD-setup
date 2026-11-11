@@ -32,13 +32,13 @@ I could not run anything on your laptop, so here is exactly where this stands.
 | Part | Status |
 | --- | --- |
 | `zfs-install.sh`: partitioning into free space, pool, datasets, base system, loader on a shared ESP | **Tested** in a FreeBSD 15.1 UEFI virtual machine on a disk that already had an ESP, a "Linux" and a "Windows" partition. Existing partitions and ESP files were verified untouched. |
-| Limine → FreeBSD chainload entry | See [Test results](#test-results). |
-| `setup.sh` stages (packages, config files, snapshots, login manager) | See [Test results](#test-results). Every package name was checked against the live FreeBSD 15 `latest` repository. |
-| Caelestia shell + CLI build on FreeBSD | See [Test results](#test-results). |
+| Limine → FreeBSD chainload entry | **Tested** in the same VM: Limine 10.8.5 → `FreeBSD` entry → FreeBSD loader → ZFS root → login prompt. |
+| `setup.sh` stages `base system zfs gpu audio desktop caelestia gaming finish` | **Tested** in the VM: all complete without errors, packages install from the FreeBSD 15 `latest` repository, snapshots and boot environments work. `apps` and `kde` were not run (package names checked only; Plasma is currently missing from the `latest` branch and `setup.sh` reports that instead of failing). |
+| Caelestia shell 2.5.0 + CLI 1.1.3 build on FreeBSD | **Tested**: compiles, installs, `caelestia scheme set` works, and Hyprland accepts the Caelestia Lua config. |
 | Intel HD 630 as the display GPU | Untested here, but this is the standard, well-supported path (`drm-kmod`, `i915kms`). |
 | GTX 1050 as secondary GPU (`nvrun`), Steam on NVIDIA | **Untested on hardware.** The driver packages exist and install; whether render offload works under Wayland on this exact machine has to be tried. `GPU_MODE="intel"` is the safe fallback. |
 | Wi-Fi, touchpad, suspend/resume, keyboard backlight, webcam | **Untested on hardware.** Depends on the exact parts in your unit; see [Hardware notes](#hardware-notes). |
-| Caelestia at runtime (how it looks and behaves) | **Not verified visually.** Some panels cannot work on FreeBSD at all; see [What does not work](#what-does-not-work-on-freebsd). |
+| Hyprland and Caelestia actually drawing on a screen | **Not verified.** The test VM has no GPU, so Hyprland stops at graphics initialisation there. Some panels cannot work on FreeBSD at all; see [What does not work](#what-does-not-work-on-freebsd). |
 
 Caelestia is written for Arch Linux and has no FreeBSD port. This repo builds
 it from source with small compatibility shims. Expect rough edges, and expect
@@ -399,7 +399,35 @@ the space.
 
 ## Test results
 
-<!-- TEST-RESULTS -->
+Everything was run on FreeBSD 15.1-RELEASE (amd64, UEFI) in an emulated
+machine without a GPU, in November 2026.
+
+- **Installer**: target disk prepared with an ESP (containing stand-in
+  Windows and Limine files), a "Linux" partition, a "Windows" partition and
+  three separate free regions. `zfs-install.sh` placed ZFS + swap in the
+  largest region, left the other partitions and the ESP files byte-identical,
+  and appended the firmware entry after the existing boot order. It also
+  refuses to run when the free space is too small, when the pool name is
+  taken, or when it was started a second time.
+- **Boot**: that disk, with a real Limine 10.8.5 as `BOOTX64.EFI` and
+  `limine/freebsd.conf` appended to `limine.conf`, boots to the FreeBSD login
+  prompt on the ZFS root.
+- **setup.sh**: stages listed in the table above finish with exit status 0.
+  Checked afterwards: `loader.conf`, `rc.conf` (`kld_list` =
+  `fusefs i915kms nvidia-modeset nvidia-drm`), sysctls valid, groups, the
+  `pre-setup` boot environment, automatic snapshots firing, `snap`,
+  `brightnessctl`, the `ly` entry in `/etc/ttys`, seatd running,
+  matching `nvidia-driver-580`/`nvidia-kmod-580` versions.
+- **Caelestia**: the first build failed on `std::jthread` (experimental in
+  FreeBSD's C++ library); fixed with `-fexperimental-library`, the same flag
+  the FreeBSD Hyprland port uses. The lm-sensors shim, the static cavacore
+  library and M3Shapes build cleanly.
+- **Not possible in that VM**: loading `i915kms`/`nvidia` on real hardware,
+  rendering, audio output, Wi-Fi, suspend, Steam.
+
+If something on the real laptop behaves differently from this guide, the
+first places to look are `/var/log/freebsd-setup.log`,
+`$XDG_RUNTIME_DIR/hypr-session.log` and [TROUBLESHOOTING](docs/TROUBLESHOOTING.md).
 
 ## Sources
 
