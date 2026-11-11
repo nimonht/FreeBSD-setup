@@ -324,11 +324,18 @@ ls -l "$MNT/boot/efi/EFI/freebsd/"
 
 if [ "$EFI_ENTRY" = yes ]; then
 	OLD_ORDER=$(efibootmgr | awk -F': *' '/^BootOrder/{gsub(/ /,"",$2); print $2}')
+	# An entry left over from an earlier attempt would otherwise be duplicated.
+	for _b in $(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}\*? FreeBSD$/{sub(/^[ +]*Boot/,""); sub(/\*.*/,""); print $1}'); do
+		efibootmgr -B -b "$_b" >/dev/null 2>&1 || true
+	done
+	OLD_ORDER=$(efibootmgr | awk -F': *' '/^BootOrder/{gsub(/ /,"",$2); print $2}')
 	if efibootmgr -c -a -l "$MNT/boot/efi/EFI/freebsd/loader.efi" -L FreeBSD >/dev/null 2>&1; then
 		NEW=$(efibootmgr | awk '/FreeBSD$/ || / FreeBSD /{sub(/^[ +]*Boot/,""); sub(/\*.*/,""); print $1}' | tail -1)
 		# Put the old order back in front; FreeBSD goes last.
 		if [ -n "$OLD_ORDER" ] && [ -n "$NEW" ]; then
-			efibootmgr -o "$OLD_ORDER,$NEW" >/dev/null 2>&1 || warn "could not restore the boot order; check it in the firmware setup"
+			# (drop $NEW from the old list first, in case the number was reused)
+			OLD_ORDER=$(echo "$OLD_ORDER" | tr ',' '\n' | grep -vx "$NEW" | paste -sd, -)
+			efibootmgr -o "${OLD_ORDER:+$OLD_ORDER,}$NEW" >/dev/null 2>&1 || warn "could not restore the boot order; check it in the firmware setup"
 		fi
 		efibootmgr | grep -E '^BootOrder|FreeBSD'
 	else
