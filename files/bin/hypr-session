@@ -1,0 +1,51 @@
+#!/bin/sh
+# hypr-session - start Hyprland with the environment a FreeBSD desktop needs.
+# Used by the login manager entry "Hyprland (Caelestia)"; also runnable from
+# a console login. Put personal overrides in ~/.config/hypr-session.env.
+
+export LANG="${LANG:-en_US.UTF-8}"
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_DESKTOP=Hyprland
+export XDG_CONFIG_DIRS="/usr/local/etc/xdg:/etc/xdg"
+export XDG_DATA_DIRS="/usr/local/share:/usr/share"
+export MOZ_ENABLE_WAYLAND=1
+export QT_QPA_PLATFORMTHEME=qt6ct
+
+# pam_xdg normally provides this; fall back for unusual login paths.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "$XDG_RUNTIME_DIR" ]; then
+	XDG_RUNTIME_DIR="/tmp/xdg-runtime-$(id -u)"
+	mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+	export XDG_RUNTIME_DIR
+fi
+
+# Caelestia shell: where its helper binary and keyboard layout list live.
+export CAELESTIA_LIB_DIR=/usr/local/lib/caelestia
+export CAELESTIA_XKB_RULES_PATH=/usr/local/share/X11/xkb/rules/base.lst
+
+# Hybrid graphics: make the Intel GPU (the one wired to the panel) primary and
+# keep NVIDIA as a secondary render device.
+intel=; nvidia=
+for i in 0 1 2 3; do
+	name=$(sysctl -n "hw.dri.$i.name" 2>/dev/null) || continue
+	case "$name" in
+	i915*)   [ -z "$intel" ]  && intel="/dev/dri/card$i" ;;
+	nvidia*) [ -z "$nvidia" ] && nvidia="/dev/dri/card$i" ;;
+	esac
+done
+if [ -n "$intel" ] && [ -z "${AQ_DRM_DEVICES:-}" ]; then
+	export AQ_DRM_DEVICES="$intel${nvidia:+:$nvidia}"
+fi
+export LIBVA_DRIVER_NAME="${LIBVA_DRIVER_NAME:-iHD}"
+
+[ -f "$HOME/.config/hypr-session.env" ] && . "$HOME/.config/hypr-session.env"
+
+command -v start-pipewire >/dev/null 2>&1 && start-pipewire
+
+cd "$HOME" || exit 1
+log="$XDG_RUNTIME_DIR/hypr-session.log"
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+	exec dbus-run-session -- Hyprland "$@" >"$log" 2>&1
+else
+	exec Hyprland "$@" >"$log" 2>&1
+fi

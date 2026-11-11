@@ -1,0 +1,42 @@
+#!/bin/sh
+# sysup - upgrade packages and the base system with a safety net.
+#
+# Creates a ZFS boot environment first. If the upgraded system misbehaves,
+# pick the old environment in the FreeBSD boot menu ("Boot Environments"),
+# or run:  bectl activate <name> && reboot
+#
+#   sysup            upgrade packages + base system patches
+#   sysup -p         packages only
+#   sysup -k N       keep the N newest pre-upgrade environments (default 5)
+set -eu
+[ "$(id -u)" -eq 0 ] || exec doas "$0" "$@"
+
+KEEP=5; BASE=yes
+while getopts pk: o; do
+	case $o in p) BASE=no ;; k) KEEP=$OPTARG ;; *) exit 2 ;; esac
+done
+
+BE="pre-upgrade-$(date +%Y%m%d-%H%M)"
+bectl create "$BE"
+echo "==> boot environment $BE created"
+
+echo "==> pkg upgrade"
+pkg update
+pkg upgrade
+
+if [ "$BASE" = yes ]; then
+	echo "==> freebsd-update"
+	freebsd-update fetch
+	freebsd-update install || true
+fi
+
+# Prune old automatic environments, never the active ones.
+bectl list -H | awk '$1 ~ /^pre-upgrade-/ && $2 == "-" {print $1}' | sort -r | tail -n +$((KEEP + 1)) |
+while read -r old; do
+	echo "==> removing old boot environment $old"
+	bectl destroy -o "$old"
+done
+
+echo
+echo "Done. Reboot if the kernel, drivers (drm/nvidia) or the base system changed."
+echo "Roll back with: bectl activate $BE && reboot"
