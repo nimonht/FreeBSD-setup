@@ -107,13 +107,14 @@ echo "PASS: installer"
 python3 - "$W/boot-steps.json" "$USERNAME" "$USER_PASSWORD" "${DISK_SETUP:-}" "${ENCRYPT:-no}" "${ENCRYPT_PASSPHRASE:-}" <<'PY'
 import json, sys
 out, user, pw, setup, enc, encpw = sys.argv[1:7]
-checks = ("echo CHECKS-BEGIN; freebsd-version; zfs list -H -o name | head -3; "
+# printf, not echo: the marker must not appear in the echo of the typed command
+checks = ("printf 'CHECKS-%s\\n' BEGIN; freebsd-version; zfs list -H -o name | head -3; "
           "kenv -q vfs.root.mountfrom; geli status 2>/dev/null; "
           "sysrc -n hostname sddm_enable pf_enable cupsd_enable 2>/dev/null; "
           "pkg -N >/dev/null 2>&1 && pkg info -q plasma6-plasma firefox cups hyprland 2>/dev/null; "
           "ls /usr/local/share/wayland-sessions 2>/dev/null; command -v caelestia Hyprland startplasma-wayland sddm ly fcitx5 steam-setup 2>/dev/null; "
           "grep -c WARNING /var/log/freebsd-setup.log; tail -3 /var/log/freebsd-setup.log; "
-          "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; echo CHECKS-DONE\r")
+          "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; printf 'CHECKS-%s\\n' DONE\r")
 steps = []
 if setup == "dualboot":
     steps.append([r"FreeBSD", "\x1b[B\r", 600])            # Limine menu: FreeBSD entry
@@ -152,7 +153,7 @@ kill "$(cat "$W/qemu2.pid")" 2>/dev/null || true
 # Judge on the text without terminal escape codes (boot menus draw with them).
 tr -d '\r' < "$W/boot.log" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g' > "$W/boot.txt"
 [ "$rc" -eq 0 ] && grep -a -q 'CHECKS-DONE' "$W/boot.txt" || { echo "FAIL: boot test (see $W/boot.txt)"; exit 1; }
-sed -n '/^CHECKS-BEGIN/,/^CHECKS-DONE/p' "$W/boot.txt" | grep -av 'CHECKS-'
+sed -n '/^CHECKS-BEGIN/,/^CHECKS-DONE/p' "$W/boot.txt" | grep -av 'CHECKS-' || true
 if [ "${DISK_SETUP:-}" = dualboot ]; then
 	grep -a -q 'Other OS (stand-in)' "$W/boot.txt" || { echo "FAIL: chainloading from FreeBSD's menu"; exit 1; }
 	echo "PASS: boot through Limine, login, and chainload from FreeBSD's menu"
