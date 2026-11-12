@@ -77,6 +77,15 @@ if [ "$UI_MODE" = auto ] && [ -z "$CONFIG_FILE" ]; then
 	die "unattended mode needs --config FILE with the answers"
 fi
 
+# Extra CA for networks with a TLS-intercepting proxy: SSL_CA_CERT_FILE
+# replaces the whole trust store, so merge it with the system's own CAs.
+EXTRA_CA=""
+if [ -n "${SSL_CA_CERT_FILE:-}" ] && [ -f "$SSL_CA_CERT_FILE" ]; then
+	EXTRA_CA=$SSL_CA_CERT_FILE
+	cat /etc/ssl/cert.pem "$EXTRA_CA" > /tmp/fbs-ca-bundle.pem 2>/dev/null &&
+		export SSL_CA_CERT_FILE=/tmp/fbs-ca-bundle.pem
+fi
+
 # Where the base system comes from: this FreeBSD version, release sets.
 REL=$(uname -r | sed 's/-p[0-9]*$//')
 DIST_URL="https://download.freebsd.org/releases/amd64/$REL"
@@ -216,7 +225,11 @@ The only option on this disk is to ERASE it completely."
 	fi
 }
 
-valid_user() { echo "$1" | grep -Eq '^[a-z_][a-z0-9_-]{0,15}$' && ! id "$1" >/dev/null 2>&1; }
+# A login name: valid characters, and not one of the system's own accounts.
+valid_user() {
+	echo "$1" | grep -Eq '^[a-z_][a-z0-9_-]{0,15}$' || return 1
+	! awk -F: -v u="$1" '$1 == u && ($3 < 1000 || $3 >= 65530) { f = 1 } END { exit !f }' /etc/passwd
+}
 
 ask_account() {
 	[ "$UI_MODE" = auto ] && { [ -n "$USERNAME" ] && [ -n "$USER_PASSWORD" ] || die "the config file must set USERNAME and USER_PASSWORD"; }
@@ -225,6 +238,7 @@ ask_account() {
 	while :; do
 		USERNAME=$(ui_input "Your account" "Login name (lower case, no spaces):" "${USERNAME:-$_sug}") || exit 1
 		valid_user "$USERNAME" && break
+		[ "$UI_MODE" = auto ] && die "USERNAME '$USERNAME' cannot be used (invalid or a system account)"
 		ui_msg "Your account" "'$USERNAME' cannot be used: use lower-case letters, digits, - or _, starting with a letter, and not a system name such as root or operator."
 	done
 	[ "$UI_MODE" = auto ] || while :; do
@@ -545,9 +559,9 @@ EOF
 	echo "$TIMEZONE" > "$MNT/var/db/zoneinfo"
 	[ "$RTC_LOCAL" = yes ] && touch "$MNT/etc/wall_cmos_clock"
 	# A TLS-intercepting proxy (company networks) needs its CA in the new system.
-	if [ -n "${SSL_CA_CERT_FILE:-}" ] && [ -f "$SSL_CA_CERT_FILE" ]; then
+	if [ -n "$EXTRA_CA" ]; then
 		mkdir -p "$MNT/usr/local/share/certs"
-		awk -v d="$MNT/usr/local/share/certs" '/BEGIN CERT/ { n++ } { print > (d "/fbs-extra-ca-" n ".pem") }' "$SSL_CA_CERT_FILE"
+		awk -v d="$MNT/usr/local/share/certs" '/BEGIN CERT/ { n++ } { print > (d "/fbs-extra-ca-" n ".pem") }' "$EXTRA_CA"
 		chroot "$MNT" certctl rehash >> "$LOG" 2>&1 || true
 	fi
 }
