@@ -7,6 +7,7 @@
 #
 # Needs: qemu-system-x86_64, OVMF (UEFI firmware), genisoimage, python3.
 # Works without KVM (slow: the KDE install takes a few hours under emulation).
+# Memory: 4 GB for the install VM (VM_MEM=...), 2 GB for the boot test.
 # Optional:
 #   EXTRA_CA=/path/ca.pem   for networks with a TLS-intercepting proxy
 #   DISK_SETUP=dualboot     start from a disk that looks like a Windows/Linux
@@ -79,7 +80,7 @@ steps = [
 json.dump(steps, open(out, "w"))
 PY
 
-qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 4 -m 6G \
+qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 3 -m "${VM_MEM:-4G}" \
 	-drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -drive if=pflash,format=raw,file="$W/vars.fd" \
 	-drive file="$TARGET",format=$FMT,if=virtio,cache=unsafe,discard=unmap,detect-zeroes=unmap \
 	-drive file="$W/cfg.iso",if=virtio,format=raw,readonly=on \
@@ -140,7 +141,7 @@ json.dump(steps, open(out, "w"))
 PY
 # Keep the NVRAM the installer wrote (its "FreeBSD" entry), as on a real PC.
 cp "$W/vars.fd" "$W/vars2.fd"
-qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2 -m 3G \
+qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2 -m 2G \
 	-drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -drive if=pflash,format=raw,file="$W/vars2.fd" \
 	-drive file="$TARGET",format=$FMT,if=virtio,cache=unsafe \
 	-netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
