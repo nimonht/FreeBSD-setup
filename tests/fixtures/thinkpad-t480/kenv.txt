@@ -1,0 +1,4 @@
+smbios.system.maker="LENOVO"
+smbios.system.product="20L5CTO1WW"
+smbios.system.version="ThinkPad T480"
+smbios.chassis.type="Notebook"

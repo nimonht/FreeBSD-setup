@@ -1,0 +1,8 @@
+hostb0@pci0:0:0:0:	class=0x060000 rev=0x01 hdr=0x00 vendor=0x8086 device=0x5910 subvendor=0x8086 subdevice=0x0001
+    vendor     = 'Intel Corporation'
+    device     = 'Host Bridge'
+    class      = bridge
+vgapci0@pci0:1:0:0:	class=0x030000 rev=0x01 hdr=0x00 vendor=0x10de device=0x1187 subvendor=0x10de subdevice=0x0001
+    vendor     = 'NVIDIA Corporation'
+    device     = 'GK104 [GeForce GTX 760]'
+    class      = display

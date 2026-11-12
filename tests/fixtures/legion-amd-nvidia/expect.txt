@@ -1,0 +1,9 @@
+HW_GPU_PRIMARY=amd
+HW_GPU_HYBRID=yes
+HW_NVIDIA_BRANCH=current
+HW_AMD_KMOD=amdgpu
+HW_DESKTOP=yes
+HW_ACPI_KMOD=
+report:modern standby
+report:firmware package
+report:gpu-run

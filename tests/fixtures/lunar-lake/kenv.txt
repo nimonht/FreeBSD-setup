@@ -1,0 +1,3 @@
+smbios.system.maker="Dell Inc."
+smbios.system.product="XPS 13 9350"
+smbios.chassis.type="Notebook"

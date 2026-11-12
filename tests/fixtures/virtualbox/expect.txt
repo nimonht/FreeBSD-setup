@@ -1,0 +1,6 @@
+HW_VM=virtualbox
+HW_GPU_PRIMARY=vm
+HW_DESKTOP=no
+HW_LAPTOP=no
+report:Virtual machine: virtualbox
+report:cannot run

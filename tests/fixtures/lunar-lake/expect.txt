@@ -1,0 +1,4 @@
+HW_DESKTOP=no
+HW_GPU_PRIMARY=intel
+report:needs the newer Intel 'xe' driver
+report:has no driver (Intel

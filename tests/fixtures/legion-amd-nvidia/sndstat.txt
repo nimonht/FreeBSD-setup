@@ -1,0 +1,2 @@
+Installed devices:
+pcm0: <Realtek ALC287 (Analog 2.0+HP/2.0)> (play/rec) default

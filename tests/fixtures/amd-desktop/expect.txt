@@ -1,0 +1,8 @@
+HW_GPU_PRIMARY=amd
+HW_AMD_KMOD=amdgpu
+HW_DESKTOP=yes
+HW_LAPTOP=no
+HW_CPU_VENDOR=amd
+HW_ACPI_KMOD=
+report:realtek-re-kmod
+report:Wi-Fi: Intel Corporation Wi-Fi 6 AX200 (iwlwifi0)
