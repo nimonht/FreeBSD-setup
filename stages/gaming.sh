@@ -23,3 +23,5 @@ loader_set kern.maxproc 20000
 
 install_file "$REPO_DIR/files/bin/steam-setup" /usr/local/bin/steam-setup 755
 say "to finish Steam, run 'steam-setup' once as $TARGET_USER from a terminal in the desktop"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

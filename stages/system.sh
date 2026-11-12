@@ -70,3 +70,5 @@ is_live && { service devfs restart >> "$LOG" 2>&1 || true; }
 # brightnessctl look-alike on top of backlight(8): Caelestia and many
 # Wayland tools call brightnessctl.
 install_file "$REPO_DIR/files/bin/brightnessctl" /usr/local/bin/brightnessctl 755
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

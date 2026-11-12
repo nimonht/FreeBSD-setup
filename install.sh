@@ -644,7 +644,9 @@ do_boot() {
 	fi
 	if [ "$INSTALL_MODE" = erase ]; then
 		_bi=$(gpart show -l "$INSTALL_DISK" | awk '$4 == "fbsd-boot" { print $3 }')
-		[ -n "$_bi" ] && run gpart bootcode -b "$MNT/boot/pmbr" -p "$MNT/boot/gptzfsboot" -i "$_bi" "$INSTALL_DISK"
+		if [ -n "$_bi" ]; then
+			run gpart bootcode -b "$MNT/boot/pmbr" -p "$MNT/boot/gptzfsboot" -i "$_bi" "$INSTALL_DISK"
+		fi
 	fi
 }
 
@@ -759,13 +761,21 @@ do_boot
 do_setup
 do_finish
 
+# (Built with ifs: under set -e a failing $(...) in an assignment would end
+# the script right here.)
 _done="FreeBSD is installed.
 
-Remove the USB stick and restart the computer.$( [ "$INSTALL_MODE" = alongside ] && [ "$BOOT_DEFAULT" != freebsd ] && echo "
+Remove the USB stick and restart the computer."
+if [ "$INSTALL_MODE" = alongside ] && [ "$BOOT_DEFAULT" != freebsd ]; then
+	_done="$_done
 Start FreeBSD from:${BOOT_SUMMARY:-
-  - the firmware boot menu}")$( [ -n "$WARNINGS" ] && echo "
+  - the firmware boot menu}"
+fi
+if [ -n "$WARNINGS" ]; then
+	_done="$_done
 
-Things that need attention:$WARNINGS")"
+Things that need attention:$WARNINGS"
+fi
 ui_msg "Done" "$_done"
 printf '%s\n' "$_done"
 if [ "$UI_MODE" != auto ] && ui_yesno "Restart" "Restart now?" yes; then shutdown -r now; fi

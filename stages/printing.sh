@@ -19,3 +19,5 @@ if [ "$WANT_HYPR" = yes ]; then
 	pkg_try system-config-printer simple-scan
 fi
 say "printers: open http://localhost:631 or your desktop's printer settings; most network printers are found automatically"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

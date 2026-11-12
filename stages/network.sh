@@ -18,3 +18,5 @@ done
 if [ "$WANT_KDE" = yes ]; then
 	pkg_try networkmgr
 fi
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

@@ -29,3 +29,5 @@ case "${DESKTOP_LANGUAGE:-}" in
 esac
 chown -R "$TARGET_USER" "$_cfg"
 say "KDE Plasma installed - choose 'Plasma (Wayland)' at the login screen"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

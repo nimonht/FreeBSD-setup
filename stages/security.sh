@@ -25,3 +25,5 @@ sysctl_set kern.randompid 1
 sysctl_set security.bsd.unprivileged_read_msgbuf 0
 sysctl_set security.bsd.hardlink_check_uid 1
 sysctl_set security.bsd.hardlink_check_gid 1
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

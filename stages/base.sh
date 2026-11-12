@@ -90,3 +90,5 @@ if [ -n "${KEYBOARD_LAYOUT:-}" ]; then
 	_km=$(wiz_layout_keymap "$KEYBOARD_LAYOUT")
 	[ -n "$_km" ] && [ -f "/usr/share/vt/keymaps/$_km" ] && sysrc keymap="${_km%.kbd}" >/dev/null
 fi
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)
