@@ -29,28 +29,29 @@ tr|tr.kbd|Turkish
 gr|gr.kbd|Greek
 jp|jp.kbd|Japanese'
 
-# Languages: language code | system locale | label. When FreeBSD has no
-# system locale for a language, desktops still show their translations
-# through LANGUAGE (see stages/base.sh).
+# Languages: language code | system locale | label (ASCII only: the install
+# media's text console cannot show other scripts). When FreeBSD has no system
+# locale for a language, desktops still show their translations through
+# LANGUAGE (see stages/base.sh).
 WIZ_LANGS='en|en_US.UTF-8|English
-vi|en_US.UTF-8|Tiếng Việt (Vietnamese)
-de|de_DE.UTF-8|Deutsch
-fr|fr_FR.UTF-8|Français
-es|es_ES.UTF-8|Español
-pt-br|pt_BR.UTF-8|Português (Brasil)
-pt|pt_PT.UTF-8|Português
-it|it_IT.UTF-8|Italiano
-nl|nl_NL.UTF-8|Nederlands
-pl|pl_PL.UTF-8|Polski
-cs|cs_CZ.UTF-8|Čeština
-sv|sv_SE.UTF-8|Svenska
-tr|tr_TR.UTF-8|Türkçe
-ru|ru_RU.UTF-8|Русский
-uk|uk_UA.UTF-8|Українська
-zh-cn|zh_CN.UTF-8|简体中文
-zh-tw|zh_TW.UTF-8|繁體中文
-ja|ja_JP.UTF-8|日本語
-ko|ko_KR.UTF-8|한국어'
+vi|en_US.UTF-8|Vietnamese (Tieng Viet)
+de|de_DE.UTF-8|German (Deutsch)
+fr|fr_FR.UTF-8|French (Francais)
+es|es_ES.UTF-8|Spanish (Espanol)
+pt-br|pt_BR.UTF-8|Portuguese, Brazil (Portugues)
+pt|pt_PT.UTF-8|Portuguese, Portugal (Portugues)
+it|it_IT.UTF-8|Italian (Italiano)
+nl|nl_NL.UTF-8|Dutch (Nederlands)
+pl|pl_PL.UTF-8|Polish (Polski)
+cs|cs_CZ.UTF-8|Czech (Cestina)
+sv|sv_SE.UTF-8|Swedish (Svenska)
+tr|tr_TR.UTF-8|Turkish (Turkce)
+ru|ru_RU.UTF-8|Russian
+uk|uk_UA.UTF-8|Ukrainian
+zh-cn|zh_CN.UTF-8|Chinese, Simplified
+zh-tw|zh_TW.UTF-8|Chinese, Traditional
+ja|ja_JP.UTF-8|Japanese
+ko|ko_KR.UTF-8|Korean'
 
 wiz_layout_keymap() { printf '%s\n' "$WIZ_LAYOUTS" | awk -F'|' -v k="$1" '$1 == k { print $2; exit }'; }
 wiz_lang_locale()   { printf '%s\n' "$WIZ_LANGS" | awk -F'|' -v k="$1" '$1 == k { print $2; exit }'; }
