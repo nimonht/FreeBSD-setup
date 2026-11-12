@@ -143,7 +143,13 @@ install_file() { install -m "${3:-644}" "$1" "$2"; }
 
 # --------------------------------------------------------------- the user ---
 
-as_user() { su -l "$TARGET_USER" -c "$*"; }
+# as_user command   run a shell command as the desktop user, in their home.
+# Not a login shell, and never attached to the terminal: a login shell runs
+# ~/.profile, whose resizewin(1) touches the terminal from a background
+# process group, and the kernel then stops (suspends) su for good.
+as_user() {
+	su "$TARGET_USER" -c "cd ~ && PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin && $*" < /dev/null
+}
 
 # user_file src dest-relative-to-home   copy into the user's home, never
 # overwriting a file they already have
