@@ -29,14 +29,14 @@ _hw_sysctl() {
 	if [ -n "${HW_FIXTURES:-}" ]; then
 		_hw_file sysctl.txt | awk -v k="$1" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }'
 	else
-		sysctl -n "$1" 2>/dev/null
+		sysctl -n "$1" 2>/dev/null || true
 	fi
 }
 _hw_kenv() {
 	if [ -n "${HW_FIXTURES:-}" ]; then
 		_hw_file kenv.txt | awk -v k="$1" 'index($0, k "=") == 1 { v = substr($0, length(k) + 2); gsub(/^"|"$/, "", v); print v; exit }'
 	else
-		kenv -q "$1" 2>/dev/null
+		kenv -q "$1" 2>/dev/null || true
 	fi
 }
 _hw_sndstat() { if [ -n "${HW_FIXTURES:-}" ]; then _hw_file sndstat.txt; else cat /dev/sndstat 2>/dev/null; fi; }

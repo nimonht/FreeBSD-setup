@@ -76,3 +76,5 @@ chown -R "$TARGET_USER" "$CFG" "$TARGET_HOME/Pictures"
 # a broken fish config can never lock you out.
 as_user 'caelestia scheme set -n caelestia' >> "$LOG" 2>&1 ||
 	say "colour scheme will be initialised on first login"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

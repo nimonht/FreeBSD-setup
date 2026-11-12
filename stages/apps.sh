@@ -11,7 +11,7 @@ if is_yes INSTALL_APPS; then
 	""|en) ;;
 	*)	_lo=$DESKTOP_LANGUAGE
 		case "$_lo" in pt-br) _lo=pt_BR ;; zh-cn) _lo=zh_CN ;; zh-tw) _lo=zh_TW ;; esac
-		pkg_has "$_lo-libreoffice" && pkg_try "$_lo-libreoffice" ;;
+		if pkg_has "$_lo-libreoffice"; then pkg_try "$_lo-libreoffice"; fi ;;
 	esac
 fi
 
@@ -20,3 +20,5 @@ if is_yes INSTALL_DEVTOOLS; then
 	pkg_install git gmake cmake ninja pkgconf python3 node npm
 	pkg_try vscode
 fi
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

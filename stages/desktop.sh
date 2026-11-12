@@ -85,3 +85,5 @@ TAB
 none)
 	say "no login screen: log in on the console and type 'startplasma' or 'hypr-session'" ;;
 esac
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

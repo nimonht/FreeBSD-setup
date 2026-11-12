@@ -85,7 +85,7 @@ if in_list nvidia $GPU_DRIVERS && [ "$NVIDIA_BRANCH" != none ]; then
 			pkg_install "$_drmpkg"
 			# The kernel module, DRM module and userland must be one version.
 			_dv=$(pkg query %v "$NVIDIA_PKG" 2>/dev/null | sed 's/[_,].*//')
-			_kv=$(pkg query %v "nvidia-kmod${NVIDIA_PKG#nvidia-driver}" 2>/dev/null)
+			_kv=$(pkg query %v "nvidia-kmod${NVIDIA_PKG#nvidia-driver}" 2>/dev/null || true)
 			case "$_kv" in "$_dv"*) ;; *) warn "$NVIDIA_PKG ($_dv) and its kernel module ($_kv) differ - run 'pkg upgrade' until they match" ;; esac
 			loader_set hw.nvidiadrm.modeset 1
 			kld_add nvidia-modeset nvidia-drm
@@ -136,3 +136,5 @@ if [ -n "$HW_WEBCAM" ]; then
 	svc webcamd
 	pw groupmod webcamd -m "$TARGET_USER" 2>/dev/null || true
 fi
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

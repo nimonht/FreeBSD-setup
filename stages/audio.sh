@@ -21,3 +21,5 @@ DESK
 # Laptop speakers vs headphones: pick the analog device automatically.
 sysctl_set hw.snd.default_auto 1
 say "list sound devices with 'cat /dev/sndstat'; choose one with 'sysctl hw.snd.default_unit=N'"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

@@ -54,3 +54,5 @@ if [ ! -f "$_cfg/fcitx5/profile" ]; then
 	} > "$_cfg/fcitx5/profile"
 fi
 chown -R "$TARGET_USER" "$_cfg"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)
