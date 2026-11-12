@@ -17,6 +17,8 @@
 #   SHELL_REF / CLI_REF   git ref to build ("latest-tag", a tag, branch, commit)
 #   WORK                  build directory (default /var/tmp/caelestia-build)
 set -eu
+# Never wait for a password prompt: everything is fetched from public URLs.
+export GIT_TERMINAL_PROMPT=0
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 WORK="${WORK:-/var/tmp/caelestia-build}"

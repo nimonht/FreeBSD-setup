@@ -83,6 +83,11 @@ serial console, checks run on the installed system.
 - The setup stages were started in the new system with `SSL_CA_CERT_FILE`
   set to an empty string, which makes FreeBSD's fetch library reject every
   HTTPS certificate: **every install would have ended without a desktop**.
+- The desktop stage hung forever whenever the setup ran from a console
+  (always, in the installer): commands run as the user through `su -l`,
+  and the login profile's `resizewin` touched the terminal from a
+  background process group, so the kernel suspended `su`
+  (`tests/as-user-test.sh` reproduces it).
 - A successful install with no warnings exited with status 1 (a `set -e`
   pitfall in building the final message).
 - An unattended run with an existing user name looped forever.
