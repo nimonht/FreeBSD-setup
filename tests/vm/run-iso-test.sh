@@ -89,6 +89,11 @@ qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 4 -m 6G \
 python3 "$HERE/drive.py" "$W/ser.sock" "$W/serial.log" "$W/steps.json"
 tr -d '\r' < "$W/serial.log" | grep -a -q 'INSTALLER-EXIT=0' || { echo "FAIL: installer did not finish"; exit 1; }
 tr -d '\r' < "$W/serial.log" | grep -a -q 'FreeBSD is installed' || { echo "FAIL: no success message"; exit 1; }
+if tr -d '\r' < "$W/serial.log" | grep -a -q 'desktop setup stopped with an error'; then
+	echo "FAIL: the setup stages stopped with an error:"
+	tr -d '\r' < "$W/serial.log" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g' | grep -a -E '^(ERROR|WARNING):' | head -5
+	exit 1
+fi
 echo "PASS: installer"
 [ "${BOOT_TEST:-yes}" = yes ] || exit 0
 
@@ -104,7 +109,7 @@ out, user, pw, setup, enc, encpw = sys.argv[1:7]
 checks = ("echo CHECKS-BEGIN; freebsd-version; zfs list -H -o name | head -3; "
           "kenv -q vfs.root.mountfrom; geli status 2>/dev/null; "
           "sysrc -n hostname sddm_enable pf_enable cupsd_enable 2>/dev/null; "
-          "pkg info -q plasma6-plasma firefox cups 2>/dev/null; "
+          "pkg -N >/dev/null 2>&1 && pkg info -q plasma6-plasma firefox cups hyprland 2>/dev/null; "
           "ls /usr/local/share/wayland-sessions 2>/dev/null; command -v caelestia Hyprland startplasma-wayland sddm ly fcitx5 steam-setup 2>/dev/null; "
           "grep -c WARNING /var/log/freebsd-setup.log; tail -3 /var/log/freebsd-setup.log; "
           "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; echo CHECKS-DONE\r")

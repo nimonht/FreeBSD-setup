@@ -706,7 +706,7 @@ do_setup() {
 	step "Installing the desktop (the long part)"
 	mount -t devfs devfs "$MNT/dev"
 	_rc=0
-	chroot "$MNT" /usr/bin/env FBS_TARGET=chroot SSL_CA_CERT_FILE= \
+	chroot "$MNT" /usr/bin/env -u SSL_CA_CERT_FILE FBS_TARGET=chroot \
 		/bin/sh "$FBS_SHARE/setup.sh" --chroot --yes --user "$USERNAME" || _rc=$?
 	umount "$MNT/dev" 2>/dev/null || umount -f "$MNT/dev" 2>/dev/null || true
 	if [ "$_rc" -ne 0 ]; then
