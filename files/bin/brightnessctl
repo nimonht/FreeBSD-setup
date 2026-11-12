@@ -1,0 +1,39 @@
+#!/bin/sh
+# brightnessctl look-alike for FreeBSD, built on backlight(8).
+# Implements the subset desktop shells use:
+#   brightnessctl g|get          current value (0-100)
+#   brightnessctl m|max          maximum value (always 100)
+#   brightnessctl s|set VALUE    VALUE = 40, 40%, +5%, 5%-, +5, 5-
+#   brightnessctl i|info         short summary
+dev=${BACKLIGHT_DEVICE:-}
+bl() { if [ -n "$dev" ]; then backlight -f "$dev" "$@"; else backlight "$@"; fi; }
+cur() { bl -q 2>/dev/null || echo 0; }
+
+# skip options such as -q, -d DEVICE, -c CLASS
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-d|-c|--device|--class) shift 2 ;;
+	-*) shift ;;
+	*) break ;;
+	esac
+done
+
+case "${1:-info}" in
+g|get) cur ;;
+m|max) echo 100 ;;
+i|info) echo "Device 'backlight' of class 'backlight': current brightness $(cur) ($(cur)%), max 100" ;;
+s|set)
+	v=${2:?usage: brightnessctl set VALUE}
+	c=$(cur)
+	n=$(echo "$v" | tr -d '%+-')
+	case "$v" in
+	+*)  new=$(( c + n )) ;;
+	*-)  new=$(( c - n )) ;;
+	*)   new=$n ;;
+	esac
+	[ "$new" -gt 100 ] && new=100
+	[ "$new" -lt 1 ] && new=1
+	bl "$new"
+	;;
+*) echo "brightnessctl (FreeBSD shim): unsupported command '$1'" >&2; exit 1 ;;
+esac
