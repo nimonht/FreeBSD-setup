@@ -35,8 +35,8 @@ step() { printf "\n${_c_head}==== %s ====${_c_off}\n" "$*"; _log "==== $* ====";
 is_live()   { [ "$FBS_TARGET" = live ]; }
 is_chroot() { [ "$FBS_TARGET" = chroot ]; }
 
-# yes VAR -> true when the variable holds yes/YES/true/1/on
-yes() { eval "_v=\${$1:-}"; case "$_v" in [Yy][Ee][Ss]|[Tt][Rr][Uu][Ee]|1|[Oo][Nn]) return 0 ;; esac; return 1; }
+# is_yes VAR -> true when the variable holds yes/YES/true/1/on
+is_yes() { eval "_v=\${$1:-}"; case "$_v" in [Yy][Ee][Ss]|[Tt][Rr][Uu][Ee]|1|[Oo][Nn]) return 0 ;; esac; return 1; }
 
 # in_list word list...  -> true when word is one of the following words
 in_list() { _w=$1; shift; for _x in "$@"; do [ "$_x" = "$_w" ] && return 0; done; return 1; }
@@ -46,10 +46,23 @@ in_list() { _w=$1; shift; for _x in "$@"; do [ "$_x" = "$_w" ] && return 0; done
 # pkg_has name   -> true when the configured repositories offer the package
 pkg_has() { pkg rquery -U '%n' "$1" >/dev/null 2>&1; }
 
-# pkg_install name...   install packages; fail the script if any is missing
+# run_shown pattern command...   run a command, log all its output, show
+# the lines matching the pattern (progress), return the command's status
+run_shown() {
+	_pat=$1; shift
+	_rcf=$(mktemp)
+	{ "$@"; echo $? > "$_rcf"; } 2>&1 | tee -a "$LOG" |
+		grep --line-buffered -E "$_pat" | sed -u 's/^/       /' || true
+	_r=$(cat "$_rcf" 2>/dev/null); rm -f "$_rcf"
+	return "${_r:-1}"
+}
+
+# pkg_install name...   install packages, one progress line per package;
+# fail the script if any is missing
 pkg_install() {
 	say "pkg install $*"
-	env ASSUME_ALWAYS_YES=yes pkg install -y "$@" >> "$LOG" 2>&1 ||
+	run_shown '^\[[0-9]+/[0-9]+\] (Fetching|Installing|Upgrading)' \
+		env ASSUME_ALWAYS_YES=yes pkg install -y "$@" ||
 		die "could not install: $*  (details: $LOG)"
 }
 
@@ -115,11 +128,13 @@ kld_remove() {
 # kld_now module   load a module right away on a live system
 kld_now() { is_live && { kldload -n "$1" >> "$LOG" 2>&1 || return 1; }; return 0; }
 
-# svc name   enable a service and (on a live system) start it
+# svc rcvar [script]   enable a service and (on a live system) start it;
+# script defaults to rcvar (they differ for e.g. avahi_daemon/avahi-daemon)
 svc() {
 	sysrc "${1}_enable=YES" >/dev/null
 	if is_live; then
-		service "$1" status >/dev/null 2>&1 || service "$1" start >> "$LOG" 2>&1 || true
+		_s=${2:-$1}
+		service "$_s" status >/dev/null 2>&1 || service "$_s" start >> "$LOG" 2>&1 || true
 	fi
 }
 

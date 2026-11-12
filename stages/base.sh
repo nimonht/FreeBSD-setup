@@ -34,7 +34,7 @@ pkg update -f >> "$LOG" 2>&1 || die "pkg update failed (details: $LOG)"
 say "upgrading installed packages"
 env ASSUME_ALWAYS_YES=yes pkg upgrade -y >> "$LOG" 2>&1 || warn "pkg upgrade reported a problem (details: $LOG)"
 
-if is_live && yes RUN_FREEBSD_UPDATE && freebsd-version -u | grep -q RELEASE; then
+if is_live && is_yes RUN_FREEBSD_UPDATE && freebsd-version -u | grep -q RELEASE; then
 	say "freebsd-update: base system security patches (a few minutes)"
 	if env PAGER=cat freebsd-update --not-running-from-cron fetch >> "$LOG" 2>&1; then
 		env PAGER=cat freebsd-update --not-running-from-cron install >> "$LOG" 2>&1 || true

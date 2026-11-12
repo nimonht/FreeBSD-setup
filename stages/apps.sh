@@ -2,7 +2,7 @@
 
 [ "$DESKTOP" = none ] && return 0
 
-if yes INSTALL_APPS; then
+if is_yes INSTALL_APPS; then
 	say "browser, office, media"
 	pkg_install firefox vlc
 	pkg_try libreoffice thunderbird gimp keepassxc
@@ -15,7 +15,7 @@ if yes INSTALL_APPS; then
 	esac
 fi
 
-if yes INSTALL_DEVTOOLS; then
+if is_yes INSTALL_DEVTOOLS; then
 	say "developer tools"
 	pkg_install git gmake cmake ninja pkgconf python3 node npm
 	pkg_try vscode

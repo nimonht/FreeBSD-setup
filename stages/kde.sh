@@ -9,7 +9,7 @@ if ! env ASSUME_ALWAYS_YES=yes pkg install -y plasma6-plasma >> "$LOG" 2>&1; the
 fi
 pkg_try plasma6-xdg-desktop-portal-kde plasma6-sddm-kcm plasma6-kde-gtk-config \
 	plasma6-spectacle konsole dolphin kate ark gwenview okular kcalc
-yes INSTALL_PRINTING && pkg_try plasma6-print-manager skanlite
+is_yes INSTALL_PRINTING && pkg_try plasma6-print-manager skanlite
 
 # Plasma's language and keyboard settings for the user (only when unset).
 _cfg="$TARGET_HOME/.config"

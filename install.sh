@@ -53,6 +53,7 @@ done
 INSTALL_DISK="" INSTALL_MODE="" ZFS_SIZE_GB="" SWAP_SIZE="auto" POOL=zroot
 HOSTNAME_NEW="" USERNAME="" USER_FULLNAME="" USER_PASSWORD="" ROOT_PASSWORD=""
 TIMEZONE="" RTC_LOCAL="auto" BOOT_DEFAULT="keep" BOOT_INTEGRATION="yes"
+ENCRYPT=no ENCRYPT_PASSPHRASE=""
 WIZ_LANG="" DESKTOP_LANGUAGE=""
 MIN_GB=30
 [ -n "$CONFIG_FILE" ] && . "$CONFIG_FILE"
@@ -263,6 +264,31 @@ You type it when installing software or changing system settings." yes; then
 	HOSTNAME_NEW=$(ui_input "Computer name" "A name for this computer on the network:" "$_hn") || exit 1
 }
 
+ask_encrypt() {
+	if [ "$UI_MODE" = auto ]; then
+		is_yes ENCRYPT && [ -z "$ENCRYPT_PASSPHRASE" ] && ENCRYPT_PASSPHRASE=$USER_PASSWORD
+		return 0
+	fi
+	_d=no; is_yes ENCRYPT && _d=yes
+	if ui_yesno "Encryption" "Encrypt FreeBSD's part of the disk?
+
+Recommended for laptops: if the computer is lost or stolen, nobody can read your files without the passphrase. You type it every time the computer starts; at that moment the keyboard always uses the US layout." $_d; then
+		ENCRYPT=yes
+		if ui_yesno "Encryption" "Use your account password as the disk passphrase?" yes; then
+			ENCRYPT_PASSPHRASE=$USER_PASSWORD
+		else
+			while :; do
+				_p1=$(ui_password "Encryption" "Disk passphrase:") || exit 1
+				_p2=$(ui_password "Encryption" "Type it again:") || exit 1
+				[ "$_p1" = "$_p2" ] && [ -n "$_p1" ] && { ENCRYPT_PASSPHRASE=$_p1; break; }
+				ui_msg "Encryption" "The passphrases are empty or do not match. Try again."
+			done
+		fi
+	else
+		ENCRYPT=no
+	fi
+}
+
 ask_timezone() {
 	_tab=/usr/share/zoneinfo/zone1970.tab
 	_cur=${TIMEZONE:-}
@@ -411,7 +437,7 @@ EOF
 		echo "Action:      add FreeBSD in the free space; existing partitions are not touched"
 	fi
 	cat <<EOF
-FreeBSD:     $ZFS_GB GB ZFS (pool "$POOL") + $(( SWAP_SECTORS * SECSIZE / 1073741824 )) GB swap
+FreeBSD:     $ZFS_GB GB ZFS (pool "$POOL") + $(( SWAP_SECTORS * SECSIZE / 1073741824 )) GB swap$(is_yes ENCRYPT && echo ", encrypted (passphrase at every start)")
 User:        $USERNAME${USER_FULLNAME:+ ($USER_FULLNAME)}, computer name $HOSTNAME_NEW
 Language:    ${WIZ_LANG:-en}, keyboard ${KEYBOARD_LAYOUT:-us}, time zone $TIMEZONE$( [ "$RTC_LOCAL" = yes ] && echo ", clock in local time")
 EOF
@@ -466,10 +492,22 @@ do_partition() {
 }
 
 do_pool() {
+	ZDEV=/dev/gpt/fbsd-zfs
+	if is_yes ENCRYPT; then
+		step "Encrypting the FreeBSD partition (GELI, AES-XTS 256)"
+		_k=$(mktemp /tmp/fbs-geli.XXXXXX)
+		chmod 600 "$_k"
+		printf '%s' "$ENCRYPT_PASSPHRASE" > "$_k"
+		# -b: unlock at boot; -g: the boot loader asks for the passphrase
+		run geli init -b -g -e AES-XTS -l 256 -s 4096 -B /tmp/fbsd-zfs.eli.backup -J "$_k" /dev/gpt/fbsd-zfs
+		run geli attach -j "$_k" /dev/gpt/fbsd-zfs
+		rm -f "$_k"
+		ZDEV=/dev/gpt/fbsd-zfs.eli
+	fi
 	step "Creating the ZFS pool $POOL"
 	mkdir -p "$MNT"
 	run zpool create -f -o altroot="$MNT" -o ashift=12 -o autotrim=on \
-		-O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none "$POOL" /dev/gpt/fbsd-zfs
+		-O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none "$POOL" "$ZDEV"
 	run zfs create -o mountpoint=none "$POOL/ROOT"
 	run zfs create -o mountpoint=/ -o canmount=noauto "$POOL/ROOT/default"
 	run zfs mount "$POOL/ROOT/default"
@@ -508,12 +546,12 @@ do_base() {
 	done
 	rm -rf "$_dist"
 	if [ "${SKIP_FREEBSD_UPDATE:-no}" != yes ]; then
-		say "applying security patches (freebsd-update)"
+		say "applying security patches (freebsd-update; can take 10 minutes)"
 		mkdir -p "$MNT/var/db/freebsd-update"
-		if env PAGER=cat freebsd-update -b "$MNT" -d "$MNT/var/db/freebsd-update" -f "$MNT/etc/freebsd-update.conf" \
-			--not-running-from-cron --currently-running "$REL" fetch >> "$LOG" 2>&1; then
-			env PAGER=cat freebsd-update -b "$MNT" -d "$MNT/var/db/freebsd-update" -f "$MNT/etc/freebsd-update.conf" \
-				--not-running-from-cron --currently-running "$REL" install >> "$LOG" 2>&1 || true
+		_fu="freebsd-update -b $MNT -d $MNT/var/db/freebsd-update -f $MNT/etc/freebsd-update.conf --not-running-from-cron --currently-running $REL"
+		if run_shown '^(Looking|Fetching|Inspecting|Preparing|Applying|Installing|No updates|The following|WARNING|[0-9]+ updates)' \
+			env PAGER=cat $_fu fetch; then
+			run_shown '^(Installing|Applying|No updates|[A-Za-z].*done)' env PAGER=cat $_fu install || true
 		else
 			warn "could not fetch security patches now; run 'sysup' after the first boot"
 		fi
@@ -528,6 +566,13 @@ kern.geom.label.disk_ident.enable="0"
 kern.geom.label.gptid.enable="0"
 autoboot_delay="3"
 EOF
+	_swapdev=/dev/gpt/fbsd-swap
+	if is_yes ENCRYPT; then
+		echo 'geom_eli_load="YES"' >> "$MNT/boot/loader.conf"
+		mkdir -p "$MNT/var/backups"
+		cp /tmp/fbsd-zfs.eli.backup "$MNT/var/backups/" 2>/dev/null || true
+		_swapdev=/dev/gpt/fbsd-swap.eli     # encrypted with a new random key at every start
+	fi
 	{
 		echo "# Device		Mountpoint	FStype	Options		Dump	Pass#"
 		_lab=$(gpart show -l -p "$INSTALL_DISK" | awk -v d="$ESP_DEV" '$3 == d { print $4; exit }')
@@ -536,7 +581,7 @@ EOF
 		elif [ -n "$ESP_DEV" ]; then
 			echo "/dev/$ESP_DEV	/boot/efi	msdosfs	rw,failok	0	0"
 		fi
-		[ "$SWAP_SECTORS" -gt 0 ] && echo "/dev/gpt/fbsd-swap	none	swap	sw	0	0"
+		[ "$SWAP_SECTORS" -gt 0 ] && echo "$_swapdev	none	swap	sw	0	0"
 	} > "$MNT/etc/fstab"
 	cat > "$MNT/etc/rc.conf" <<EOF
 hostname="$HOSTNAME_NEW"
@@ -622,14 +667,14 @@ efi_entry() {
 
 boot_integrate() {
 	_esp="$MNT/boot/efi"
-	if yes BOOT_INTEGRATION && [ -n "$LIMINE_CONF" ] && [ -f "$_esp/$LIMINE_CONF" ]; then
+	if is_yes BOOT_INTEGRATION && [ -n "$LIMINE_CONF" ] && [ -f "$_esp/$LIMINE_CONF" ]; then
 		if ! grep -q 'EFI/freebsd/loader.efi' "$_esp/$LIMINE_CONF"; then
 			cp "$_esp/$LIMINE_CONF" "$_esp/$LIMINE_CONF.before-freebsd"
 			printf '\n/FreeBSD\n    comment: FreeBSD on ZFS (added by FreeBSD-setup)\n    protocol: efi\n    path: boot():/EFI/freebsd/loader.efi\n' >> "$_esp/$LIMINE_CONF"
 			say "added FreeBSD to the Limine menu ($LIMINE_CONF; backup: $LIMINE_CONF.before-freebsd)"
 		fi
 	fi
-	if yes BOOT_INTEGRATION && [ "$HAS_SDBOOT" = yes ]; then
+	if is_yes BOOT_INTEGRATION && [ "$HAS_SDBOOT" = yes ]; then
 		mkdir -p "$_esp/loader/entries"
 		printf 'title   FreeBSD\nefi     /EFI/freebsd/loader.efi\n' > "$_esp/loader/entries/freebsd.conf"
 		say "added FreeBSD to the systemd-boot menu"
@@ -694,6 +739,7 @@ ask_network
 ask_disk
 ask_mode
 ask_account
+ask_encrypt
 ask_region
 [ "$BASE_ONLY" = yes ] || ask_desktop
 ask_boot
