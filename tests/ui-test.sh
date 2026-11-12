@@ -17,14 +17,19 @@ t() {
 	else fail=$((fail + 1)); echo "FAIL $1: got '$_out', want '$3'"; fi
 }
 
+# Keys as a terminal sends them in curses keypad mode: arrows are ESC O x.
 t "menu: Enter keeps the default" '\r' 'RESULT=[b] RC=0' \
 	"ui_menu Title Text b a 'Item A' b 'Item B' c 'Item C'"
-t "menu: Down moves to the next item" '\033[B\r' 'RESULT=[c] RC=0' \
+t "menu: Down arrow moves to the next item" '\033OB\r' 'RESULT=[c] RC=0' \
 	"ui_menu Title Text b a 'Item A' b 'Item B' c 'Item C'"
-t "checklist: Space toggles" '\033[B \r' 'RESULT=[a b] RC=0' \
-	"ui_check Title Text a 'Item A' on b 'Item B' off c 'Item C' off"
+t "menu: first letter of a tag jumps to it" 'c\r' 'RESULT=[c] RC=0' \
+	"ui_menu Title Text a a 'Item A' b 'Item B' c 'Item C'"
+t "menu: Escape cancels (bsddialog status 5)" '\033' 'RESULT=[] RC=5' \
+	"ui_menu Title Text a a 'Item A' b 'Item B'"
 t "checklist: defaults" '\r' 'RESULT=[a c] RC=0' \
 	"ui_check Title Text a 'Item A' on b 'Item B' off c 'Item C' on"
+t "checklist: Space toggles the current item" '\033OB \r' 'RESULT=[a b] RC=0' \
+	"ui_check Title Text a 'Item A' on b 'Item B' off c 'Item C' off"
 t "input: typed text is appended" 'xy\r' 'RESULT=[defxy] RC=0' \
 	"ui_input Title Text def"
 t "password" 'se cret\r' 'RESULT=[se cret] RC=0' \
@@ -33,8 +38,8 @@ t "yes/no: Enter means yes" '\r' 'RESULT=[] RC=0' \
 	"ui_yesno Title Text yes"
 t "yes/no: default no" '\r' 'RESULT=[] RC=1' \
 	"ui_yesno Title Text no"
-t "menu: Escape cancels" '\033' 'RESULT=[] RC=1' \
-	"ui_menu Title Text a a 'Item A' b 'Item B'"
+t "menu with spaces and many items (time zone style)" '\r' 'RESULT=[Asia/Ho_Chi_Minh] RC=0' \
+	"ui_menu Title Text Asia/Ho_Chi_Minh Asia/Bangkok 'Bangkok - Thailand' Asia/Ho_Chi_Minh 'Ho Chi Minh - Vietnam' Asia/Tokyo 'Tokyo'"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -140,14 +140,16 @@ At the login screen pick **Plasma (Wayland)** or **Hyprland** and log in.
 
 ## Already have FreeBSD 15?
 
-Run the same one-liner as your normal user on an installed FreeBSD. It starts
-the setup wizard instead of the installer, asking for the root password through
-`doas`, `sudo` or `su`:
+Run the same one-liner on an installed FreeBSD. It starts the setup wizard
+instead of the installer:
 
 ```sh
 fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
 ```
 
+It asks for the root password through `doas`, `sudo` or `su`. On a fresh
+FreeBSD, `su` only works for members of the `wheel` group; if it answers
+*Sorry*, log in as `root` on a text console and run the same command there.
 Or clone and run it: `git clone https://github.com/nimonht/FreeBSD-setup && doas FreeBSD-setup/setup.sh`.
 Before changing anything it creates a ZFS boot environment `pre-setup-<date>`:
 choosing it in the boot menu undoes everything the setup did.
