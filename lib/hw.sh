@@ -106,11 +106,19 @@ hw_amd_kmod() {
 	esac
 }
 
+# hw_amd_gpu_note device-id -> empty, or a warning for GPUs newer than
+# FreeBSD's amdgpu (based on Linux 6.12)
+hw_amd_gpu_note() {
+	case "$1" in
+	75??) echo "RDNA 4 (RX 9000) is newer than FreeBSD's amdgpu driver; it may not work yet" ;;
+	esac
+}
+
 # hw_intel_gpu_note device-id -> empty when i915kms supports it well,
 # otherwise a short warning
 hw_intel_gpu_note() {
 	case "$1" in
-	64??|e2??|b0??|7d4?|7d6?|7dd?) echo "needs the newer Intel 'xe' driver, which FreeBSD does not have yet" ;;
+	64??|e2??|b0??) echo "needs the newer Intel 'xe' driver, which FreeBSD does not have yet" ;;
 	56??) echo "Intel Arc discrete GPU - support in FreeBSD's i915 is experimental" ;;
 	esac
 }
@@ -205,7 +213,7 @@ hw_detect() {
 		8086)	kind=intel; plan=i915kms; note=$(hw_intel_gpu_note "$dev")
 			HW_GPU_INTEL="$name" ;;
 		1002)	kind=amd; plan=$(hw_amd_kmod "$dev"); HW_AMD_KMOD=$plan
-			HW_GPU_AMD="$name" ;;
+			note=$(hw_amd_gpu_note "$dev"); HW_GPU_AMD="$name" ;;
 		10de)	kind=nvidia; br=$(hw_nvidia_branch "$dev"); HW_NVIDIA_BRANCH=$br
 			HW_GPU_NVIDIA="$name"
 			case "$br" in

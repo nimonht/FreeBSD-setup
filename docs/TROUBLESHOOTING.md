@@ -72,6 +72,17 @@ If that works, `EFI/freebsd/loader.env` on the EFI partition is missing or
 names another pool. Fix it from FreeBSD:
 `echo 'rootdev=zfs:zroot/ROOT/default:' | doas tee /boot/efi/EFI/freebsd/loader.env`.
 
+**Encrypted disk: the passphrase is not accepted**: the boot loader always
+uses the US keyboard layout, whatever layout you chose (on a German keyboard,
+`z` and `y` are swapped, for example). There is no way around a forgotten
+passphrase: that is the point of encryption. If the passphrase is right but
+the partition reports damaged metadata, restore it from the backup on the EFI
+partition (from the USB stick's Live System):
+`mount -t msdosfs /dev/<efi-partition> /mnt && geli restore /mnt/EFI/freebsd/fbsd-zfs.eli.backup /dev/gpt/fbsd-zfs`.
+Change the passphrase from a running system with
+`doas geli setkey -n 0 /dev/gpt/fbsd-zfs` (and keep it for the backup with
+`doas geli backup /dev/gpt/fbsd-zfs /boot/efi/EFI/freebsd/fbsd-zfs.eli.backup`).
+
 **Clock wrong in Windows after using FreeBSD (or the reverse)**: they disagree
 about the hardware clock. Local time (what Windows uses):
 `doas touch /etc/wall_cmos_clock`; UTC: `doas rm /etc/wall_cmos_clock`; then
