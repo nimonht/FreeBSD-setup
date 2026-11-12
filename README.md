@@ -45,7 +45,7 @@ script can change that.
 | Netflix/Spotify/Discord/Zoom/Teams apps | Yes (Flatpak) | Yes | **Web versions only**; no Flatpak/Snap/AppImage |
 | Steam games | Yes (Proton) | Yes | **Some**: the Linux Steam client through a compatibility layer; many games run, anti-cheat games don't, things break more often |
 | Snapshots and undo | Yes (Btrfs) | System Restore / Time Machine | **Excellent**: ZFS snapshots and boot environments |
-| Disk encryption | Yes | Yes | Supported by FreeBSD, **not offered by this installer yet** |
+| Disk encryption | Yes | BitLocker / FileVault | **Yes, optional**: FreeBSD's whole partition (GELI, AES-256); the passphrase is typed at every start |
 
 **Good fit:** you like FreeBSD's design and ZFS, your hardware is in the
 supported range, and you mostly use open-source software and web apps.
@@ -118,8 +118,9 @@ and write it to the stick (this erases the stick):
    ```
 
 5. Answer the questions: disk, *install next to the existing systems* or
-   *erase the disk*, your name and password, language, keyboard, time zone,
-   desktop and extras. The last screen shows the full plan; nothing is written
+   *erase the disk*, your name and password, whether to encrypt the disk
+   (recommended for laptops), language, keyboard, time zone, desktop and
+   extras. The last screen shows the full plan; nothing is written
    before you confirm it.
 
 The installation then runs on its own for 30-90 minutes, mostly downloading.
@@ -189,6 +190,12 @@ more often.
 **Installer, whole disk:** a new GPT table with an EFI partition, a BIOS boot
 partition (so the disk boots in UEFI and legacy mode), swap, and a ZFS pool
 `zroot` with the standard FreeBSD dataset layout.
+
+**Encryption (optional, both modes):** the ZFS partition is encrypted with
+GELI (AES-XTS, 256-bit key); FreeBSD's boot loader asks for the passphrase,
+always with the US keyboard layout. Swap gets a new random key at every start.
+A backup of the encryption metadata (useless without the passphrase) is kept
+in `EFI/freebsd/fbsd-zfs.eli.backup` on the EFI partition.
 
 **Installer, next to other systems:** two new partitions (ZFS and swap) in the
 largest free space; `EFI/freebsd/` added to the existing EFI partition; one

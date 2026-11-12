@@ -1,0 +1,1 @@
+zroot/ROOT/default	/	zfs	rw	0	0

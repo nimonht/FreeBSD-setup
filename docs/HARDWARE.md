@@ -20,10 +20,11 @@ Wayland desktops: they need a graphics driver with kernel mode setting (KMS).
 
 | GPU | Driver chosen | Desktop |
 |---|---|---|
-| Intel HD/UHD/Iris/Iris Xe (Sandy Bridge 2011 → Meteor Lake) | `i915kms` (drm-kmod) | Yes |
+| Intel HD/UHD/Iris/Iris Xe/Arc integrated (Sandy Bridge 2011 → Meteor Lake, Arrow Lake) | `i915kms` (drm-kmod) | Yes |
 | Intel Arc (DG2) desktop cards | `i915kms` | Experimental |
 | Intel Lunar Lake, Battlemage, Panther Lake | needs the `xe` driver (not in FreeBSD yet) | No |
-| AMD Radeon GCN 1.2 and newer (R9 285/Fury, RX 400–9000, Vega, all Ryzen APUs) | `amdgpu` | Yes |
+| AMD Radeon GCN 1.2 and newer (R9 285/Fury, RX 400–7000, Vega, Ryzen APUs) | `amdgpu` | Yes |
+| AMD Radeon RX 9000 (RDNA 4) | `amdgpu` | Not yet: newer than FreeBSD's driver |
 | AMD Radeon HD 2000 – R9 290 (TeraScale, GCN 1.0/1.1) | `radeonkms` | Yes, slower |
 | NVIDIA GeForce 16/20/30/40/50 series (Turing and newer) | `nvidia-driver` (current) | Yes |
 | NVIDIA GeForce GTX 750/900/10 series, Titan V (Maxwell, Pascal, Volta) | `nvidia-driver-580` (legacy, last for these GPUs) | Yes |

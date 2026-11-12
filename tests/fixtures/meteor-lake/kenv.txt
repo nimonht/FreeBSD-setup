@@ -1,0 +1,4 @@
+smbios.system.maker="LENOVO"
+smbios.system.product="21KD"
+smbios.system.version="ThinkPad X1 Carbon Gen 12"
+smbios.chassis.type="Notebook"

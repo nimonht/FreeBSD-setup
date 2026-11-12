@@ -25,7 +25,7 @@ ISO=$(realpath "${1:?usage: run-iso-test.sh ISO CONFIG}")
 CONF=$(realpath "${2:?usage: run-iso-test.sh ISO CONFIG}")
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
-W="$HERE/work"
+W="${WORK:-$HERE/work}"   # WORK=dir runs several scenarios side by side
 OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
 OVMF_VARS=${OVMF_VARS:-/usr/share/OVMF/OVMF_VARS_4M.fd}
 # Without KVM, QEMU's "max" CPU model makes FreeBSD 15 panic at boot; an
@@ -105,7 +105,7 @@ checks = ("echo CHECKS-BEGIN; freebsd-version; zfs list -H -o name | head -3; "
           "kenv -q vfs.root.mountfrom; geli status 2>/dev/null; "
           "sysrc -n hostname sddm_enable pf_enable cupsd_enable 2>/dev/null; "
           "pkg info -q plasma6-plasma firefox cups 2>/dev/null; "
-          "ls /usr/local/share/wayland-sessions 2>/dev/null; "
+          "ls /usr/local/share/wayland-sessions 2>/dev/null; command -v caelestia Hyprland startplasma-wayland sddm ly fcitx5 steam-setup 2>/dev/null; "
           "grep -c WARNING /var/log/freebsd-setup.log; tail -3 /var/log/freebsd-setup.log; "
           "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; echo CHECKS-DONE\r")
 steps = []

@@ -629,6 +629,9 @@ do_boot() {
 		# Tell the loader which dataset to boot, so it never guesses on a
 		# disk shared with other systems.
 		printf 'rootdev=zfs:%s/ROOT/default:\n' "$POOL" > "$MNT/boot/efi/EFI/freebsd/loader.env"
+		# Encryption metadata backup (holds no usable key without the
+		# passphrase): outside the encrypted partition, so it can repair it.
+		is_yes ENCRYPT && cp /tmp/fbsd-zfs.eli.backup "$MNT/boot/efi/EFI/freebsd/" 2>/dev/null || true
 		if [ "$INSTALL_MODE" = erase ]; then
 			# The fallback path firmware uses when its boot entries are lost.
 			mkdir -p "$MNT/boot/efi/EFI/BOOT"
