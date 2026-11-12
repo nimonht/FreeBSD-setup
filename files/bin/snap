@@ -1,0 +1,43 @@
+#!/bin/sh
+# snap - small front end for manual ZFS snapshots.
+#
+#   snap                      list snapshots of your home and the system
+#   snap take [NAME]          recursive snapshot of the whole pool
+#   snap files DATASET-PATH   show where a path's old versions live
+#   snap rollback SNAPSHOT    roll one dataset back (destroys newer changes!)
+#   snap rm SNAPSHOT          delete a snapshot
+set -eu
+POOL=$(zfs list -H -o name / | cut -d/ -f1)
+need_root() { [ "$(id -u)" -eq 0 ] || exec doas "$0" "$@"; }
+
+case "${1:-list}" in
+list)
+	zfs list -t snapshot -o name,used,creation -s creation "$POOL/ROOT" "$POOL/home" -r 2>/dev/null | tail -n 40
+	;;
+take)
+	need_root "$@"
+	name="${2:-manual-$(date +%Y%m%d-%H%M%S)}"
+	zfs snapshot -r "$POOL@$name"
+	echo "created $POOL@$name (recursive)"
+	;;
+files)
+	p=$(realpath "${2:-.}")
+	mp=$(df "$p" | awk 'NR==2{print $NF}')
+	echo "Old versions are read-only under: $mp/.zfs/snapshot/<snapshot-name>/${p#"$mp"/}"
+	ls "$mp/.zfs/snapshot/" 2>/dev/null | tail -n 20
+	;;
+rollback)
+	need_root "$@"
+	s=${2:?usage: snap rollback dataset@snapshot}
+	printf 'Roll %s back? Everything newer in that dataset is lost. Type yes: ' "$s"
+	read -r a; [ "$a" = yes ] || exit 1
+	zfs rollback -r "$s"
+	;;
+rm)
+	need_root "$@"
+	zfs destroy "${2:?usage: snap rm dataset@snapshot}"
+	;;
+*)
+	sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+	;;
+esac
