@@ -87,7 +87,7 @@ A graphical desktop will not start on this machine."
 }
 
 wiz_extras() {
-	_on() { yes "$1" && echo on || echo off; }
+	_on() { is_yes "$1" && echo on || echo off; }
 	_g=$INSTALL_GAMING
 	[ "$_g" = auto ] && { [ "$HW_DESKTOP" = yes ] && [ "$HW_ARCH" = amd64 ] && _g=yes || _g=no; }
 	_snap=$AUTO_SNAPSHOTS
@@ -152,7 +152,7 @@ resolve_config() {
 	[ "$DESKTOP" = auto ] && { [ "$HW_DESKTOP" = yes ] && DESKTOP=kde || DESKTOP=none; }
 	case "$DESKTOP" in kde|hyprland|both|none) ;; *) die "DESKTOP must be kde, hyprland, both, none or auto (got '$DESKTOP')" ;; esac
 	WANT_KDE=no WANT_HYPR=no
-	case "$DESKTOP" in kde) WANT_KDE=yes ;; hyprland) WANT_HYPR=yes ;; both) WANT_KDE=yes WANT_HYPR=yes ;; esac
+	case "$DESKTOP" in kde) WANT_KDE=yes ;; hyprland) WANT_HYPR=yes ;; both) WANT_KDE=is_yes WANT_HYPR=yes ;; esac
 	if [ "$PKG_BRANCH" = auto ]; then
 		PKG_BRANCH=quarterly; [ "$WANT_HYPR" = yes ] && PKG_BRANCH=latest
 	fi
@@ -203,7 +203,7 @@ save_config() {
 wiz_summary_text() {
 	_ims=${INPUT_METHODS:-none}
 	cat <<EOF
-Desktop:          $DESKTOP$( [ "$WANT_HYPR" = yes ] && yes INSTALL_CAELESTIA && echo " (Hyprland with Caelestia shell)")
+Desktop:          $DESKTOP$( [ "$WANT_HYPR" = yes ] && is_yes INSTALL_CAELESTIA && echo " (Hyprland with Caelestia shell)")
 Login screen:     $DISPLAY_MANAGER
 Graphics drivers: ${GPU_DRIVERS:-none}$( [ -n "$HW_GPU_NVIDIA" ] && echo " (NVIDIA branch: $NVIDIA_BRANCH)")
 Packages:         $PKG_BRANCH branch

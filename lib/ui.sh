@@ -12,7 +12,7 @@
 : "${UI_TITLE:=FreeBSD-setup}"
 
 ui_init() {
-	if yes ASSUME_YES; then UI_MODE=auto
+	if is_yes ASSUME_YES; then UI_MODE=auto
 	elif [ ! -t 0 ]; then UI_MODE=auto
 	elif command -v bsddialog >/dev/null 2>&1 && [ "${TERM:-dumb}" != dumb ] && [ "${UI_MODE:-}" != text ]; then UI_MODE=dialog
 	else UI_MODE=text; fi

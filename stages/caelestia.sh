@@ -1,7 +1,7 @@
 # Stage: caelestia - build the Caelestia shell + CLI for FreeBSD and install
 # the Caelestia dotfiles for the desktop user.
 
-if [ "$WANT_HYPR" != yes ] || ! yes INSTALL_CAELESTIA; then
+if [ "$WANT_HYPR" != yes ] || ! is_yes INSTALL_CAELESTIA; then
 	say "Caelestia not selected - skipped"
 	return 0
 fi

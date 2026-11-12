@@ -46,7 +46,7 @@ if [ "${DISK_SETUP:-}" = dualboot ]; then
 	# A disk like a dual-boot PC: EFI (Limine), Linux, Windows, 30 GB free.
 	TARGET="$W/target.raw" FMT=raw
 	truncate -s 40G "$TARGET"
-	sgdisk -q -n1:1M:+260M -t1:ef00 -c1:EFI -n2:0:+4G -t2:8300 -n3:0:+5G -t3:0700 "$TARGET"
+	sgdisk -n1:2048:+260M -t1:ef00 -c1:EFI -n2:0:+4G -t2:8300 -n3:0:+5G -t3:0700 "$TARGET" >/dev/null
 	LIMINE_EFI=${LIMINE_EFI:-$W/limine.efi}
 	[ -f "$LIMINE_EFI" ] || curl -sSL -o "$LIMINE_EFI" https://raw.githubusercontent.com/limine-bootloader/limine/v10.x-binary/BOOTX64.EFI
 	img="$TARGET@@1M"
@@ -90,38 +90,66 @@ python3 "$HERE/drive.py" "$W/ser.sock" "$W/serial.log" "$W/steps.json"
 tr -d '\r' < "$W/serial.log" | grep -a -q 'INSTALLER-EXIT=0' || { echo "FAIL: installer did not finish"; exit 1; }
 tr -d '\r' < "$W/serial.log" | grep -a -q 'FreeBSD is installed' || { echo "FAIL: no success message"; exit 1; }
 echo "PASS: installer"
-[ "${DISK_SETUP:-}" = dualboot ] || exit 0
+[ "${BOOT_TEST:-yes}" = yes ] || exit 0
 
-# ---- boot test: Limine -> FreeBSD -> login -> restart -> FreeBSD menu "L" ---
+# ---- boot test --------------------------------------------------------------
+# Boot the installed disk on its own, log in on the serial console, run a few
+# checks. Dual boot: start FreeBSD from Limine, then restart and use
+# "Start ... (L)" in FreeBSD's menu to chain back to the other loader.
+# Encrypted installs: answer the boot loader's passphrase prompt.
 . "$W/cfg/answers.conf"
-python3 - "$W/boot-steps.json" "$USERNAME" "$USER_PASSWORD" <<'PY'
+python3 - "$W/boot-steps.json" "$USERNAME" "$USER_PASSWORD" "${DISK_SETUP:-}" "${ENCRYPT:-no}" "${ENCRYPT_PASSPHRASE:-}" <<'PY'
 import json, sys
-out, user, pw = sys.argv[1:4]
-steps = [
-    [r"FreeBSD", "\x1b[B\r", 600],                       # Limine menu: 2nd entry
-    [r"Escape to loader prompt", "3", 600],                # FreeBSD menu
+out, user, pw, setup, enc, encpw = sys.argv[1:7]
+checks = ("echo CHECKS-BEGIN; freebsd-version; zfs list -H -o name | head -3; "
+          "kenv -q vfs.root.mountfrom; geli status 2>/dev/null; "
+          "sysrc -n hostname sddm_enable pf_enable cupsd_enable 2>/dev/null; "
+          "pkg info -q plasma6-plasma firefox cups 2>/dev/null; "
+          "ls /usr/local/share/wayland-sessions 2>/dev/null; "
+          "grep -c WARNING /var/log/freebsd-setup.log; tail -3 /var/log/freebsd-setup.log; "
+          "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; echo CHECKS-DONE\r")
+steps = []
+if setup == "dualboot":
+    steps.append([r"FreeBSD", "\x1b[B\r", 600])            # Limine menu: FreeBSD entry
+if enc == "yes":
+    steps.append([r"[Pp]assphrase", (encpw or pw) + "\r", 900])
+steps += [
+    [r"Escape to loader prompt", "3", 900],
     [r"OK", 'set console="comconsole,efi"\r', 120],
     [r"OK", "boot\r", 60],
-    [r"login:", user + "\r", 1800],
+    [r"login:", user + "\r", 3600],
     [r"Password:", pw + "\r", 60],
-    [r"\$\s*$", "freebsd-version; zfs list -H -o name,mountpoint | head -4; ls /boot/efi/EFI; grep fbs_chain /boot/loader.conf; echo CHECKS-DONE\r", 120],
-    [r"CHECKS-DONE\s", "su -m root -c 'shutdown -r now'\r", 60],
+    [r"\$\s*$", checks, 120],
+    [r"CHECKS-DONE\s", "su -m root -c 'shutdown -%s now'\r" % ("r" if setup == "dualboot" else "p"), 120],
     [r"Password:", pw + "\r", 60],
-    [r"FreeBSD", "\x1b[B\r", 900],                       # Limine again
-    [r"Start Windows Boot Manager", "l", 600],             # FreeBSD menu: chain back
-    [r"Other OS \(stand-in\)", "", 300],                    # the chained loader's menu
 ]
+if setup == "dualboot":
+    steps.append([r"FreeBSD", "\x1b[B\r", 900])             # Limine again
+    if enc == "yes":
+        steps.append([r"[Pp]assphrase", (encpw or pw) + "\r", 900])
+    steps += [
+        [r"Start Windows Boot Manager", "l", 600],            # FreeBSD menu: chain back
+        [r"Other OS \(stand-in\)", "", 300],                    # the chained loader's menu
+    ]
 json.dump(steps, open(out, "w"))
 PY
-cp "$OVMF_VARS" "$W/vars2.fd"
-# Keep the NVRAM the installer wrote (its "FreeBSD" entry) for realism.
+# Keep the NVRAM the installer wrote (its "FreeBSD" entry), as on a real PC.
 cp "$W/vars.fd" "$W/vars2.fd"
-qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2 -m 2G \
+qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2 -m 3G \
 	-drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -drive if=pflash,format=raw,file="$W/vars2.fd" \
 	-drive file="$TARGET",format=$FMT,if=virtio,cache=unsafe \
 	-netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
 	-display none -serial unix:"$W/ser2.sock",server=on,wait=off -daemonize -pidfile "$W/qemu2.pid"
-python3 "$HERE/drive.py" "$W/ser2.sock" "$W/boot.log" "$W/boot-steps.json" --stop
+rc=0
+python3 "$HERE/drive.py" "$W/ser2.sock" "$W/boot.log" "$W/boot-steps.json" --stop || rc=$?
 kill "$(cat "$W/qemu2.pid")" 2>/dev/null || true
-grep -a -q 'Other OS (stand-in)' "$W/boot.log" && grep -a -q 'CHECKS-DONE' "$W/boot.log" || { echo "FAIL: boot test"; exit 1; }
-echo "PASS: boot through Limine, login, and chainload from FreeBSD's menu"
+# Judge on the text without terminal escape codes (boot menus draw with them).
+tr -d '\r' < "$W/boot.log" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g' > "$W/boot.txt"
+[ "$rc" -eq 0 ] && grep -a -q 'CHECKS-DONE' "$W/boot.txt" || { echo "FAIL: boot test (see $W/boot.txt)"; exit 1; }
+sed -n '/^CHECKS-BEGIN/,/^CHECKS-DONE/p' "$W/boot.txt" | grep -av 'CHECKS-'
+if [ "${DISK_SETUP:-}" = dualboot ]; then
+	grep -a -q 'Other OS (stand-in)' "$W/boot.txt" || { echo "FAIL: chainloading from FreeBSD's menu"; exit 1; }
+	echo "PASS: boot through Limine, login, and chainload from FreeBSD's menu"
+else
+	echo "PASS: the installed system boots and logs in"
+fi

@@ -17,7 +17,7 @@ set_kv /etc/periodic.conf daily_scrub_zfs_default_threshold '"30"'   # days betw
 set_kv /etc/periodic.conf daily_status_zfs_enable '"YES"'
 set_kv /etc/periodic.conf daily_trim_zfs_enable '"NO"'               # autotrim handles it
 
-if yes AUTO_SNAPSHOTS; then
+if is_yes AUTO_SNAPSHOTS; then
 	pkg_install zfstools
 	say "automatic snapshots: 4x15min, 24 hourly, 7 daily, 4 weekly, 6 monthly"
 	mkdir -p /usr/local/etc/cron.d

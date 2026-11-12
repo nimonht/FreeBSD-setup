@@ -1,6 +1,6 @@
 # Stage: security - a desktop firewall and a few safe kernel defaults.
 
-if yes FIREWALL; then
+if is_yes FIREWALL; then
 	say "firewall (pf): block unsolicited incoming connections, allow everything outgoing"
 	if [ -f /etc/pf.conf ] && ! grep -q 'FreeBSD-setup' /etc/pf.conf; then
 		cp /etc/pf.conf "/etc/pf.conf.before-freebsd-setup"
