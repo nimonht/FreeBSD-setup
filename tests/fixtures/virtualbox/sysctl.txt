@@ -1,0 +1,7 @@
+hw.machine=amd64
+kern.osrelease=15.1-RELEASE
+machdep.bootmethod=UEFI
+kern.vm_guest=generic
+hw.model=AMD Ryzen 9 7950X
+hw.ncpu=4
+hw.physmem=4294967296

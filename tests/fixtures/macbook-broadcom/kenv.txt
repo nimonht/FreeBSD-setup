@@ -1,0 +1,3 @@
+smbios.system.maker="Apple Inc."
+smbios.system.product="MacBookPro12,1"
+smbios.chassis.type="Laptop"

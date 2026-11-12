@@ -1,0 +1,44 @@
+ugen1.3: <Intel product 0x0a2b> at usbus0, cfg=0 md=HOST spd=FULL (12Mbps) pwr=ON (100mA)
+
+  bLength = 0x0012 
+  bDescriptorType = 0x0001 
+  bcdUSB = 0x0200 
+  bDeviceClass = 0x00e0  <Probed by interface class>
+  idVendor = 0x8087 
+  idProduct = 0x0a2b 
+  bNumConfigurations = 0x0001 
+
+
+ Interface 0
+   bLength = 0x0009 
+   bInterfaceNumber = 0x0000 
+   bInterfaceClass = 0x00e0  <x>
+   bInterfaceSubClass = 0x0001 
+
+ Interface 1
+   bLength = 0x0009 
+   bInterfaceNumber = 0x0001 
+   bInterfaceClass = 0x00e0  <x>
+   bInterfaceSubClass = 0x0001 
+ugen1.4: <Chicony Electronics USB2.0 HD UVC WebCam> at usbus0, cfg=0 md=HOST spd=FULL (12Mbps) pwr=ON (100mA)
+
+  bLength = 0x0012 
+  bDescriptorType = 0x0001 
+  bcdUSB = 0x0200 
+  bDeviceClass = 0x00ef  <Probed by interface class>
+  idVendor = 0x04f2 
+  idProduct = 0xb5d7 
+  bNumConfigurations = 0x0001 
+
+
+ Interface 0
+   bLength = 0x0009 
+   bInterfaceNumber = 0x0000 
+   bInterfaceClass = 0x000e  <x>
+   bInterfaceSubClass = 0x0001 
+
+ Interface 1
+   bLength = 0x0009 
+   bInterfaceNumber = 0x0001 
+   bInterfaceClass = 0x000e  <x>
+   bInterfaceSubClass = 0x0001 

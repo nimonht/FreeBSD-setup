@@ -1,0 +1,8 @@
+hw.machine=amd64
+kern.osrelease=15.1-RELEASE
+machdep.bootmethod=UEFI
+kern.vm_guest=none
+hw.model=Intel(R) Core(TM) i5-12400F
+hw.ncpu=12
+hw.physmem=17179869184
+hw.pci.default_vgapci_unit=0
