@@ -7,7 +7,9 @@ if is_yes FIREWALL; then
 		say "your previous /etc/pf.conf was saved as /etc/pf.conf.before-freebsd-setup"
 	fi
 	install_file "$REPO_DIR/files/pf.conf" /etc/pf.conf 600
-	if pfctl -nf /etc/pf.conf >> "$LOG" 2>&1 || is_chroot; then
+	# pfctl needs the pf module even for a syntax check (-n)
+	is_live && { kldload -n pf 2>/dev/null || true; }
+	if is_chroot || pfctl -nf /etc/pf.conf >> "$LOG" 2>&1; then
 		sysrc pf_enable=YES >/dev/null
 		if is_live; then
 			kldload -n pf 2>/dev/null || true
