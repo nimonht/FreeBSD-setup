@@ -21,7 +21,8 @@
 
 set -eu
 
-REPO_DIR=$(cd "$(dirname "$0")" && pwd)
+# realpath: "freebsd-setup" in /usr/local/sbin is a symlink to this file
+REPO_DIR=$(dirname "$(realpath "$0")")
 FBS_LIB="$REPO_DIR/lib"
 STAGES="base drivers system network zfs audio desktop kde hyprland caelestia input printing apps gaming security finish"
 

@@ -42,10 +42,12 @@ CA_CMD=""
 if [ -n "${EXTRA_CA:-}" ]; then cp "$EXTRA_CA" "$W/cfg/ca.pem"; CA_CMD="export SSL_CA_CERT_FILE=/media/ca.pem && "; fi
 genisoimage -quiet -R -J -o "$W/cfg.iso" "$W/cfg"
 cp "$OVMF_VARS" "$W/vars.fd"
-TARGET="$W/target.qcow2" FMT=qcow2
+TARGET="$W/target.qcow2" FMT=qcow2 RTC=utc
 if [ "${DISK_SETUP:-}" = dualboot ]; then
 	# A disk like a dual-boot PC: EFI (Limine), Linux, Windows, 30 GB free.
-	TARGET="$W/target.raw" FMT=raw
+	# A PC with Windows keeps its clock in local time, and the installer sets
+	# FreeBSD up to match: give the VM such a clock, or TLS dates are off.
+	TARGET="$W/target.raw" FMT=raw RTC=localtime
 	truncate -s 40G "$TARGET"
 	sgdisk -n1:2048:+260M -t1:ef00 -c1:EFI -n2:0:+4G -t2:8300 -n3:0:+5G -t3:0700 "$TARGET" >/dev/null
 	LIMINE_EFI=${LIMINE_EFI:-$W/limine.efi}
@@ -86,7 +88,7 @@ qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 3 -m "${VM_MEM:
 	-drive file="$W/cfg.iso",if=virtio,format=raw,readonly=on \
 	-drive file="$ISO",media=cdrom,readonly=on \
 	-netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
-	-display none -serial unix:"$W/ser.sock",server=on,wait=off -daemonize -pidfile "$W/qemu.pid"
+	-rtc base=$RTC -display none -serial unix:"$W/ser.sock",server=on,wait=off -daemonize -pidfile "$W/qemu.pid"
 python3 "$HERE/drive.py" "$W/ser.sock" "$W/serial.log" "$W/steps.json"
 tr -d '\r' < "$W/serial.log" | grep -a -q 'INSTALLER-EXIT=0' || { echo "FAIL: installer did not finish"; exit 1; }
 tr -d '\r' < "$W/serial.log" | grep -a -q 'FreeBSD is installed' || { echo "FAIL: no success message"; exit 1; }
@@ -146,7 +148,7 @@ qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 2 -m 2G \
 	-drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -drive if=pflash,format=raw,file="$W/vars2.fd" \
 	-drive file="$TARGET",format=$FMT,if=virtio,cache=unsafe \
 	-netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
-	-display none -serial unix:"$W/ser2.sock",server=on,wait=off -daemonize -pidfile "$W/qemu2.pid"
+	-rtc base=$RTC -display none -serial unix:"$W/ser2.sock",server=on,wait=off -daemonize -pidfile "$W/qemu2.pid"
 rc=0
 python3 "$HERE/drive.py" "$W/ser2.sock" "$W/boot.log" "$W/boot-steps.json" --stop || rc=$?
 kill "$(cat "$W/qemu2.pid")" 2>/dev/null || true
