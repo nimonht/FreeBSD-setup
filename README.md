@@ -232,24 +232,6 @@ All answers and their defaults are documented in
 `SSL_CA_CERT_FILE=/path/to/ca.pem` before running the installer; it is
 copied into the new system.
 
-## Tested so far
-
-Be clear-eyed about this: **no real laptop or desktop has run this version
-yet**. What has been tested:
-
-- The installer and the setup stages, automatically, on the official FreeBSD
-  15.1 install image in a virtual machine: whole-disk, next to existing
-  Windows/Linux partitions with the Limine boot menu, and encrypted installs
-  (details and results: [docs/TESTING.md](docs/TESTING.md)).
-- Hardware detection, against recorded profiles of twelve different machines
-  (`sh tests/run.sh`), on every push (CI).
-
-A virtual machine cannot show a desktop on FreeBSD (no 3D driver), so the KDE
-and Hyprland sessions themselves, graphics drivers, Wi-Fi, sound and sleep
-have not been tried on hardware with this version. If you try it, please open
-an issue with the output of `freebsd-setup --report` and what worked; machines
-known to work are listed in [docs/HARDWARE.md](docs/HARDWARE.md).
-
 Problems? See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## License

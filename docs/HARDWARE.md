@@ -64,4 +64,3 @@ Add yours with a pull request or an issue (include `freebsd-setup --report`).
 | Machine | FreeBSD | Desktop | Notes |
 |---|---|---|---|
 | QEMU/KVM virtual machine (q35, OVMF) | 15.1 | console only (as expected) | the automated test machine; installer and all setup stages pass |
-| ASUS ROG GL553VD (i7-7700HQ, HD 630 + GTX 1050) | 15.1 | not yet reported | profile and notes: [hardware/asus-gl553vd.md](hardware/asus-gl553vd.md) |
