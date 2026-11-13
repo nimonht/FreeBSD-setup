@@ -112,7 +112,7 @@ checks = ("printf 'CHECKS-%s\\n' BEGIN; freebsd-version; zfs list -H -o name | h
           "kenv -q vfs.root.mountfrom; geli status 2>/dev/null; "
           "sysrc -n hostname sddm_enable pf_enable cupsd_enable 2>/dev/null; "
           "pkg -N >/dev/null 2>&1 && pkg info -q plasma6-plasma firefox cups hyprland 2>/dev/null; "
-          "ls /usr/local/share/wayland-sessions 2>/dev/null; command -v caelestia Hyprland startplasma-wayland sddm ly fcitx5 steam-setup 2>/dev/null; "
+          "ls /usr/local/share/wayland-sessions 2>/dev/null; for c in caelestia Hyprland startplasma-wayland sddm ly fcitx5 steam-setup; do command -v $c; done; "
           "grep -c WARNING /var/log/freebsd-setup.log; tail -3 /var/log/freebsd-setup.log; "
           "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; printf 'CHECKS-%s\\n' DONE\r")
 steps = []

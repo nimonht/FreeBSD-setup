@@ -74,7 +74,7 @@ serial console, checks run on the installed system.
 | 2026-11-12 | Whole disk, **encrypted** (GELI), console only, German keyboard | **Pass**: installer and every setup stage (0 warnings); boot loader asks for the passphrase; root on `zroot/ROOT/default` over `vtbd0p4.eli`, swap on `fbsd-swap.eli`; firewall on; `@installed` and `@setup-…` snapshots present |
 | 2026-11-12 | Next to existing EFI + Linux + Windows partitions, Limine 10.8.5 as boot manager | **Pass** (boot path): FreeBSD added to the Limine menu, boots from it, login works; after a restart FreeBSD's menu shows *Start Windows Boot Manager (L)* and **L** chainloads the other loader. (The setup stages in this run hit the bug fixed below; re-run with Hyprland in progress.) |
 | 2026-11-12 | `tests/ui-test.sh`: every dialog type driven with real key presses | **Pass** 11/11 on FreeBSD 15.1 with the base system's `bsddialog` |
-| 2026-11-12 | Whole disk, KDE Plasma (quarterly packages), apps, printing, with `freebsd-update` | in progress |
+| 2026-11-12 | Whole disk, KDE Plasma (quarterly packages), apps, printing, with `freebsd-update` | **Pass**: installer and every stage (only warning: "this VM cannot show a desktop"); base patched to 15.1-p6 from the live system; boot test: Plasma, Firefox, VLC, LibreOffice, CUPS installed, `sddm` and `cupsd` running, firewall rules loaded, snapshots and the auto-snapshot cron job present. The Plasma session itself cannot start in a VM |
 | 2026-11-12 | Next to Windows/Linux (Limine), Hyprland + Caelestia, Vietnamese input, gaming | in progress |
 | 2026-11-11 | Hyprland + Caelestia 2.5.0 build and Hyprland stages on an installed system | Pass (build; no GPU to start the session) |
 
