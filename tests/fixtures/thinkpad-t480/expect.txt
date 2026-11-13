@@ -1,0 +1,9 @@
+HW_GPU_PRIMARY=intel
+HW_GPU_HYBRID=no
+HW_DESKTOP=yes
+HW_LAPTOP=yes
+HW_ACPI_KMOD=acpi_ibm
+HW_NVIDIA_BRANCH=
+report:Fingerprint reader
+report:firmware package
+report:Ethernet: Intel Corporation Ethernet Connection (4) I219-LM (em0)

@@ -1,0 +1,3 @@
+smbios.system.maker="ASUS"
+smbios.system.product="System Product Name"
+smbios.chassis.type="Desktop"

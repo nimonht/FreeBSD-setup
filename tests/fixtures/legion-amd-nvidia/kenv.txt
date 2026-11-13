@@ -1,0 +1,4 @@
+smbios.system.maker="LENOVO"
+smbios.system.product="82JW"
+smbios.system.version="Legion 5 15ACH6H"
+smbios.chassis.type="Notebook"

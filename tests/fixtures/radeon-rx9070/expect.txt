@@ -1,0 +1,3 @@
+HW_GPU_PRIMARY=amd
+HW_AMD_KMOD=amdgpu
+report:RDNA 4 (RX 9000) is newer than

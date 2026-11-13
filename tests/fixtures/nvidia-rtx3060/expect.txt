@@ -1,0 +1,7 @@
+HW_GPU_PRIMARY=nvidia
+HW_NVIDIA_BRANCH=current
+HW_GPU_HYBRID=no
+HW_DESKTOP=yes
+HW_LAPTOP=no
+HW_ACPI_KMOD=acpi_asus_wmi
+report:NVIDIA driver

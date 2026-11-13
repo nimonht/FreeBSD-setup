@@ -1,0 +1,19 @@
+#!/bin/sh
+# gpu-run - run a program on the second (usually faster) GPU of a hybrid
+# graphics machine: NVIDIA via PRIME render offload, AMD/Intel via DRI_PRIME.
+#   gpu-run glxinfo -B      gpu-run vkcube      gpu-run steam
+# Without it, programs render on the GPU that drives the screen.
+[ $# -gt 0 ] || { echo "usage: gpu-run command [args]" >&2; exit 2; }
+
+if kldstat -q -m nvidia 2>/dev/null; then
+	export __NV_PRIME_RENDER_OFFLOAD=1
+	export __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0
+	export __GLX_VENDOR_LIBRARY_NAME=nvidia
+	export __VK_LAYER_NV_optimus=NVIDIA_only
+	export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/local/share/glvnd/egl_vendor.d/10_nvidia.json
+	[ -f /usr/local/share/vulkan/icd.d/nvidia_icd.json ] &&
+		export VK_DRIVER_FILES=/usr/local/share/vulkan/icd.d/nvidia_icd.json
+else
+	export DRI_PRIME=1
+fi
+exec "$@"

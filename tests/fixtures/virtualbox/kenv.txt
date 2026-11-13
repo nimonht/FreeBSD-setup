@@ -1,0 +1,3 @@
+smbios.system.maker="innotek GmbH"
+smbios.system.product="VirtualBox"
+smbios.chassis.type="Other"

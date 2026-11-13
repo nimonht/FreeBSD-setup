@@ -1,0 +1,2 @@
+Installed devices:
+pcm0: <Cirrus Logic CS4208 (Analog)> (play/rec) default

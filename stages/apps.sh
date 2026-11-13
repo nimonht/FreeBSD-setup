@@ -1,20 +1,24 @@
 # Stage: apps - everyday software. Edit the lists to taste.
 
-[ "$INSTALL_APPS" = yes ] || { say "INSTALL_APPS=no - skipped"; return 0 2>/dev/null || true; }
+[ "$DESKTOP" = none ] && return 0
 
-say "browser, mail, office, media"
-pkg_install firefox mpv imv zathura zathura-pdf-mupdf
-pkg_try chromium thunderbird libreoffice obs-studio telegram-desktop keepassxc \
-	qbittorrent gimp
+if is_yes INSTALL_APPS; then
+	say "browser, office, media"
+	pkg_install firefox vlc
+	pkg_try libreoffice thunderbird gimp keepassxc
+	# LibreOffice in the desktop language, when a translation exists
+	case "${DESKTOP_LANGUAGE:-}" in
+	""|en) ;;
+	*)	_lo=$DESKTOP_LANGUAGE
+		case "$_lo" in pt-br) _lo=pt_BR ;; zh-cn) _lo=zh_CN ;; zh-tw) _lo=zh_TW ;; esac
+		if pkg_has "$_lo-libreoffice"; then pkg_try "$_lo-libreoffice"; fi ;;
+	esac
+fi
 
-say "developer tools"
-pkg_try vscode gmake llvm rust go node npm python3 py312-pip tig gh
+if is_yes INSTALL_DEVTOOLS; then
+	say "developer tools"
+	pkg_install git gmake cmake ninja pkgconf python3 node npm
+	pkg_try vscode
+fi
 
-say "filesystems: read your Windows (NTFS) and Linux (ext4) partitions, USB sticks"
-pkg_install fusefs-ntfs fusefs-exfat exfat-utils fusefs-ext2 e2fsprogs-core
-pkg_try automount
-
-say "webcam"
-pkg_try webcamd
-sysrc webcamd_enable=YES >/dev/null 2>&1 || true
-pw groupmod webcamd -m "$TARGET_USER" 2>/dev/null || true
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

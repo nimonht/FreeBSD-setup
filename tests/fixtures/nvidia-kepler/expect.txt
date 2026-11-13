@@ -1,0 +1,6 @@
+HW_NVIDIA_BRANCH=470
+HW_DESKTOP=no
+HW_BOOT=BIOS
+report:X11 only
+report:legacy BIOS
+report:no network adapter

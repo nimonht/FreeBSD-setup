@@ -1,0 +1,3 @@
+smbios.system.maker="Gigabyte"
+smbios.system.product="Z77-D3H"
+smbios.chassis.type="Desktop"

@@ -2,8 +2,8 @@
 
 POOL=$(root_pool)
 if [ -z "$POOL" ]; then
-	warn "root is not on ZFS - zfs stage skipped"
-	return 0 2>/dev/null || true
+	say "the system is not installed on ZFS - snapshots and boot environments skipped"
+	return 0
 fi
 
 say "pool '$POOL': autotrim on, monthly scrub, ARC capped at ${ARC_MAX_GB} GiB"
@@ -17,7 +17,7 @@ set_kv /etc/periodic.conf daily_scrub_zfs_default_threshold '"30"'   # days betw
 set_kv /etc/periodic.conf daily_status_zfs_enable '"YES"'
 set_kv /etc/periodic.conf daily_trim_zfs_enable '"NO"'               # autotrim handles it
 
-if [ "$AUTO_SNAPSHOTS" = yes ]; then
+if is_yes AUTO_SNAPSHOTS; then
 	pkg_install zfstools
 	say "automatic snapshots: 4x15min, 24 hourly, 7 daily, 4 weekly, 6 monthly"
 	mkdir -p /usr/local/etc/cron.d
@@ -36,11 +36,13 @@ CRON
 	for ds in tmp var/tmp var/crash var/audit usr/obj usr/ports usr/src; do
 		zfs list -H "$POOL/$ds" >/dev/null 2>&1 && zfs set com.sun:auto-snapshot=false "$POOL/$ds"
 	done
-	service cron restart >> "$LOG" 2>&1 || true
+	is_live && { service cron restart >> "$LOG" 2>&1 || true; }
 fi
 
 # sysup: update the whole system with a safety net (new boot environment).
-install -m 755 "$REPO_DIR/files/bin/sysup" /usr/local/sbin/sysup
-install -m 755 "$REPO_DIR/files/bin/snap"  /usr/local/sbin/snap
+install_file "$REPO_DIR/files/bin/sysup" /usr/local/sbin/sysup 755
+install_file "$REPO_DIR/files/bin/snap" /usr/local/sbin/snap 755
 pkg_try httm
 say "installed 'sysup' (safe system upgrade) and 'snap' (manual snapshots/rollback)"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

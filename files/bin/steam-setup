@@ -1,26 +1,39 @@
 #!/bin/sh
-# steam-setup - one-time bootstrap of the Linux Steam client for this user,
-# using games/linux-steam-utils. Run it as your normal user from a terminal
-# inside the desktop session; afterwards start Steam with:  steam
+# steam-setup - one-time setup of the Linux Steam client for this user, using
+# games/linux-steam-utils. Run it as your normal user from a terminal in the
+# desktop. Afterwards start Steam from the application menu or with: steam
 set -eu
 LSU=/usr/local/steam-utils/bin
-[ -x "$LSU/lsu-bootstrap" ] || { echo "linux-steam-utils is not installed (run ./setup.sh gaming)" >&2; exit 1; }
+[ -x "$LSU/lsu-bootstrap" ] || { echo "Steam support is not installed: doas freebsd-setup gaming" >&2; exit 1; }
 [ "$(id -u)" -ne 0 ] || { echo "run this as your normal user, not root" >&2; exit 1; }
 
 if [ ! -d "$HOME/.steam" ]; then
-	echo "==> downloading and unpacking the Steam bootstrap"
+	echo "==> downloading and unpacking the Steam client (a few hundred MB)"
 	"$LSU/lsu-bootstrap"
 fi
 
-mkdir -p "$HOME/.local/bin"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
 cat > "$HOME/.local/bin/steam" <<'WRAP'
 #!/bin/sh
-# Steam on the NVIDIA GPU when the wrapper exists, otherwise on Intel.
-if command -v nvrun >/dev/null 2>&1 && kldstat -q -m nvidia 2>/dev/null; then
-	exec nvrun /usr/local/steam-utils/bin/steam "$@"
+# Start Steam; on hybrid-graphics machines run it on the faster GPU.
+if command -v gpu-run >/dev/null 2>&1; then
+	exec gpu-run /usr/local/steam-utils/bin/steam "$@"
 fi
 exec /usr/local/steam-utils/bin/steam "$@"
 WRAP
 chmod +x "$HOME/.local/bin/steam"
-echo "==> done. Start Steam with:  ~/.local/bin/steam   (add ~/.local/bin to PATH)"
-echo "    In Steam: Settings > Compatibility > enable Steam Play for all titles."
+cat > "$HOME/.local/share/applications/steam.desktop" <<DESK
+[Desktop Entry]
+Type=Application
+Name=Steam
+Comment=Linux Steam client (FreeBSD linux-steam-utils)
+Exec=$HOME/.local/bin/steam %U
+Icon=steam
+Terminal=false
+Categories=Game;
+DESK
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *)
+	printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.profile" ;;
+esac
+echo "==> done. Start Steam from the application menu (or: ~/.local/bin/steam)."
+echo "    In Steam: Settings > Compatibility > enable Steam Play for all other titles."

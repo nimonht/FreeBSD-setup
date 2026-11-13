@@ -1,9 +1,9 @@
 # Stage: caelestia - build the Caelestia shell + CLI for FreeBSD and install
 # the Caelestia dotfiles for the desktop user.
 
-if [ "$DESKTOP" = kde ] || [ "$INSTALL_CAELESTIA" != yes ]; then
-	say "Caelestia not requested - skipped"
-	return 0 2>/dev/null || true
+if [ "$WANT_HYPR" != yes ] || ! is_yes INSTALL_CAELESTIA; then
+	say "Caelestia not selected - skipped"
+	return 0
 fi
 
 say "build dependencies"
@@ -14,19 +14,17 @@ pkg_install quickshell cmake ninja pkgconf git python313 \
 	jpeg-turbo png freetype2 lcms2 webp tiff openjpeg
 
 # The plugin reads CPU/memory/network statistics through linprocfs.
-sysrc linux_enable=YES >/dev/null
-service linux status >/dev/null 2>&1 || service linux start >> "$LOG" 2>&1 || true
+svc linux
 
-say "building (logs in /var/tmp/caelestia-build/*.log) - 10 to 20 minutes on this CPU"
-if ! env SHELL_REF="$CAELESTIA_SHELL_REF" CLI_REF="$CAELESTIA_CLI_REF" \
-	sh "$REPO_DIR/caelestia/build.sh" 2>&1 | tee -a "$LOG"; then
-	warn "the Caelestia build failed. Hyprland itself still works with its default config; see docs/TROUBLESHOOTING.md (Caelestia) and re-run: ./setup.sh caelestia"
-	return 0 2>/dev/null || true
+say "building (logs in /var/tmp/caelestia-build/*.log) - 10 to 30 minutes"
+_rcf=$(mktemp)
+{ env SHELL_REF="$CAELESTIA_SHELL_REF" CLI_REF="$CAELESTIA_CLI_REF" \
+	sh "$REPO_DIR/caelestia/build.sh"; echo $? > "$_rcf"; } 2>&1 | tee -a "$LOG"
+_rc=$(cat "$_rcf"); rm -f "$_rcf"
+if [ "$_rc" != 0 ] || [ ! -x /usr/local/bin/caelestia ] || [ ! -d /usr/local/etc/xdg/quickshell/caelestia ]; then
+	warn "the Caelestia build failed. Hyprland still works with its default look; see docs/TROUBLESHOOTING.md (Caelestia) and re-run: doas freebsd-setup caelestia"
+	return 0
 fi
-[ -x /usr/local/bin/caelestia ] && [ -d /usr/local/etc/xdg/quickshell/caelestia ] || {
-	warn "the Caelestia build did not produce an install - see /var/tmp/caelestia-build/*.log"
-	return 0 2>/dev/null || true
-}
 
 # Material Symbols font (not in FreeBSD ports) - the shell's icons.
 FONT_DIR=/usr/local/share/fonts/material-symbols
@@ -78,3 +76,5 @@ chown -R "$TARGET_USER" "$CFG" "$TARGET_HOME/Pictures"
 # a broken fish config can never lock you out.
 as_user 'caelestia scheme set -n caelestia' >> "$LOG" 2>&1 ||
 	say "colour scheme will be initialised on first login"
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)
