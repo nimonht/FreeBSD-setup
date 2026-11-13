@@ -75,7 +75,7 @@ serial console, checks run on the installed system.
 | 2026-11-12 | Next to existing EFI + Linux + Windows partitions, Limine 10.8.5 as boot manager | **Pass** (boot path): FreeBSD added to the Limine menu, boots from it, login works; after a restart FreeBSD's menu shows *Start Windows Boot Manager (L)* and **L** chainloads the other loader. (The setup stages in this run hit the bug fixed below; re-run with Hyprland in progress.) |
 | 2026-11-12 | `tests/ui-test.sh`: every dialog type driven with real key presses | **Pass** 11/11 on FreeBSD 15.1 with the base system's `bsddialog` |
 | 2026-11-12 | Whole disk, KDE Plasma (quarterly packages), apps, printing, with `freebsd-update` | **Pass**: installer and every stage (only warning: "this VM cannot show a desktop"); base patched to 15.1-p6 from the live system; boot test: Plasma, Firefox, VLC, LibreOffice, CUPS installed, `sddm` and `cupsd` running, firewall rules loaded, snapshots and the auto-snapshot cron job present. The Plasma session itself cannot start in a VM |
-| 2026-11-12 | Next to Windows/Linux (Limine), Hyprland + Caelestia, Vietnamese input, gaming | in progress |
+| 2026-11-13 | Next to Windows/Linux (Limine), Hyprland + Caelestia, Vietnamese input, gaming | **Pass with fixes**: FreeBSD added to Limine and booted from it; every Hyprland stage and the Caelestia 2.5.0 build passed inside the installer; `Hyprland`, `caelestia`, `ly`, `fcitx5` installed. The gaming stage failed in the installer (Linux packages need the Linux kernel module loaded: fixed) and passed when re-run on the booted system (Steam utilities, Wine). Not yet re-run from scratch with the fixes |
 | 2026-11-11 | Hyprland + Caelestia 2.5.0 build and Hyprland stages on an installed system | Pass (build; no GPU to start the session) |
 
 ### Bugs these tests caught before any user did
@@ -88,6 +88,11 @@ serial console, checks run on the installed system.
   and the login profile's `resizewin` touched the terminal from a
   background process group, so the kernel suspended `su`
   (`tests/as-user-test.sh` reproduces it).
+- With gaming selected, the installer could not install the Linux
+  compatibility packages (they check the running kernel for Linux support).
+- The installed `freebsd-setup` command, a symlink, could not find its files.
+- On a running system the firewall was left off: `pfctl -n` needs the pf
+  module loaded.
 - A successful install with no warnings exited with status 1 (a `set -e`
   pitfall in building the final message).
 - An unattended run with an existing user name looped forever.
