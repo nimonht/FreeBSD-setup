@@ -5,6 +5,7 @@ is_yes INSTALL_GAMING || { say "gaming not selected - skipped"; return 0; }
 
 say "Linux compatibility layer with the Rocky Linux 9 userland"
 kld_add linux linux64
+kldload -n linux64 2>/dev/null || true   # the packages check the running kernel
 svc linux
 pkg_install linux-rl9 linux-rl9-dri linux-rl9-vulkan linux-rl9-libglvnd
 add_line /etc/fstab "tmpfs	/compat/linux/dev/shm	tmpfs	rw,late,size=1g,mode=1777	0	0"

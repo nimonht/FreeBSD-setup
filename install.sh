@@ -706,6 +706,10 @@ do_setup() {
 	[ "$BASE_ONLY" = yes ] && return 0
 
 	step "Installing the desktop (the long part)"
+	# The Linux-compatibility packages (Steam, Caelestia's /proc reader) only
+	# install when the running kernel - this live system's - has Linux support.
+	kldload -n linux64 2>/dev/null || true
+	kldload -n linux 2>/dev/null || true
 	mount -t devfs devfs "$MNT/dev"
 	_rc=0
 	chroot "$MNT" /usr/bin/env -u SSL_CA_CERT_FILE FBS_TARGET=chroot \
