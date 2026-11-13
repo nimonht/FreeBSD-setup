@@ -1,0 +1,20 @@
+hostb0@pci0:0:0:0:	class=0x060000 rev=0x01 hdr=0x00 vendor=0x1022 device=0x1630 subvendor=0x1022 subdevice=0x0001
+    vendor     = 'AMD'
+    device     = 'Renoir Root Complex'
+    class      = bridge
+vgapci0@pci0:1:0:0:	class=0x030000 rev=0x01 hdr=0x00 vendor=0x10de device=0x25a2 subvendor=0x10de subdevice=0x0001
+    vendor     = 'NVIDIA Corporation'
+    device     = 'GA107M [GeForce RTX 3050 Mobile]'
+    class      = display
+vgapci1@pci0:6:0:0:	class=0x030000 rev=0x01 hdr=0x00 vendor=0x1002 device=0x1638 subvendor=0x1002 subdevice=0x0001
+    vendor     = 'Advanced Micro Devices, Inc. [AMD/ATI]'
+    device     = 'Cezanne [Radeon Vega Series]'
+    class      = display
+none5@pci0:3:0:0:	class=0x028000 rev=0x01 hdr=0x00 vendor=0x14c3 device=0x7961 subvendor=0x14c3 subdevice=0x0001
+    vendor     = 'MEDIATEK Corp.'
+    device     = 'MT7921 802.11ax PCI Express Wireless Network Adapter'
+    class      = network
+hdac1@pci0:6:0:6:	class=0x040300 rev=0x01 hdr=0x00 vendor=0x1022 device=0x15e3 subvendor=0x1022 subdevice=0x0001
+    vendor     = 'Advanced Micro Devices, Inc. [AMD]'
+    device     = 'Family 17h/19h HD Audio Controller'
+    class      = multimedia

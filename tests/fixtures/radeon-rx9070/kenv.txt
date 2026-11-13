@@ -1,0 +1,3 @@
+smbios.system.maker="Micro-Star International Co., Ltd."
+smbios.system.product="MS-7C56"
+smbios.chassis.type="Desktop"

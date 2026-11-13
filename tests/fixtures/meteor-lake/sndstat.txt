@@ -1,0 +1,2 @@
+Installed devices:
+pcm0: <Conexant CX20753/4 (Analog 2.0+HP/2.0)> (play/rec) default

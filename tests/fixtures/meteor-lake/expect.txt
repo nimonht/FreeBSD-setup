@@ -1,0 +1,4 @@
+HW_GPU_PRIMARY=intel
+HW_DESKTOP=yes
+HW_ACPI_KMOD=acpi_ibm
+report:Desktop: KDE Plasma and Hyprland can run

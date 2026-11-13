@@ -1,0 +1,10 @@
+hw.machine=amd64
+kern.osrelease=15.1-RELEASE
+machdep.bootmethod=UEFI
+kern.vm_guest=none
+hw.model=Intel(R) Core(TM) Ultra 7 258V
+hw.ncpu=8
+hw.physmem=34359738368
+hw.acpi.battery.units=1
+hw.acpi.supported_sleep_state=S4 S5
+hw.pci.default_vgapci_unit=0

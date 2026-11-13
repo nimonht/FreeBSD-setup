@@ -1,441 +1,258 @@
-# FreeBSD on the ASUS ROG GL553VD — triple boot with CachyOS and Windows 10
+# FreeBSD-setup
 
-A complete, bare-metal guide plus scripts to install **FreeBSD 15.1** next to
-CachyOS and Windows 10 on an ASUS GL553VD (i7-7700HQ, Intel HD 630 + GTX 1050
-4 GB, 16 GB RAM), boot it from the **Limine** menu you already have, and turn
-it into a daily driver: **ZFS root with snapshots and boot environments**,
-**Hyprland + the Caelestia shell** (KDE Plasma optional), audio, gaming.
+**Install FreeBSD as a ready-to-use desktop: one command, a few questions, done.**
 
-```
-install/zfs-install.sh   installs FreeBSD on ZFS into free disk space (run from the installer USB)
-limine/freebsd.conf      the menu entry to add to Limine
-setup.sh + config.env    one command that sets the whole desktop up after the first boot
-stages/                  what setup.sh does, one file per step
-caelestia/               builds the Caelestia shell and CLI on FreeBSD
-files/                   helper tools and FreeBSD-specific desktop config
-docs/TROUBLESHOOTING.md  fixes, by symptom
-```
+FreeBSD-setup is a guided installer plus setup wizard for FreeBSD 15. It checks
+your computer, tells you honestly what will and won't work, installs FreeBSD on
+ZFS (whole disk, or next to Windows/Linux), and sets up a complete desktop with
+the right drivers for your hardware:
 
-The short version, once you have read the long one:
+- **KDE Plasma** (recommended, familiar if you come from Windows) or **Hyprland
+  with the Caelestia shell** (modern tiling desktop, for the adventurous), or both
+- **Drivers picked automatically**: Intel, AMD and NVIDIA graphics (each NVIDIA
+  card gets the driver branch NVIDIA lists for it), firmware for GPUs and Wi-Fi,
+  CPU microcode, laptop touchpads, hotkeys and power saving
+- **ZFS with automatic snapshots and boot environments**: every file has hourly
+  and daily versions to go back to, and every update can be undone with one
+  reboot
+- Sound (PipeWire), printers and scanners, USB drives and phones, input
+  methods for Vietnamese, Chinese, Japanese and Korean, a firewall
+- Optional: everyday apps (Firefox, LibreOffice, VLC, GIMP), gaming (Steam,
+  Wine/Proton), developer tools
 
-1. Back up. Free up 80 GB+ of unallocated disk space.
-2. Boot the FreeBSD USB stick → **Live System** → `sh zfs-install.sh`.
-3. Boot CachyOS, append `limine/freebsd.conf` to `limine.conf`.
-4. Boot FreeBSD, `cd ~/FreeBSD-setup && su -m root -c './setup.sh'`, reboot.
+## Is FreeBSD right for you?
 
----
+Read this before you install. FreeBSD is a solid, coherent operating system,
+but it is **not a drop-in replacement for Linux, Windows or macOS** on a desktop
+or laptop. Hardware support and software availability are narrower, and no setup
+script can change that.
 
-## Read this first: what is tested and what is not
+| | Linux (e.g. CachyOS) | Windows / macOS | FreeBSD with this setup |
+|---|---|---|---|
+| KDE Plasma / Hyprland desktop | Yes | – | **Yes**, needs a real GPU (below) |
+| Intel / AMD graphics | Yes | Yes | **Yes** (Intel Lunar Lake/Battlemage: not yet) |
+| NVIDIA graphics | Yes | Yes | **Yes** for GTX 750 / 900 series and newer; older cards: no Wayland desktop |
+| Laptop hybrid graphics | Yes, GPU powers off | Yes | **Partly**: games on the fast GPU with `gpu-run`; it cannot power off, so battery life suffers |
+| Wi-Fi | Yes | Yes | **Mostly**: Intel and Realtek work, newer MediaTek/Qualcomm chips are recent additions, Broadcom does not work. Often slower than on Linux |
+| Bluetooth | Yes | Yes | **Barely**: keyboards/mice paired by hand; no Bluetooth headphones |
+| Sleep (suspend) | Yes | Yes | **Sometimes**: works on many Intel laptops (S3); not on "modern standby" laptops; no hibernate |
+| Sound | Yes | Yes | **Yes**, except laptops with Intel "Smart Sound"/SOF audio |
+| Webcam, printers, scanners, USB drives | Yes | Yes | **Yes** (most webcams; driverless network printers) |
+| Fingerprint / face login | Mostly | Yes | **No** |
+| Running in VirtualBox / VMware | Yes | Yes | **Console only**: these desktops need a 3D graphics driver that VMs don't have on FreeBSD |
+| Browsers | Chrome, Firefox | All | Firefox, Chromium (no official Chrome) |
+| Office | LibreOffice, OnlyOffice | MS Office | LibreOffice |
+| Netflix/Spotify/Discord/Zoom/Teams apps | Yes (Flatpak) | Yes | **Web versions only**; no Flatpak/Snap/AppImage |
+| Steam games | Yes (Proton) | Yes | **Some**: the Linux Steam client through a compatibility layer; many games run, anti-cheat games don't, things break more often |
+| Snapshots and undo | Yes (Btrfs) | System Restore / Time Machine | **Excellent**: ZFS snapshots and boot environments |
+| Disk encryption | Yes | BitLocker / FileVault | **Yes, optional**: FreeBSD's whole partition (GELI, AES-256); the passphrase is typed at every start |
 
-I could not run anything on your laptop, so here is exactly where this stands.
+**Good fit:** you like FreeBSD's design and ZFS, your hardware is in the
+supported range, and you mostly use open-source software and web apps.
+**Poor fit:** you need specific commercial apps, competitive online games,
+long battery life on a gaming laptop, or Bluetooth audio. Dual-boot keeps your
+other system for those.
 
-| Part | Status |
-| --- | --- |
-| `zfs-install.sh`: partitioning into free space, pool, datasets, base system, loader on a shared ESP | **Tested** in a FreeBSD 15.1 UEFI virtual machine on a disk that already had an ESP, a "Linux" and a "Windows" partition. Existing partitions and ESP files were verified untouched. |
-| Limine → FreeBSD chainload entry | **Tested** in the same VM: Limine 10.8.5 → `FreeBSD` entry → FreeBSD loader → ZFS root → login prompt. |
-| `setup.sh` stages `base system zfs gpu audio desktop caelestia gaming finish` | **Tested** in the VM: all complete without errors, packages install from the FreeBSD 15 `latest` repository, snapshots and boot environments work. `apps` and `kde` were not run (package names checked only; Plasma is currently missing from the `latest` branch and `setup.sh` reports that instead of failing). |
-| Caelestia shell 2.5.0 + CLI 1.1.3 build on FreeBSD | **Tested**: compiles, installs, `caelestia scheme set` works, and Hyprland accepts the Caelestia Lua config. |
-| Intel HD 630 as the display GPU | Untested here, but this is the standard, well-supported path (`drm-kmod`, `i915kms`). |
-| GTX 1050 as secondary GPU (`nvrun`), Steam on NVIDIA | **Untested on hardware.** The driver packages exist and install; whether render offload works under Wayland on this exact machine has to be tried. `GPU_MODE="intel"` is the safe fallback. |
-| Wi-Fi, touchpad, suspend/resume, keyboard backlight, webcam | **Untested on hardware.** Depends on the exact parts in your unit; see [Hardware notes](#hardware-notes). |
-| Hyprland and Caelestia actually drawing on a screen | **Not verified.** The test VM has no GPU, so Hyprland stops at graphics initialisation there. Some panels cannot work on FreeBSD at all; see [What does not work](#what-does-not-work-on-freebsd). |
+## What you need
 
-Caelestia is written for Arch Linux and has no FreeBSD port. This repo builds
-it from source with small compatibility shims. Expect rough edges, and expect
-an upstream update to occasionally break the build until the shims are
-adjusted. Plain Hyprland from FreeBSD packages is the solid base underneath;
-if Caelestia fails to build, `setup.sh` says so and leaves you with a working
-Hyprland.
+- A 64-bit PC (amd64) with **8 GB RAM** (4 GB minimum) and **40 GB** of free disk
+  space (30 GB minimum)
+- A **real graphics card** for the desktop: Intel HD/UHD/Iris/Arc integrated
+  graphics, an AMD Radeon, or an NVIDIA GeForce GTX 750 or newer
+- UEFI firmware to install next to Windows/Linux (legacy BIOS: whole disk only)
+- **Secure Boot switched off** in the firmware setup (FreeBSD's boot loader is
+  not signed by Microsoft)
+- An internet connection during installation (Ethernet is easiest; Wi-Fi works
+  with supported cards)
+- A USB stick of 2 GB or more
 
----
+Not sure? The installer's first screen is a hardware report, and nothing is
+written before the very last confirmation, so you can safely look and quit.
 
-## Step 0 — Safety net (do not skip)
+## Install
 
-Triple-booting means editing a partition table that holds two working systems.
+### 1. Back up
 
-1. **Back up** everything you cannot lose from both Windows and CachyOS to an
-   external drive.
-2. Make a **CachyOS live USB** as well as the FreeBSD one. If the boot menu
-   ever breaks, the CachyOS live USB is how you repair Limine.
-3. In **Windows**: turn off Fast Startup (Control Panel → Power Options →
-   "Choose what the power buttons do" → untick *Turn on fast startup*), and
-   if BitLocker/device encryption is on, suspend it or save the recovery key.
-   Fast Startup leaves NTFS half-mounted and causes corruption in multi-boot.
-4. In the **firmware setup** (tap `F2` at power-on): Secure Boot **disabled**
-   (FreeBSD's loader is not signed), boot mode UEFI (no CSM/Legacy).
+Back up everything you cannot lose. If you keep Windows: switch off **Fast
+Startup** (Control Panel → Power Options → "Choose what the power buttons do")
+and suspend **BitLocker**/device encryption, or at least save its recovery key.
 
-## Step 1 — Collect facts from CachyOS
+### 2. Make room (only when keeping another system)
 
-Boot CachyOS and save the output of these somewhere you can read later (phone
-photo is fine):
+FreeBSD needs **unallocated** space on the disk; the installer creates its
+partitions there and never touches existing ones.
 
-```sh
-lsblk -o NAME,SIZE,FSTYPE,PARTTYPENAME,PARTUUID,MOUNTPOINTS   # disks and partitions
-sudo parted -l | grep -E 'Model|Disk /|Partition Table'      # must say "gpt"
-sudo find /boot /efi -maxdepth 3 -name 'limine.conf' 2>/dev/null
-efibootmgr                                                   # current boot entries
-lspci -nn | grep -Ei 'vga|3d|network|ethernet'               # GPU, Wi-Fi, LAN chips
-timedatectl | grep 'RTC in local TZ'                         # yes or no
-```
+- From Windows: *Disk Management* → right-click your largest partition →
+  *Shrink Volume*. Leave the freed space "Unallocated".
+- From Linux: boot a live USB and shrink a partition with GParted or KDE
+  Partition Manager.
 
-What to note:
+### 3. Write the USB stick
 
-- **Which disk** has free room. The GL553VD ships with an M.2 SSD, a 2.5" HDD,
-  or both. FreeBSD names them differently from Linux:
-  `nvme0n1` → `nda0` (or `nvd0`), `sda` → `ada0`, `sdb` → `ada1`.
-- **Where the EFI System Partition is** (FSTYPE `vfat`, type "EFI System") and
-  where `limine.conf` is.
-- The **Wi-Fi chip**. Intel 7265/8260/8265 are driven by `iwlwifi`/`iwm` and
-  work. If yours is Realtek or Qualcomm, plan on Ethernet or a USB adapter for
-  the first boot.
-- **RTC in local TZ**: the installer asks. `no` = clock is UTC.
+Download **`FreeBSD-15.1-RELEASE-amd64-memstick.img`** from
+[download.freebsd.org](https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/15.1/)
+and write it to the stick (this erases the stick):
 
-## Step 2 — Make free space
+- Windows: [Rufus](https://rufus.ie) (choose *DD image* mode) or [balenaEtcher](https://etcher.balena.io)
+- macOS / Linux: balenaEtcher, or `sudo dd if=FreeBSD-15.1-RELEASE-amd64-memstick.img of=/dev/<stick> bs=1M status=progress`
 
-FreeBSD needs **unallocated** space (not a formatted partition). 80 GB is a
-comfortable minimum for a desktop; 150 GB+ if you want games on it. The
-installer script picks the **largest** unallocated region on the disk.
+### 4. Boot it and run the installer
 
-- **Taking it from Windows**: in Windows, *Disk Management* → right-click the
-  `C:` (or data) volume → *Shrink Volume*. Leave the freed space as
-  "Unallocated".
-- **Taking it from CachyOS**: boot the CachyOS live USB and use *KDE Partition
-  Manager* or *GParted* to shrink the CachyOS partition (Btrfs/ext4 shrink
-  works offline). Do not shrink a mounted root filesystem.
-- **A whole spare disk**: delete its partitions so the disk is one unallocated
-  region with a GPT table.
-
-Do not create any partition for FreeBSD yourself; the script does it.
-
-## Step 3 — Make the FreeBSD USB stick
-
-On CachyOS (replace `sdX` with the USB stick — check with `lsblk`, this erases it):
-
-```sh
-cd ~/Downloads
-curl -LO https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/15.1/FreeBSD-15.1-RELEASE-amd64-memstick.img
-curl -LO https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/15.1/CHECKSUM.SHA256-FreeBSD-15.1-RELEASE-amd64
-sha256sum FreeBSD-15.1-RELEASE-amd64-memstick.img   # compare with the line in the CHECKSUM file
-sudo dd if=FreeBSD-15.1-RELEASE-amd64-memstick.img of=/dev/sdX bs=1M conv=sync status=progress
-```
-
-Then put this repository where the FreeBSD live system can read it. The
-simplest place is your EFI System Partition (it is FAT, FreeBSD reads it):
-
-```sh
-git clone https://github.com/nimonht/FreeBSD-setup.git
-sudo cp -r FreeBSD-setup /boot/fbsd-setup     # /boot is the ESP on CachyOS; use your ESP mount point
-```
-
-## Step 4 — Boot the stick and install
-
-1. Plug in Ethernet if you can (it makes the first boot easier).
-2. Power on, tap `Esc` for the ASUS boot menu, choose the USB stick (UEFI).
-3. At the FreeBSD installer's first screen choose **Live System** (not
-   Install). Log in as `root`, no password.
-4. Find your disk and ESP, copy the scripts off the ESP:
+1. Restart with the stick plugged in and open the boot menu (usually **F12**,
+   **F8**, **F11** or **Esc** right after power-on; on Macs hold **Option**).
+   Pick the USB stick (UEFI).
+2. At the blue *Welcome* screen choose **Live System**, then log in as `root`
+   (no password).
+3. Connect to the internet:
 
    ```sh
-   gpart show -p                      # the disk with "- free -" space; the "efi" partition
-   mount -t msdosfs /dev/nda0p1 /media     # <- your efi partition
-   cp -R /media/fbsd-setup /tmp/
-   umount /media
-   cd /tmp/fbsd-setup
+   bsdinstall netconfig
    ```
 
-5. Run the installer script:
+   Pick your network card (Wi-Fi cards are named `iwlwifi0`, `iwm0`, `rtw880`...),
+   answer *Yes* to DHCP, and pick your Wi-Fi network if you use one.
+4. Start the installer:
 
    ```sh
-   sh install/zfs-install.sh
+   fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
    ```
 
-   It asks for the disk, your user name, time zone and whether the hardware
-   clock is local time, then prints the current partition table and a plan.
-   **Read the plan.** Nothing is written until you type `YES`.
+5. Answer the questions: disk, *install next to the existing systems* or
+   *erase the disk*, your name and password, whether to encrypt the disk
+   (recommended for laptops), language, keyboard, time zone, desktop and
+   extras. The last screen shows the full plan; nothing is written
+   before you confirm it.
 
-   What it then does:
-   - adds a ZFS partition and an 8 GB swap partition inside the largest free
-     region (it never deletes, resizes or formats anything that exists);
-   - creates the pool `zroot` (lz4 compression, autotrim) with the standard
-     FreeBSD dataset layout, including `zroot/ROOT/default` so boot
-     environments work;
-   - installs the FreeBSD base system, kernel and 32-bit libraries (from the
-     stick; downloaded if the stick lacks them);
-   - writes `fstab`, `rc.conf`, `loader.conf`, time zone;
-   - offers to set up Wi-Fi if it sees a wireless card;
-   - asks for the root password and your user's password;
-   - copies FreeBSD's `loader.efi` to `EFI/freebsd/` on the ESP (your other
-     systems' files are not touched) and adds a firmware boot entry "FreeBSD"
-     at the **end** of the boot order, so Limine stays the default;
-   - copies this repository to `~/FreeBSD-setup` on the new system;
-   - takes a `@fresh-install` snapshot.
+The installation then runs on its own for 30-90 minutes, mostly downloading.
+When it says *FreeBSD is installed*, remove the stick and restart.
 
-   Useful variations:
+### 5. First start
 
-   ```sh
-   SWAP_SIZE=16g ZFS_SIZE=120g sh install/zfs-install.sh   # explicit sizes
-   POOL=zfbsd sh install/zfs-install.sh                    # another pool name
-   ESP_DEV=nda0p1 DISK=ada0 sh install/zfs-install.sh      # FreeBSD on the HDD, ESP on the SSD
-   ```
+- **Whole disk:** FreeBSD starts directly.
+- **Next to other systems:** FreeBSD is added to the **Limine** or
+  **systemd-boot** menu when it finds one, **rEFInd** finds it by itself, and
+  it always appears as *FreeBSD* in the firmware boot menu (F12/F8/Esc). If
+  you chose "FreeBSD's menu" as the default, press **L** in that menu to start
+  Windows (or whatever started the computer before). GRUB users: see
+  [docs/DUAL-BOOT.md](docs/DUAL-BOOT.md).
 
-6. `reboot` and pull the stick out.
+At the login screen pick **Plasma (Wayland)** or **Hyprland** and log in.
 
-## Step 5 — Add FreeBSD to Limine
+## Already have FreeBSD 15?
 
-Boot CachyOS. Back up and edit the Limine config you found in step 1:
+Run the same one-liner on an installed FreeBSD. It starts the setup wizard
+instead of the installer:
 
 ```sh
-sudo cp /boot/limine.conf /boot/limine.conf.bak
-sudo tee -a /boot/limine.conf < ~/FreeBSD-setup/limine/freebsd.conf   # or paste the block by hand
+fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
 ```
 
-The block is:
+It asks for the root password through `doas`, `sudo` or `su`. On a fresh
+FreeBSD, `su` only works for members of the `wheel` group; if it answers
+*Sorry*, log in as `root` on a text console and run the same command there.
+Or clone and run it: `git clone https://github.com/nimonht/FreeBSD-setup && doas FreeBSD-setup/setup.sh`.
+Before changing anything it creates a ZFS boot environment `pre-setup-<date>`:
+choosing it in the boot menu undoes everything the setup did.
 
-```
-/FreeBSD
-    comment: FreeBSD 15 on ZFS
-    protocol: efi
-    path: boot():/EFI/freebsd/loader.efi
-```
+## Everyday use
 
-Limine chainloads FreeBSD's own loader, which then boots the ZFS pool. If
-your `limine.conf` is not on the ESP, use the `guid(...)` form explained in
-[`limine/freebsd.conf`](limine/freebsd.conf). CachyOS's Limine tooling
-regenerates only its own entries; a block appended at the end stays. If it
-ever disappears after a CachyOS kernel update, append it again.
+| Task | How |
+|---|---|
+| Update everything safely | `sysup` (creates a boot environment first) |
+| Undo a bad update | Boot menu → **8** *Boot Environments* → pick the previous one; or `doas bectl activate <name>` and restart |
+| Get an old version of a file | Every folder has `.zfs/snapshot/<time>/` with read-only copies; `snap` lists them |
+| Install software | `doas pkg install <name>`; search with `pkg search <word>` or browse [FreshPorts](https://www.freshports.org) |
+| Run a game on the fast GPU (laptops) | `gpu-run <program>`; Steam does it by itself |
+| Steam | Run `steam-setup` once from a terminal, then start Steam from the menu |
+| Wi-Fi networks | KDE: the network icon (NetworkMgr). Otherwise `doas bsdinstall wlanconfig` |
+| Change your choices (desktop, extras...) | `doas freebsd-setup` |
+| Hardware report | `freebsd-setup --report` |
+| Sound output | `pavucontrol`, or `cat /dev/sndstat` and `sysctl hw.snd.default_unit=N` |
+| Windows/Linux partitions | Dolphin shows them; NTFS, exFAT and ext4 can be opened |
 
-Reboot and pick **FreeBSD**. (Independent of Limine, `Esc` at power-on →
-"FreeBSD" also boots it.) You should land at a text `login:` prompt.
+### The desktops
 
-## Step 6 — First boot: run the setup script
+**KDE Plasma** is a complete, Windows-like desktop with its own settings app,
+file manager (Dolphin), terminal (Konsole) and screenshot tool. Most of it works
+on FreeBSD as on Linux; settings pages that depend on Linux-only services
+(NetworkManager, Bluetooth) don't. Use the NetworkMgr tray icon for networks.
 
-Log in as your user. Check the network: `ping -c 3 pkg.freebsd.org`.
-(No network? See [Wi-Fi](docs/TROUBLESHOOTING.md#no-network-on-first-boot).)
+**Hyprland + Caelestia** is a tiling Wayland desktop with an animated shell. It
+is built from source on FreeBSD with small compatibility shims. Its Wi-Fi, VPN,
+Bluetooth, GPU-usage, power-profile and fingerprint panels rely on Linux
+services and do not work; the bar, launcher, dashboard, notifications, media
+controls, lock screen, wallpapers and colour schemes do. `Super` opens the
+launcher, `Super+T` a terminal, `Super+Q` closes a window
+([all keys](https://github.com/caelestia-dots/caelestia#default-keybinds)). It
+uses FreeBSD's newest ("latest") package branch, which updates faster and breaks
+more often.
 
-Look through the settings, then run the script:
+## What exactly gets changed
+
+**Installer, whole disk:** a new GPT table with an EFI partition, a BIOS boot
+partition (so the disk boots in UEFI and legacy mode), swap, and a ZFS pool
+`zroot` with the standard FreeBSD dataset layout.
+
+**Encryption (optional, both modes):** the ZFS partition is encrypted with
+GELI (AES-XTS, 256-bit key); FreeBSD's boot loader asks for the passphrase,
+always with the US keyboard layout. Swap gets a new random key at every start.
+A backup of the encryption metadata (useless without the passphrase) is kept
+in `EFI/freebsd/fbsd-zfs.eli.backup` on the EFI partition.
+
+**Installer, next to other systems:** two new partitions (ZFS and swap) in the
+largest free space; `EFI/freebsd/` added to the existing EFI partition; one
+entry appended to Limine's `limine.conf` (backup saved next to it) or one file
+added to systemd-boot's `loader/entries/`; a firmware boot entry *FreeBSD*.
+Nothing else on the disk is modified.
+
+**Setup:** packages, `/etc/rc.conf`, `/boot/loader.conf`, `/etc/sysctl.conf`,
+`/etc/devfs.rules`, `/etc/pf.conf` (backup kept), login screen, and per-user
+settings that you don't have yet (existing ones are never overwritten). The full
+log is `/var/log/freebsd-setup.log`; your answers are saved in
+`/usr/local/etc/freebsd-setup.conf`.
+
+**Removing FreeBSD (dual boot):** delete the `fbsd-zfs` and `fbsd-swap`
+partitions from the other system, remove `EFI/freebsd` from the EFI partition,
+the FreeBSD block from `limine.conf` (or `loader/entries/freebsd.conf`), and the
+firmware entry (`efibootmgr` on Linux).
+
+## Advanced
 
 ```sh
-cd ~/FreeBSD-setup
-ee config.env                    # optional: desktop, GPU mode, login manager, apps...
-su -m root -c './setup.sh'       # asks for the root password
+./setup.sh --report              # hardware compatibility report
+./setup.sh --list                # the setup stages
+doas ./setup.sh drivers desktop  # run only some stages
+doas ./setup.sh --yes --config my.conf   # unattended, answers from a file
+./install.sh --dry-run           # the installer's questions and plan, no changes
 ```
 
-It takes 30–60 minutes, mostly downloading packages and compiling Caelestia.
-It is safe to re-run, and single stages can be repeated
-(`su -m root -c './setup.sh gpu caelestia'`, list with `./setup.sh --list`):
+All answers and their defaults are documented in
+[`lib/defaults.conf`](lib/defaults.conf); unattended installer examples are in
+[`tests/`](tests). Behind a company proxy that intercepts TLS, export
+`SSL_CA_CERT_FILE=/path/to/ca.pem` before running the installer; it is
+copied into the new system.
 
-| Stage | What it does |
-| --- | --- |
-| `base` | Creates a `pre-setup-…` boot environment (your undo button), switches packages to the `latest` branch, updates, installs core tools, `doas`/`sudo`, puts you in `wheel`, `operator`, `video`. |
-| `system` | Laptop tuning: CPU microcode, temperature sensors, ASUS hotkeys, touchpad drivers, power management, D-Bus, seatd, a `brightnessctl` command. |
-| `zfs` | ARC memory cap, monthly scrub, **automatic rolling snapshots**, the `sysup` and `snap` commands. |
-| `gpu` | Intel `i915kms` for the display; in `hybrid` mode also the NVIDIA **580 legacy** driver (the last branch that supports the GTX 1050) and `nvrun`. |
-| `audio` | PipeWire + WirePlumber on FreeBSD's OSS, PulseAudio compatibility. |
-| `desktop` | Hyprland, portals, screenshot/clipboard tools, fonts, themes, the `ly` login screen, the `hypr-session` launcher. |
-| `caelestia` | Builds the Caelestia shell and CLI for FreeBSD, installs the Caelestia dotfiles and FreeBSD-specific overrides. |
-| `kde` | KDE Plasma 6, only if `DESKTOP` is `kde` or `both`. |
-| `gaming` | Linux compatibility layer, Steam, Wine-Proton, gamescope, MangoHud. |
-| `apps` | Firefox, media, office, developer tools, NTFS/ext4/exFAT support. |
-| `finish` | `@post-setup` snapshot and a summary of anything that needs attention. |
+## Tested so far
 
-Reboot when it finishes: `shutdown -r now`.
+Be clear-eyed about this: **no real laptop or desktop has run this version
+yet**. What has been tested:
 
-## Step 7 — First login to the desktop
+- The installer and the setup stages, automatically, on the official FreeBSD
+  15.1 install image in a virtual machine: whole-disk, next to existing
+  Windows/Linux partitions with the Limine boot menu, and encrypted installs
+  (details and results: [docs/TESTING.md](docs/TESTING.md)).
+- Hardware detection, against recorded profiles of twelve different machines
+  (`sh tests/run.sh`), on every push (CI).
 
-At the login screen choose your user and the session **Hyprland (Caelestia)**.
+A virtual machine cannot show a desktop on FreeBSD (no 3D driver), so the KDE
+and Hyprland sessions themselves, graphics drivers, Wi-Fi, sound and sleep
+have not been tried on hardware with this version. If you try it, please open
+an issue with the output of `freebsd-setup --report` and what worked; machines
+known to work are listed in [docs/HARDWARE.md](docs/HARDWARE.md).
 
-| Keys | Action |
-| --- | --- |
-| `Super` (tap) | Launcher |
-| `Super + T` / `W` / `E` | Terminal / browser / file manager |
-| `Super + Q` | Close window |
-| `Super + 1…0` | Workspaces |
-| `Super + L` | Lock |
-| `Ctrl + Alt + Delete` | Session menu (logout, reboot, power off) |
-| `Ctrl + Super + Alt + R` | Restart the shell |
+Problems? See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-The full list is in the [Caelestia README](https://github.com/caelestia-dots/caelestia#default-keybinds).
+## License
 
-First things to do:
-
-```sh
-caelestia wallpaper -f ~/Pictures/Wallpapers/some.jpg   # set a wallpaper (colours follow it)
-hyprctl monitors                                        # output names for monitor config
-glxinfo -B | grep -i renderer                           # should say Intel (Mesa)
-nvrun glxinfo -B | grep -i renderer                     # should say GeForce GTX 1050
-```
-
-Your own settings go in three files that updates never overwrite:
-
-- `~/.config/caelestia/hypr-vars.lua` — default apps, gaps, keybinds
-- `~/.config/caelestia/hypr-user.lua` — any extra Hyprland config (monitors!)
-- `~/.config/caelestia/shell.json` — the shell (bar, launcher, idle, session)
-
-Do not edit `~/.config/hypr/`; it belongs to the Caelestia dotfiles.
-
-If the screen stays black or you are thrown back to the login screen, switch
-to a text console with `Ctrl+Alt+F3`, log in, and read
-`cat $XDG_RUNTIME_DIR/hypr-session.log`. Then see
-[TROUBLESHOOTING](docs/TROUBLESHOOTING.md#hyprland-does-not-start).
-
-## Step 8 — Gaming
-
-```sh
-steam-setup            # once: downloads the Linux Steam client for your user
-~/.local/bin/steam     # start Steam (runs on the GTX 1050 in hybrid mode)
-```
-
-- Steam is the **Linux** client running through FreeBSD's Linux binary
-  compatibility layer (`games/linux-steam-utils`). Native Linux games and
-  many Proton titles run. In Steam enable *Settings → Compatibility → Steam
-  Play for all other titles*.
-- Windows games outside Steam: `wine-proton` + `winetricks`, or the `mizuma`
-  launcher helper.
-- `nvrun <program>` runs anything on the NVIDIA GPU; without it programs use
-  the Intel GPU. `mangohud <program>` shows an FPS overlay.
-- **Will not work**: games with kernel-level anti-cheat (EasyAntiCheat/
-  BattlEye in most multiplayer titles, Vanguard), and anything that needs a
-  Linux kernel feature the compatibility layer lacks. Keep those on Windows
-  or CachyOS. Expect a smaller working library than on CachyOS; check a title
-  on the [FreeBSD gaming wiki](https://wiki.freebsd.org/Gaming) or
-  [linux-steam-utils issues](https://github.com/shkhln/linuxulator-steam-utils/issues).
-
-## ZFS: snapshots and boot environments
-
-This is the part of FreeBSD you will miss on other systems.
-
-**Automatic snapshots** (set up by the `zfs` stage, via `zfstools`): every 15
-minutes (4 kept), hourly (24), daily (7), weekly (4), monthly (6) for the
-system and `/home`. Temporary data (`/tmp`, `/var/tmp`, ports, obj) is excluded.
-
-```sh
-snap                         # list recent snapshots
-snap take before-experiment  # manual, whole pool
-snap files ~/Documents       # where old versions of a folder live
-ls ~/.zfs/snapshot/          # every snapshot of /home is a read-only folder
-cp ~/.zfs/snapshot/zfs-auto-snap_hourly-2026-11-11-09h00/notes.txt ~/   # restore one file
-doas zfs rollback zroot/home@zfs-auto-snap_daily-…   # roll all of /home back (drops newer changes)
-```
-
-**Boot environments** are bootable snapshots of the operating system itself.
-`sysup` makes one before every upgrade:
-
-```sh
-sysup                      # new boot environment, then pkg upgrade + freebsd-update
-bectl list                 # see them
-doas bectl activate pre-upgrade-20261111-0900 && doas shutdown -r now   # go back
-```
-
-If an upgrade leaves the system unbootable: in the FreeBSD boot menu (the one
-after Limine) press `8` — *Boot Environments* — and pick the previous one.
-`pre-setup-…` is the system exactly as it was before `setup.sh` ran.
-
-**Backups.** Snapshots protect against mistakes, not against a dead disk.
-Send them to an external drive now and then:
-
-```sh
-doas zpool create backup /dev/da0                       # once; erases that USB disk
-doas zfs snapshot -r zroot@backup-1
-doas zfs send -R zroot/home@backup-1 | doas zfs receive -Fu backup/home
-```
-
-## Daily driving
-
-| Task | Command |
-| --- | --- |
-| Update everything safely | `sysup` |
-| Install / search software | `doas pkg install <name>` / `pkg search <word>` |
-| Volume / audio devices | `pavucontrol`, `wpctl status` |
-| Brightness | keyboard keys, or `brightnessctl set 60%` |
-| Suspend | `doas zzz` (test it once before relying on it) |
-| Wi-Fi networks | edit `/etc/wpa_supplicant.conf`, `doas service netif restart wlan0` — or `doas pkg install networkmgr` for a tray GUI |
-| Mount the Windows partition | `doas ntfs-3g /dev/nda0p3 /mnt` |
-| Mount the CachyOS partition | ext4: `doas fuse-ext2 /dev/nda0p5 /mnt` (read-mostly). Btrfs cannot be read from FreeBSD. |
-| Switch to Intel-only graphics | set `GPU_MODE="intel"` in `config.env`, `su -m root -c './setup.sh gpu'`, reboot |
-| Add KDE Plasma later | set `DESKTOP="both"`, `su -m root -c './setup.sh kde'` |
-| Rebuild Caelestia after an upstream update | `su -m root -c './setup.sh caelestia'` |
-
-### What does not work on FreeBSD
-
-Being straight about the gaps compared with CachyOS:
-
-- **Caelestia panels tied to Linux services**: the network/Wi-Fi and VPN
-  panels (they talk to NetworkManager), Bluetooth, GPU usage, power profiles,
-  fingerprint unlock, and hibernate. The bar, launcher, dashboard, media,
-  notifications, lock screen, wallpaper and colour schemes do not depend on
-  those. Screen recording via `caelestia record` needs `gpu-screen-recorder`,
-  which is not ported; use `wf-recorder`.
-- **Bluetooth** audio is awkward on FreeBSD; assume wired or USB audio.
-- **Hibernate** (suspend to disk) does not exist. Suspend to RAM may or may
-  not resume cleanly with the NVIDIA driver loaded — test it.
-- **Battery life** is worse than Linux: the GTX 1050 cannot be powered down
-  completely when idle.
-- **Anti-cheat games**, some DRM video (Widevine needs the `foreign-cdm`
-  workaround), Discord's native client (use the web app).
-- **HDMI output**: on most GL553VD units the HDMI port is wired to the NVIDIA
-  GPU. Driving an external monitor through it from an Intel-primary Wayland
-  session may not work; this needs testing on your unit.
-
-### Hardware notes
-
-| Device | Driver | Notes |
-| --- | --- | --- |
-| Intel HD 630 | `i915kms` (drm-kmod) | Drives the laptop panel. |
-| GTX 1050 | `nvidia-driver-580` + `nvidia-drm-kmod-580` | Pascal cards were dropped after the 580 branch; do not install plain `nvidia-driver`. |
-| Ethernet (Realtek) | `re` | If the link is flaky: `doas pkg install realtek-re-kmod` and follow its message. |
-| Wi-Fi (Intel) | `iwlwifi` / `iwm` | Other vendors: see troubleshooting. |
-| Touchpad (I2C HID) | `ig4` + `iichid` + `hms`/`hmt` | Enabled by the `system` stage. |
-| Audio (Realtek HDA) | `snd_hda` | Speakers/headphone switch: `sysctl hw.snd.default_unit`. |
-| Webcam | `webcamd` | Enabled by the `apps` stage. |
-| Keyboard backlight / Fn keys | `acpi_asus_wmi` | Partial; brightness keys depend on the firmware. |
-
-## Removing FreeBSD
-
-From CachyOS: delete the `/FreeBSD` block from `limine.conf`, remove
-`EFI/freebsd` from the ESP, delete the firmware entry
-(`sudo efibootmgr -b <number> -B`), then delete the two partitions labelled
-`fbsd-zfs` and `fbsd-swap` with your partition tool and grow a neighbour into
-the space.
-
-## Test results
-
-Everything was run on FreeBSD 15.1-RELEASE (amd64, UEFI) in an emulated
-machine without a GPU, in November 2026.
-
-- **Installer**: target disk prepared with an ESP (containing stand-in
-  Windows and Limine files), a "Linux" partition, a "Windows" partition and
-  three separate free regions. `zfs-install.sh` placed ZFS + swap in the
-  largest region, left the other partitions and the ESP files byte-identical,
-  and appended the firmware entry after the existing boot order. It also
-  refuses to run when the free space is too small, when the pool name is
-  taken, or when it was started a second time.
-- **Boot**: that disk, with a real Limine 10.8.5 as `BOOTX64.EFI` and
-  `limine/freebsd.conf` appended to `limine.conf`, boots to the FreeBSD login
-  prompt on the ZFS root.
-- **setup.sh**: stages listed in the table above finish with exit status 0.
-  Checked afterwards: `loader.conf`, `rc.conf` (`kld_list` =
-  `fusefs i915kms nvidia-modeset nvidia-drm`), sysctls valid, groups, the
-  `pre-setup` boot environment, automatic snapshots firing, `snap`,
-  `brightnessctl`, the `ly` entry in `/etc/ttys`, seatd running,
-  matching `nvidia-driver-580`/`nvidia-kmod-580` versions.
-- **Caelestia**: the first build failed on `std::jthread` (experimental in
-  FreeBSD's C++ library); fixed with `-fexperimental-library`, the same flag
-  the FreeBSD Hyprland port uses. The lm-sensors shim, the static cavacore
-  library and M3Shapes build cleanly.
-- **Not possible in that VM**: loading `i915kms`/`nvidia` on real hardware,
-  rendering, audio output, Wi-Fi, suspend, Steam.
-
-If something on the real laptop behaves differently from this guide, the
-first places to look are `/var/log/freebsd-setup.log`,
-`$XDG_RUNTIME_DIR/hypr-session.log` and [TROUBLESHOOTING](docs/TROUBLESHOOTING.md).
-
-## Sources
-
-- [FreeBSD 15.1-RELEASE announcement and release notes](https://www.freebsd.org/releases/15.1R/relnotes/)
-- [FreeBSD Handbook](https://docs.freebsd.org/en/books/handbook/) — bsdinstall, ZFS, Wayland, Linux binary compatibility
-- [Limine CONFIG.md](https://github.com/limine-bootloader/limine/blob/trunk/CONFIG.md) — `efi` chainload protocol and path syntax
-- [FreeBSD forums: dual-booting FreeBSD 15.1 on a shared UEFI disk](https://forums.freebsd.org/threads/dual-booting-freebsd-15-1-alongside-gentoo-on-a-shared-uefi-disk.104037/)
-- [FreeBSD forums: nvidia 580 drivers and packages](https://forums.freebsd.org/threads/nvidia-580-drivers-and-packages-nvidia-settings-for-580-drivers-not-found.102833/) and the ports `UPDATING` entry on the 580 legacy branch
-- [FreshPorts: graphics/nvidia-drm-kmod](https://www.freshports.org/graphics/nvidia-drm-kmod/), [x11-wm/hyprland](https://www.freshports.org/x11-wm/hyprland/), [x11/quickshell](https://www.freshports.org/x11/quickshell/)
-- [Caelestia dotfiles](https://github.com/caelestia-dots/caelestia), [shell](https://github.com/caelestia-dots/shell), [CLI](https://github.com/caelestia-dots/cli)
-- [linuxulator-steam-utils](https://github.com/shkhln/linuxulator-steam-utils), [pw-oss (PipeWire OSS backend)](https://github.com/shkhln/pw-oss)
+BSD 2-Clause, see [LICENSE](LICENSE). Caelestia is © its authors under its own
+license and is downloaded from its upstream repositories at install time.

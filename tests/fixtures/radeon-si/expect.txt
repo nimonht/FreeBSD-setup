@@ -1,0 +1,4 @@
+HW_AMD_KMOD=radeonkms
+HW_DESKTOP=yes
+report:a graphical desktop needs at least 4 GB
+report:radeonkms

@@ -1,67 +1,89 @@
-# Stage: desktop - Hyprland, portals, tools, fonts, themes, login manager.
+# Stage: desktop - what every graphical desktop needs: fonts, portals,
+# removable drives, keyboard layout and the login screen.
 
-if [ "$DESKTOP" = kde ]; then
-	say "DESKTOP=kde: Hyprland not installed"
-else
-	say "Hyprland and companions"
-	pkg_install hyprland hyprlock hypridle hyprpaper hyprpicker hyprpolkitagent \
-		xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
-		qt6-wayland qt5-wayland qt6ct \
-		foot fuzzel wl-clipboard cliphist grim slurp swappy wf-recorder libnotify \
-		thunar gvfs polkit polkit-gnome gnome-keyring gammastep \
-		xdg-user-dirs xdg-utils wlr-randr ydotool
+[ "$DESKTOP" = none ] && { say "no desktop selected - skipped"; return 0; }
+[ "$HW_DESKTOP" = yes ] || warn "installing a desktop although this machine cannot run it: $HW_DESKTOP_WHY"
 
-	install -m 755 "$REPO_DIR/files/bin/hypr-session" /usr/local/bin/hypr-session
-	mkdir -p /usr/local/share/wayland-sessions
-	cat > /usr/local/share/wayland-sessions/hypr-session.desktop <<'DESK'
-[Desktop Entry]
-Name=Hyprland (Caelestia)
-Comment=Hyprland with the FreeBSD-setup session environment
-Exec=/usr/local/bin/hypr-session
-Type=Application
-DesktopNames=Hyprland
-DESK
-fi
+say "fonts"
+pkg_install noto-basic noto-emoji dejavu liberation-fonts-ttf
+pkg_try webfonts                       # Arial, Times New Roman... for documents
+case " $INPUT_METHODS ${DESKTOP_LANGUAGE:-} " in
+*" zh-cn "*|*" zh-tw "*|*" ja "*|*" ko "*) pkg_try noto-sc noto-tc noto-jp noto-kr ;;
+esac
 
-say "fonts, icons, cursors"
-pkg_install noto-basic noto-emoji noto-extra nerd-fonts-jetbrainsmono \
-	nerd-fonts-caskaydiacove material-icons-ttf liberation-fonts-ttf dejavu \
-	papirus-icon-theme bibata-cursor-theme nwg-look
-pkg_try rubik cantarell-fonts webfonts
-
-say "shell tools"
-pkg_install fish starship eza zoxide direnv btop fastfetch micro bat ripgrep \
-	lazygit py312-trash-cli
+say "desktop plumbing: portals, polkit, keyring, user folders"
+pkg_install xdg-utils xdg-user-dirs xdg-desktop-portal polkit xwayland
 as_user 'xdg-user-dirs-update' >> "$LOG" 2>&1 || true
 
-# ---- login manager ---------------------------------------------------------
-dm="$DISPLAY_MANAGER"
-[ "$DESKTOP" = kde ] && [ "$dm" = ly ] && dm=sddm
-case "$dm" in
+say "USB drives, phones and other operating systems' partitions"
+pkg_install bsdisks fusefs-ntfs fusefs-exfat fusefs-ext2 fusefs-simple-mtpfs
+svc bsdisks
+mkdir -p /usr/local/etc/polkit-1/rules.d
+cat > /usr/local/etc/polkit-1/rules.d/50-freebsd-setup.rules <<'RULES'
+// Written by FreeBSD-setup: members of "operator" may mount drives and
+// shut down / restart / suspend without typing the root password.
+polkit.addRule(function(action, subject) {
+	if (subject.isInGroup("operator") && subject.local && subject.active &&
+	    (action.id.indexOf("org.freedesktop.udisks2.") == 0 ||
+	     action.id.indexOf("org.freedesktop.consolekit.system.") == 0 ||
+	     action.id.indexOf("org.freedesktop.login1.") == 0)) {
+		return polkit.Result.YES;
+	}
+});
+RULES
+
+# Keyboard layout for X11 programs and the SDDM login screen.
+if [ -n "${KEYBOARD_LAYOUT:-}" ]; then
+	_xkb=$KEYBOARD_LAYOUT _var=""
+	case "$_xkb" in us-intl) _xkb=us _var=intl ;; esac
+	mkdir -p /usr/local/etc/X11/xorg.conf.d
+	cat > /usr/local/etc/X11/xorg.conf.d/00-keyboard.conf <<XORG
+# Written by FreeBSD-setup.
+Section "InputClass"
+	Identifier "keyboard"
+	MatchIsKeyboard "on"
+	Option "XkbLayout" "$_xkb"
+	Option "XkbVariant" "$_var"
+EndSection
+XORG
+fi
+
+# ---- login screen ------------------------------------------------------------
+case "$DISPLAY_MANAGER" in
+sddm)
+	say "login screen: SDDM"
+	pkg_install sddm xorg-minimal
+	mkdir -p /usr/local/etc/sddm.conf.d
+	cat > /usr/local/etc/sddm.conf.d/10-freebsd-setup.conf <<'CONF'
+# Written by FreeBSD-setup.
+[Theme]
+Current=breeze
+[Users]
+MinimumUid=1001
+MaximumUid=60000
+CONF
+	sysrc sddm_enable=YES >/dev/null
+	sysrc -x ly_enable >/dev/null 2>&1 || true
+	sed -i '' -E 's|^ttyv1([[:space:]]+)"/usr/libexec/getty Ly"|ttyv1\1"/usr/libexec/getty Pc"|' /etc/ttys
+	;;
 ly)
+	say "login screen: ly (on the second console, ttyv1)"
 	pkg_install ly
-	say "login manager: ly on ttyv1"
+	sysrc sddm_enable=NO >/dev/null 2>&1 || true
 	if ! grep -q '^Ly:' /etc/gettytab; then
 		cat >> /etc/gettytab <<'TAB'
 
-# ly display manager (FreeBSD-setup)
+# ly login screen (FreeBSD-setup)
 Ly:\
 	:lo=/usr/local/bin/ly_wrapper:\
 	:al=root:
 TAB
 	fi
-	# ttyv1 runs ly instead of a login prompt; ttyv0 and ttyv2+ stay as consoles.
 	sed -i '' -E 's|^ttyv1[[:space:]]+"/usr/libexec/getty Pc"[[:space:]]+xterm[[:space:]]+on(ifexists)?[[:space:]]+secure|ttyv1	"/usr/libexec/getty Ly"		xterm	on  secure|' /etc/ttys
-	grep -q 'getty Ly' /etc/ttys || warn "could not switch ttyv1 to ly in /etc/ttys - edit it by hand (see README)"
-	sysrc sddm_enable=NO >/dev/null 2>&1 || true
-	;;
-sddm)
-	pkg_install sddm
-	sysrc sddm_enable=YES >/dev/null
-	say "login manager: sddm"
+	grep -q 'getty Ly' /etc/ttys || warn "could not switch ttyv1 to ly in /etc/ttys - see docs/TROUBLESHOOTING.md"
 	;;
 none)
-	say "no login manager: log in on the console and run 'hypr-session'"
-	;;
-*)	warn "unknown DISPLAY_MANAGER '$DISPLAY_MANAGER' - none configured" ;;
+	say "no login screen: log in on the console and type 'startplasma' or 'hypr-session'" ;;
 esac
+
+true   # (a stage must not end on a failed test: setup.sh runs under set -e)

@@ -1,198 +1,201 @@
 # Troubleshooting
 
-Two escape hatches work for almost everything below:
+Start here:
 
-- **A text console**: `Ctrl+Alt+F3`. The desktop started by the `ly` login
-  manager lives on the second console: `Ctrl+Alt+F2` takes you back.
-- **Boot environments**: in the FreeBSD boot menu press `8`, pick
-  `pre-setup-…` or the last `pre-upgrade-…`, boot it, then make it permanent
-  with `doas bectl activate <name>`.
+- **The log**: `/var/log/freebsd-setup.log` (setup) and
+  `/var/log/freebsd-install.log` (installer).
+- **The hardware report**: `freebsd-setup --report` says what was detected and
+  what is known not to work.
+- **A text console** is always available with `Ctrl+Alt+F3` (or F2, F4...).
+  The SDDM login screen and desktop come back with `Ctrl+Alt+F9`; with the
+  `ly` login screen it is `Ctrl+Alt+F2`.
+- **Undo**: in FreeBSD's boot menu press **8** (*Boot Environments*) and pick
+  `pre-setup-...` or the newest `pre-upgrade-...`, or run
+  `doas bectl activate <name>` and restart. That rolls the whole system back;
+  your files in `/home` are not affected.
+- **Re-run** a part: `doas freebsd-setup <stage>` (`freebsd-setup --list`).
 
-The setup log is `/var/log/freebsd-setup.log`.
+## Installer
 
-## FreeBSD does not appear in Limine / "file not found"
+**"No internet"**: run `bsdinstall netconfig` from the Live System shell, or
+choose *Connect* in the installer. Wired networks need only DHCP. If the Wi-Fi
+card is not listed, use Ethernet, a USB Ethernet adapter, or USB tethering from
+a phone (`kldload if_urndis; dhclient ue0` for Android).
 
-- Boot it once from the firmware menu (`Esc` at power-on → *FreeBSD*) to
-  confirm the install itself is fine.
-- In CachyOS check the loader is where the entry points:
-  `sudo ls /boot/EFI/freebsd/` must list `loader.efi` and `loader.env`
-  (adjust `/boot` to your ESP mount point).
-- If `limine.conf` is not on the ESP, replace `boot():` with
-  `guid(<ESP PARTUUID>):` — see `limine/freebsd.conf`.
-- Indentation in `limine.conf` matters: entry line starts with `/`, options
-  are indented.
+**The disk I want is not in the list**: the USB stick and disks that are in use
+are hidden. NVMe drives are called `nda0`, SATA drives `ada0`, USB drives `da0`.
+If an NVMe drive is missing on a laptop, switch the storage mode from
+*Intel RST/RAID* to *AHCI* in the firmware setup (Windows must be prepared for
+that change first: search "switch RST to AHCI Windows").
 
-## The loader starts but cannot find the root filesystem
+**"Cannot install next to the existing systems"**: the message says why.
+Usually there is not enough *unallocated* space (shrink a partition first), the
+disk uses MBR instead of GPT, or the USB stick was started in legacy BIOS mode:
+start it again and pick the entry marked "UEFI" in the boot menu.
 
-At the `OK` loader prompt:
+**Download failed / checksum mismatch**: the network dropped. Run the installer
+again: it starts over cleanly when you choose "erase", and for side-by-side
+installs it refuses to continue over a half-done attempt. Delete the
+`fbsd-zfs`/`fbsd-swap` partitions with `gpart delete -i N <disk>` first.
+
+**Company network with a TLS-inspecting proxy**:
+`export SSL_CA_CERT_FILE=/path/to/proxy-ca.pem` before starting the installer.
+
+## Starting the computer
+
+**FreeBSD does not appear in Limine / systemd-boot**: check the EFI partition
+from the other system: `EFI/freebsd/loader.efi` must exist, and the entry must
+be in the configuration file the boot manager actually reads (Limine:
+`limine.conf`; the installer backed up the previous one as
+`limine.conf.before-freebsd`). You can always start FreeBSD from the firmware
+boot menu (F12/F8/F11/Esc at power-on), entry "FreeBSD".
+
+**Windows or Linux no longer starts by default**: the firmware boot order
+changed (some Windows updates do this too). Pick the system once in the firmware
+boot menu and fix the order there, or from FreeBSD:
+`efibootmgr` lists the entries, `doas efibootmgr -o 0001,0000,...` sets the order.
+
+**"Start ..." (key L) in FreeBSD's menu does nothing**: the loader looks for
+the other system's boot file on disks 0-3. At the loader prompt (`3` in the
+menu), `lsdev` lists the disks and `chain disk0p1:/EFI/Microsoft/Boot/bootmgfw.efi`
+starts it by hand. The path is in `/boot/loader.conf` (`fbs_chain_path`).
+
+**The loader stops at `OK` and cannot find the system**:
 
 ```
-lszfs zroot/ROOT          # should list "default"
+lszfs zroot/ROOT
 set currdev=zfs:zroot/ROOT/default:
 boot
 ```
 
-If that boots, the `loader.env` on the ESP is missing or names another pool.
-Fix from FreeBSD:
+If that works, `EFI/freebsd/loader.env` on the EFI partition is missing or
+names another pool. Fix it from FreeBSD:
+`echo 'rootdev=zfs:zroot/ROOT/default:' | doas tee /boot/efi/EFI/freebsd/loader.env`.
+
+**Encrypted disk: the passphrase is not accepted**: the boot loader always
+uses the US keyboard layout, whatever layout you chose (on a German keyboard,
+`z` and `y` are swapped, for example). There is no way around a forgotten
+passphrase: that is the point of encryption. If the passphrase is right but
+the partition reports damaged metadata, restore it from the backup on the EFI
+partition (from the USB stick's Live System):
+`mount -t msdosfs /dev/<efi-partition> /mnt && geli restore /mnt/EFI/freebsd/fbsd-zfs.eli.backup /dev/gpt/fbsd-zfs`.
+Change the passphrase from a running system with
+`doas geli setkey -n 0 /dev/gpt/fbsd-zfs` (and keep it for the backup with
+`doas geli backup /dev/gpt/fbsd-zfs /boot/efi/EFI/freebsd/fbsd-zfs.eli.backup`).
+
+**Clock wrong in Windows after using FreeBSD (or the reverse)**: they disagree
+about the hardware clock. Local time (what Windows uses):
+`doas touch /etc/wall_cmos_clock`; UTC: `doas rm /etc/wall_cmos_clock`; then
+restart.
+
+## The desktop does not start
+
+From a text console:
 
 ```sh
-doas mount /boot/efi
-echo 'rootdev=zfs:zroot/ROOT/default:' | doas tee /boot/efi/EFI/freebsd/loader.env
+freebsd-setup --report          # is the graphics card supported?
+kldstat | grep -E 'i915|amdgpu|radeon|nvidia'
+ls -l /dev/dri                  # card0, renderD128... must exist
+id                              # you must be in the "video" group
+cat /var/log/Xorg.0.log | tail  # SDDM's login screen runs on X11
+cat $XDG_RUNTIME_DIR/hypr-session.log   # Hyprland
 ```
 
-## Windows or CachyOS no longer boots
+- **No `/dev/dri`**: the graphics driver did not load. `dmesg | tail -40` shows
+  why. Missing firmware: `doas fwget`. Then `doas freebsd-setup drivers`.
+- **In a virtual machine**: expected. KDE Plasma 6.8 and Hyprland need a 3D
+  graphics driver that FreeBSD does not have for VirtualBox, VMware or QEMU.
+- **NVIDIA desktop, black screen**: check that `nvidia-driver*`,
+  `nvidia-kmod*` and `nvidia-drm*` are the same version (`pkg info | grep nvidia`)
+  and that `hw.nvidiadrm.modeset="1"` is in `/boot/loader.conf`.
+- **Laptop with NVIDIA, black screen**: the desktop must run on the Intel/AMD
+  GPU. For Hyprland, force it in `~/.config/hypr-session.env`:
+  `export AQ_DRM_DEVICES=/dev/dri/card0`. To leave the NVIDIA card switched off
+  entirely, set `GPU_DRIVERS="intel"` (or `amd`) in
+  `/usr/local/etc/freebsd-setup.conf` and run `doas freebsd-setup drivers`.
+- **Back at the login screen right after logging in**: the session crashed.
+  KDE: `cat ~/.local/share/sddm/wayland-session.log`.
+  Hyprland: `cat $XDG_RUNTIME_DIR/hypr-session.log`.
+- **KDE could not be installed**: the setup says so when the package branch
+  is being rebuilt by FreeBSD. Wait a few days and run `doas freebsd-setup kde`.
 
-The install script only adds files and partitions, so the usual cause is the
-firmware boot order. `Esc` at power-on → choose the Limine/CachyOS entry,
-then in CachyOS: `efibootmgr` and put Limine first with
-`sudo efibootmgr -o <limine>,<others…>`.
+## Hardware
 
-## No network on first boot
+**Wi-Fi**: `sysctl net.wlan.devices` lists working cards. Empty? The report
+says whether the card needs firmware (`doas fwget` installs it) or is not
+supported. Unsupported cards (Broadcom, some new chips) can work through
+[wifibox](https://github.com/pgj/freebsd-wifibox) (`pkg install wifibox`),
+which runs the Linux driver in a tiny virtual machine. Connect with the
+NetworkMgr tray icon (KDE) or `doas bsdinstall wlanconfig`.
 
-Ethernet:
+**Ethernet (Realtek) drops or is missing**: `doas pkg install realtek-re-kmod`
+and follow its message.
 
-```sh
-ifconfig                       # is there re0 (or em0/igb0/alc0)?
-doas dhclient re0
-```
+**No sound**: `cat /dev/sndstat` lists devices; the one marked `default` plays.
+Try another: `doas sysctl hw.snd.default_unit=1`, make it permanent in
+`/etc/sysctl.conf`. Check PipeWire runs: `pgrep -l pipewire wireplumber`;
+start it with `start-pipewire`. Laptops with Intel "Smart Sound"/SOF audio have
+no FreeBSD driver: use HDMI, USB or a USB headset.
 
-Wi-Fi:
+**Touchpad does not work, or no tap/scroll**: `dmesg | grep -iE 'hmt|hms|psm|iichid'`.
+I2C touchpads need `ig4_load="YES"` and `iichid_load="YES"` in
+`/boot/loader.conf` (the setup adds them on laptops) and a restart.
 
-```sh
-sysctl net.wlan.devices        # e.g. "iwlwifi0" or "iwm0"; empty = no driver
-doas sysrc wlans_iwlwifi0="wlan0" ifconfig_wlan0="WPA SYNCDHCP" create_args_wlan0="country VN"
-wpa_passphrase "YourSSID" "YourPassword" | doas tee -a /etc/wpa_supplicant.conf
-doas service netif restart
-```
+**Brightness keys**: try `brightnessctl set 50%`. If `backlight` reports no
+device, add `acpi_video_load="YES"` to `/boot/loader.conf` and restart.
 
-Empty `net.wlan.devices`: find the chip with `pciconf -lv | grep -B3 -i network`.
+**Suspend does not resume**: common with NVIDIA drivers and on laptops without
+S3. The setup only makes the lid suspend where S3 exists and no NVIDIA driver is
+loaded. Turn it off again: `doas sysctl hw.acpi.lid_switch_state=NONE` (and
+remove it from `/etc/sysctl.conf`).
 
-- Intel: `doas kldload if_iwlwifi` (newer chips) or `if_iwm` (7265/8260/8265).
-- Realtek RTL8821CE/8822BE/8822CE: `if_rtw88`; RTL8852: `if_rtw89`.
-- Qualcomm/Atheros or anything unsupported: use Ethernet, USB tethering from
-  a phone (`doas kldload if_urndis; doas dhclient ue0`), or `wifibox`
-  (`pkg install wifibox`), which runs the Linux driver in a tiny VM.
+**Bluetooth mouse/keyboard**: `doas bluetooth-config scan` and follow it.
+Bluetooth audio is not supported.
 
-## Hyprland does not start
+**Printer not found**: network printers are found through mDNS, so the router
+must allow it and `avahi_daemon` must run (`service avahi-daemon status`). Add
+printers at <http://localhost:631> (log in with your user) or in KDE's printer
+settings. USB printers: unplug and plug in again after the setup.
 
-Read the session log from a text console:
+**Webcam**: `webcamd` must run (`service webcamd status`) and you must be in
+the `webcamd` group (log out and in after the setup).
 
-```sh
-cat $XDG_RUNTIME_DIR/hypr-session.log | tail -50
-kldstat | grep -E 'i915|nvidia|drm'      # i915kms must be loaded
-ls -l /dev/dri/                          # card0, renderD128
-id                                       # you must be in group "video"
-service seatd status
-```
+## Hyprland + Caelestia
 
-- **No `/dev/dri/card0`**: `doas kldload i915kms`, then `dmesg | tail -30`.
-- **"permission denied" on the seat / DRM device**: `doas pw groupmod video -m $USER`,
-  log out and in.
-- **Starts, then black screen or immediate crash in hybrid mode**: the NVIDIA
-  DRM device is probably being picked as the primary. Force Intel only:
+- **The Caelestia build failed**: logs are in `/var/tmp/caelestia-build/*.log`.
+  A new Caelestia release may need a newer Quickshell than FreeBSD has yet:
+  pin the last release that worked in `/usr/local/etc/freebsd-setup.conf`
+  (`CAELESTIA_SHELL_REF="v2.5.0"`) and run `doas freebsd-setup caelestia`.
+- **No bar after login**: run `caelestia shell` in a terminal (`Super+T`) to
+  see the error.
+- **Icons are boxes**: the Material Symbols font is missing:
+  `ls /usr/local/share/fonts/material-symbols/`, then `doas freebsd-setup caelestia`.
+- **CPU/memory show 0**: `doas service linux start` (Caelestia reads Linux-style
+  `/proc` files from `/compat/linux/proc`).
+- **Network/Bluetooth panels empty**: expected; they need Linux services.
 
-  ```sh
-  echo 'export AQ_DRM_DEVICES=/dev/dri/card0' >> ~/.config/hypr-session.env
-  ```
+## Steam and games
 
-  If that does not help, take NVIDIA out of the picture: set
-  `GPU_MODE="intel"` in `config.env`, `su -m root -c './setup.sh gpu'`, reboot.
-- **Works from the console (`hypr-session`) but not from ly**: check
-  `/etc/ttys` has `ttyv1 "/usr/libexec/getty Ly" xterm on secure` and
-  `/etc/gettytab` has the `Ly:` entry, then `doas kill -HUP 1`.
-
-## NVIDIA
-
-```sh
-kldstat | grep nvidia                    # nvidia.ko, nvidia-modeset.ko, nvidia-drm.ko
-pkg info | grep -i nvidia                # everything must be the -580 flavour, same version
-nvidia-smi                               # GPU, temperature, memory
-nvrun glxinfo -B | grep -i renderer
-nvrun vkcube
-```
-
-- **`nvidia-smi` says driver/library version mismatch**: a partial upgrade.
-  `doas pkg upgrade`, reboot.
-- **A `pkg upgrade` wants to replace `nvidia-driver-580` with `nvidia-driver`**:
-  refuse. The GTX 1050 is not supported by newer branches. Lock them:
-  `doas pkg lock nvidia-driver-580 nvidia-kmod-580`.
-- **`nvrun` programs still render on Intel, or fail to start under Wayland**:
-  render offload from a Wayland compositor that runs on Intel is the least
-  proven part of this setup. Options: run the game inside gamescope
-  (`nvrun gamescope -f -- <game>`), or use an X11 session for gaming.
-- **Suspend/resume hangs**: resume with the NVIDIA driver loaded is hit and
-  miss on FreeBSD. The lid action is left at "do nothing" by default for that
-  reason. If `doas zzz` never resumes cleanly, shut down instead, or switch
-  to `GPU_MODE="intel"` and test again.
-
-## No sound
-
-```sh
-cat /dev/sndstat                         # pcm devices; "default" marks the active one
-sysctl hw.snd.default_unit=1             # try another pcm number
-pgrep -l pipewire wireplumber            # all three must run: pipewire, wireplumber, pipewire-pulse
-start-pipewire
-wpctl status
-cat $XDG_RUNTIME_DIR/pipewire-session.log
-```
-
-Make the working unit permanent in `/etc/sysctl.conf`
-(`hw.snd.default_unit=N`). Programs that only speak OSS work without PipeWire.
-
-## Caelestia
-
-- **The build failed during `setup.sh`**: logs are in
-  `/var/tmp/caelestia-build/*.log`. The most common cause is an upstream
-  change newer than the shims in `caelestia/build.sh`. Pin a known release in
-  `config.env` (`CAELESTIA_SHELL_REF="v2.5.0"`) and re-run
-  `su -m root -c './setup.sh caelestia'`.
-- **Hyprland starts but there is no bar**: run the shell in a terminal
-  (`Super+T`) to see why: `caelestia shell` (without `-d`). Missing QML
-  module errors mean the build's install step did not complete; "Quickshell
-  version" errors mean Caelestia wants a newer Quickshell than the FreeBSD
-  package provides — `doas pkg upgrade quickshell`, or pin an older Caelestia
-  tag as above.
-- **Icons show as empty boxes**: the Material Symbols font is missing.
-  `ls /usr/local/share/fonts/material-symbols/` then `fc-cache -f`; re-run the
-  caelestia stage to download it again.
-- **CPU/memory read 0 in the dashboard**: the Linux `/proc` emulation is not
-  mounted. `doas service linux start`; `ls /compat/linux/proc/meminfo`.
-- **No CPU temperature**: `doas kldload coretemp`; `sysctl dev.cpu.0.temperature`.
-- **I just want plain Hyprland**: move `~/.config/hypr` away and log in
-  again; Hyprland writes its default config. Set `INSTALL_CAELESTIA="no"`.
-
-## Steam
-
-- `steam-setup` must run as your user inside the desktop session.
-- **Steam window never appears**: `doas service linux start`, check
-  `mount | grep compat` shows linprocfs, linsysfs, devfs, fdescfs, tmpfs.
-- **"glXChooseVisual failed" / black Steam window**: the Linux NVIDIA
-  libraries are missing or mismatched: `pkg info linux-nvidia-libs-580` must
-  be the same version as `nvidia-driver-580`.
-- **A game does not launch**: try another Proton version in the game's
-  properties, then search the title in the
-  [linuxulator-steam-utils issues](https://github.com/shkhln/linuxulator-steam-utils/issues).
-
-## Touchpad, keys, screen
-
-- **Touchpad dead**: `dmesg | grep -iE 'iichid|hmt|hms|ig4|psm'` shows which
-  driver, if any, attached. For an I2C touchpad, `ig4_load="YES"` and
-  `iichid_load="YES"` must be in `/boot/loader.conf` (the `system` stage adds
-  them); reboot after changing it. A USB mouse always works meanwhile.
-- **Brightness keys do nothing**: `brightnessctl set 50%` from a terminal. If
-  that works, bind the keys in `~/.config/caelestia/hypr-user.lua`. If
-  `backlight` reports no device, the panel is not controlled through i915;
-  try `doas kldload acpi_video` and `sysctl hw.acpi.video.lcd0.brightness`.
-- **Wrong clock in Windows after using FreeBSD** (or the reverse): the two
-  disagree about the hardware clock. Hardware clock in local time:
-  `doas touch /etc/wall_cmos_clock`; in UTC: `doas rm /etc/wall_cmos_clock`.
+- Run `steam-setup` as your user from a terminal inside the desktop, once.
+- **Steam does not start**: `doas service linux start`; check
+  `mount | grep compat` lists linprocfs, linsysfs, devfs, fdescfs and tmpfs.
+- **NVIDIA: "glXChooseVisual failed" or black window**: `linux-nvidia-libs*`
+  must be the same version as `nvidia-driver*`.
+- **A game does not start**: try another Proton version in its properties; search
+  the game in the [linuxulator-steam-utils issues](https://github.com/shkhln/linuxulator-steam-utils/issues).
+  Games with kernel anti-cheat do not run.
 
 ## Disk space and snapshots
 
 ```sh
-zfs list -o space                        # where the space went
-zfs list -t snapshot -o name,used -s used | tail   # biggest snapshots
-doas zfs destroy zroot/home@<snapshot>   # delete one
-bectl list                               # old boot environments also hold space
-doas bectl destroy -o pre-upgrade-…
+zfs list -o space                      # where the space went
+zfs list -t snapshot -o name,used -s used | tail
+doas zfs destroy zroot/home@<snapshot> # remove one snapshot
+bectl list                             # old boot environments hold space too
+doas bectl destroy -o pre-upgrade-...
 ```
+
+## Reporting a problem
+
+Open an issue with: what you did, what happened, `freebsd-setup --report`,
+and the end of `/var/log/freebsd-setup.log`.

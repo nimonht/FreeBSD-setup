@@ -1,0 +1,3 @@
+smbios.system.maker="ASUSTeK COMPUTER INC."
+smbios.system.product="GL553VD"
+smbios.chassis.type="Notebook"
