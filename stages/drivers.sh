@@ -105,6 +105,28 @@ Section "Device"
 EndSection
 XORG
 		fi
+		# Two GPUs: the SDDM login screen runs on X11, and X picks the
+		# NVIDIA card (no screen is wired to it on a laptop) as soon as its
+		# driver is loaded: a black screen. Pin X to the GPU that drives the
+		# screen and keep it off the other one.
+		_bus=""
+		case "$HW_GPU_PRIMARY" in intel|amd) [ "$HW_GPU_HYBRID" = yes ] && _bus=$(hw_gpu_busid "$HW_GPU_PRIMARY") ;; esac
+		if [ -n "$_bus" ]; then
+			mkdir -p /usr/local/etc/X11/xorg.conf.d
+			cat > /usr/local/etc/X11/xorg.conf.d/20-primary-gpu.conf <<XORG
+# Written by FreeBSD-setup: the login screen (X11) runs on the GPU that
+# drives the screen ($HW_GPU_PRIMARY); the NVIDIA card is left to gpu-run.
+Section "ServerFlags"
+	Option "AutoAddGPU" "off"
+EndSection
+Section "Device"
+	Identifier "Screen GPU"
+	Driver     "modesetting"
+	BusID      "$_bus"
+EndSection
+XORG
+			say "login screen pinned to the $HW_GPU_PRIMARY GPU ($_bus)"
+		fi
 		if is_live && [ -n "$_drmpkg" ]; then
 			kld_now nvidia-modeset || warn "nvidia-modeset did not load - check: dmesg | tail -30"
 		fi
