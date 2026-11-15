@@ -35,6 +35,7 @@ LOG=/tmp/freebsd-install.log
 : > "$LOG"
 UI_TITLE="FreeBSD-setup installer"
 MNT=/mnt
+ESP_TMP=/tmp/fbs-esp
 CONFIG_FILE="" ASSUME_YES=no DRY_RUN=no BASE_ONLY=no FORCE=no
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -43,7 +44,7 @@ while [ $# -gt 0 ]; do
 	--dry-run) DRY_RUN=yes ;;
 	--base-only) BASE_ONLY=yes ;;
 	--force) FORCE=yes ;;
-	-h|--help) sed -n '3,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) awk 'NR > 2 && /^#/ { sub(/^# ?/, ""); print; next } NR > 2 { exit }' "$0"; exit 0 ;;
 	*) die "unknown option $1" ;;
 	esac
 	shift
@@ -52,6 +53,9 @@ done
 # Installer answers (all can come from --config).
 INSTALL_DISK="" INSTALL_MODE="" ZFS_SIZE_GB="" SWAP_SIZE="auto" POOL=zroot
 HOSTNAME_NEW="" USERNAME="" USER_FULLNAME="" USER_PASSWORD="" ROOT_PASSWORD=""
+# Unattended installs may give password hashes (crypt(3) format, e.g. from
+# "openssl passwd -6") instead of clear-text passwords.
+USER_PASSWORD_HASH="" ROOT_PASSWORD_HASH=""
 TIMEZONE="" RTC_LOCAL="auto" BOOT_DEFAULT="keep" BOOT_INTEGRATION="yes"
 ENCRYPT=no ENCRYPT_PASSPHRASE=""
 WIZ_LANG="" DESKTOP_LANGUAGE=""
@@ -77,6 +81,40 @@ ui_init
 if [ "$UI_MODE" = auto ] && [ -z "$CONFIG_FILE" ]; then
 	die "unattended mode needs --config FILE with the answers"
 fi
+
+# ---------------------------------------------------------------- cleanup ---
+# Whatever way the installer ends, leave the machine in a state it can be
+# started again from: nothing mounted, no pool imported, no key file left.
+# A failed side-by-side install also removes the partitions it created, so
+# the free space is whole again. (An erased disk stays erased.)
+PHASE=ask POOL_CREATED=no GELI_ATTACHED=no GELI_KEYFILE="" NEW_PARTS=""
+cleanup() {
+	_exit=$?
+	trap - EXIT INT TERM
+	ui_restore_tty
+	[ -n "$GELI_KEYFILE" ] && rm -f "$GELI_KEYFILE"
+	umount "$ESP_TMP" 2>/dev/null || true
+	if [ "$PHASE" = install ]; then
+		printf '\nThe installation did not finish. Cleaning up...\n' >&2
+		umount "$MNT/dev" 2>/dev/null || umount -f "$MNT/dev" 2>/dev/null || true
+		umount "$MNT/boot/efi" 2>/dev/null || umount -f "$MNT/boot/efi" 2>/dev/null || true
+		if [ "$POOL_CREATED" = yes ]; then
+			zpool export "$POOL" >> "$LOG" 2>&1 || zpool export -f "$POOL" >> "$LOG" 2>&1 || true
+		fi
+		if [ "$GELI_ATTACHED" = yes ]; then geli detach "/dev/gpt/$L_ZFS" >> "$LOG" 2>&1 || true; fi
+		if [ "$INSTALL_MODE" = alongside ]; then
+			# newest first; "ada0p5" -> index 5
+			for _p in $(echo "$NEW_PARTS" | tr ' ' '\n' | sed '1!G;h;$!d'); do
+				gpart delete -i "${_p##*p}" "$INSTALL_DISK" >> "$LOG" 2>&1 &&
+					printf '  removed the unfinished partition %s\n' "$_p" >&2
+			done
+		fi
+		printf 'Details: %s\nIt is safe to start the installer again.\n' "$LOG" >&2
+	fi
+	exit "$_exit"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
 
 # Extra CA for networks with a TLS-intercepting proxy: SSL_CA_CERT_FILE
 # replaces the whole trust store, so merge it with the system's own CAs.
@@ -188,6 +226,9 @@ ask_disk() {
 	INSTALL_DISK=$(ui_menu "Disk" "Install FreeBSD on which disk?" "$_def" $_args) || exit 1
 	IFS=$_old
 	[ -c "/dev/$INSTALL_DISK" ] || die "/dev/$INSTALL_DISK does not exist"
+	# shellcheck disable=SC2046
+	in_list "$INSTALL_DISK" $(disk_candidates) ||
+		die "$INSTALL_DISK cannot be installed on: it is the installer's own disk or is in use"
 }
 
 ask_mode() {
@@ -208,6 +249,8 @@ ask_mode() {
 	elif [ "$FREE_GB" -lt "$MIN_GB" ]; then _alongside_ok=no _why="only $FREE_GB GB is unallocated; at least $MIN_GB GB is needed (shrink a partition in Windows Disk Management or with GParted first)"
 	fi
 
+	case "$INSTALL_MODE" in ""|erase|alongside) ;;
+	*) die "INSTALL_MODE must be erase or alongside (got '$INSTALL_MODE')" ;; esac
 	_def=${INSTALL_MODE:-}
 	[ -z "$_def" ] && { [ "$_alongside_ok" = yes ] && _def=alongside || _def=erase; }
 	if [ "$_alongside_ok" = yes ]; then
@@ -222,8 +265,26 @@ ask_mode() {
 The only option on this disk is to ERASE it completely."
 	fi
 	if [ "$INSTALL_MODE" = alongside ] && [ "$UI_MODE" != auto ]; then
-		ZFS_SIZE_GB=$(ui_input "Size" "How many GB of the $FREE_GB GB free space should FreeBSD use? (swap is taken from it)" "${ZFS_SIZE_GB:-$FREE_GB}") || exit 1
+		while :; do
+			ZFS_SIZE_GB=$(ui_input "Size" "How many GB of the $FREE_GB GB free space should FreeBSD use? (swap is taken from it)" "${ZFS_SIZE_GB:-$FREE_GB}") || exit 1
+			valid_number "$ZFS_SIZE_GB" && [ "$ZFS_SIZE_GB" -ge "$MIN_GB" ] && [ "$ZFS_SIZE_GB" -le "$FREE_GB" ] && break
+			ui_msg "Size" "Type a whole number between $MIN_GB and $FREE_GB (GB), without a unit."
+			ZFS_SIZE_GB=""
+		done
 	fi
+}
+
+# A whole number, at most 9 digits (so shell arithmetic cannot overflow).
+valid_number() { case "$1" in ""|*[!0-9]*|??????????*) return 1 ;; esac; return 0; }
+
+# A host name: letters, digits, dots and dashes (it is written to rc.conf).
+valid_hostname() { echo "$1" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]{0,62}[A-Za-z0-9])?$'; }
+
+# A full name for the password database: no colon (field separator), no
+# quote, backslash or control characters.
+valid_fullname() {
+	case "$1" in *:*|*'"'*|*\\*) return 1 ;; esac
+	! printf '%s' "$1" | LC_ALL=C grep -q '[[:cntrl:]]'
 }
 
 # A login name: valid characters, and not one of the system's own accounts.
@@ -233,8 +294,16 @@ valid_user() {
 }
 
 ask_account() {
-	[ "$UI_MODE" = auto ] && { [ -n "$USERNAME" ] && [ -n "$USER_PASSWORD" ] || die "the config file must set USERNAME and USER_PASSWORD"; }
-	USER_FULLNAME=$(ui_input "Your account" "Your full name:" "$USER_FULLNAME") || exit 1
+	if [ "$UI_MODE" = auto ]; then
+		[ -n "$USERNAME" ] || die "the config file must set USERNAME"
+		[ -n "$USER_PASSWORD$USER_PASSWORD_HASH" ] || die "the config file must set USER_PASSWORD or USER_PASSWORD_HASH"
+	fi
+	while :; do
+		USER_FULLNAME=$(ui_input "Your account" "Your full name:" "$USER_FULLNAME") || exit 1
+		valid_fullname "$USER_FULLNAME" && break
+		[ "$UI_MODE" = auto ] && die "USER_FULLNAME must not contain : \" \\ or control characters"
+		ui_msg "Your account" "The name must not contain a colon (:), a double quote or a backslash."
+	done
 	_sug=$(echo "${USER_FULLNAME%% *}" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_-')
 	while :; do
 		USERNAME=$(ui_input "Your account" "Login name (lower case, no spaces):" "${USERNAME:-$_sug}") || exit 1
@@ -258,15 +327,25 @@ You type it when installing software or changing system settings." yes; then
 			ui_msg "Administrator" "The passwords are empty or do not match. Try again."
 		done
 	fi
-	[ -n "$ROOT_PASSWORD" ] || ROOT_PASSWORD=$USER_PASSWORD
+	if [ -z "$ROOT_PASSWORD$ROOT_PASSWORD_HASH" ]; then
+		ROOT_PASSWORD=$USER_PASSWORD ROOT_PASSWORD_HASH=$USER_PASSWORD_HASH
+	fi
 	TARGET_USER=$USERNAME
-	_hn=${HOSTNAME_NEW:-freebsd}
-	HOSTNAME_NEW=$(ui_input "Computer name" "A name for this computer on the network:" "$_hn") || exit 1
+	HOSTNAME_NEW=${HOSTNAME_NEW:-freebsd}
+	while :; do
+		HOSTNAME_NEW=$(ui_input "Computer name" "A name for this computer on the network:" "$HOSTNAME_NEW") || exit 1
+		valid_hostname "$HOSTNAME_NEW" && break
+		[ "$UI_MODE" = auto ] && die "HOSTNAME_NEW '$HOSTNAME_NEW' is not a valid host name (letters, digits, . and -)"
+		ui_msg "Computer name" "Use only letters, digits, dots and dashes, starting and ending with a letter or digit."
+	done
 }
 
 ask_encrypt() {
 	if [ "$UI_MODE" = auto ]; then
-		is_yes ENCRYPT && [ -z "$ENCRYPT_PASSPHRASE" ] && ENCRYPT_PASSPHRASE=$USER_PASSWORD
+		if is_yes ENCRYPT && [ -z "$ENCRYPT_PASSPHRASE" ]; then
+			[ -n "$USER_PASSWORD" ] || die "ENCRYPT=yes needs ENCRYPT_PASSPHRASE when only a password hash is given"
+			ENCRYPT_PASSPHRASE=$USER_PASSWORD
+		fi
 		return 0
 	fi
 	_d=no; is_yes ENCRYPT && _d=yes
@@ -331,7 +410,6 @@ Answer Yes when Windows is installed on this computer (Windows keeps the clock i
 
 # ------------------------------------------------------------- boot managers ---
 
-ESP_TMP=/tmp/fbs-esp
 esp_mount_ro() { mkdir -p "$ESP_TMP"; mount -t msdosfs -o ro "/dev/$1" "$ESP_TMP" 2>/dev/null; }
 esp_umount()   { umount "$ESP_TMP" 2>/dev/null || true; }
 
@@ -404,12 +482,19 @@ plan_sizes() {
 		_g=$(( (HW_RAM_MB + 1023) / 1024 )); [ "$_g" -lt 2 ] && _g=2; [ "$_g" -gt 8 ] && _g=8
 		SWAP_SIZE="${_g}g"
 	fi
-	case "$SWAP_SIZE" in 0) SWAP_SECTORS=0 ;; *[gG]) SWAP_SECTORS=$(( ${SWAP_SIZE%?} * 1073741824 / SECSIZE )) ;;
-	*) die "SWAP_SIZE must be like 8g or 0" ;; esac
+	case "$SWAP_SIZE" in
+	0) SWAP_SECTORS=0 ;;
+	*[gG])	valid_number "${SWAP_SIZE%?}" || die "SWAP_SIZE must be like 8g or 0 (got '$SWAP_SIZE')"
+		SWAP_SECTORS=$(( ${SWAP_SIZE%?} * 1073741824 / SECSIZE )) ;;
+	*) die "SWAP_SIZE must be like 8g or 0 (got '$SWAP_SIZE')" ;;
+	esac
 	if [ "$INSTALL_MODE" = alongside ]; then
 		START=$(( (FREE_START + ALIGN - 1) / ALIGN * ALIGN ))
 		USABLE=$(( (FREE_START + FREE_SECTORS - START) / ALIGN * ALIGN ))
-		if [ -n "$ZFS_SIZE_GB" ] && [ "$ZFS_SIZE_GB" -lt "$FREE_GB" ] 2>/dev/null; then
+		if [ -n "$ZFS_SIZE_GB" ]; then
+			valid_number "$ZFS_SIZE_GB" || die "ZFS_SIZE_GB must be a whole number of GB (got '$ZFS_SIZE_GB')"
+		fi
+		if [ -n "$ZFS_SIZE_GB" ] && [ "$ZFS_SIZE_GB" -lt "$FREE_GB" ]; then
 			USABLE=$(( ZFS_SIZE_GB * 1073741824 / SECSIZE / ALIGN * ALIGN ))
 		fi
 		ZFS_SECTORS=$(( USABLE - SWAP_SECTORS ))
@@ -468,46 +553,88 @@ Type the disk name ($INSTALL_DISK) to confirm:" "") || exit 1
 
 run() { _log "+ $*"; "$@" >> "$LOG" 2>&1; }
 
+# GPT labels are one name space for the whole machine: /dev/gpt/fbsd-zfs
+# could be a partition of ANOTHER disk (an earlier FreeBSD-setup install).
+# So the labels get a number when the plain names are taken anywhere, and
+# every labelled device is checked to sit on the chosen disk before use.
+label_in_use() {
+	[ -e "/dev/gpt/$1" ] && return 0
+	gpart show -l 2>/dev/null | awk -v l="$1" '$1 != "=>" && $4 == l { f = 1 } END { exit !f }'
+}
+pick_labels() {
+	_n=""
+	while label_in_use "fbsd-zfs$_n" || label_in_use "fbsd-swap$_n" ||
+		label_in_use "fbsd-esp$_n" || label_in_use "fbsd-boot$_n"; do
+		_n=$(( ${_n:-0} + 1 ))
+		[ "$_n" -lt 100 ] || die "could not find free partition labels"
+	done
+	L_ZFS="fbsd-zfs$_n" L_SWAP="fbsd-swap$_n" L_ESP="fbsd-esp$_n" L_BOOT="fbsd-boot$_n"
+	_log "partition labels: $L_ZFS $L_SWAP $L_ESP $L_BOOT"
+}
+# label_on_disk label   -> true when /dev/gpt/<label> is a partition of the
+# disk being installed on
+label_on_disk() {
+	_ld=$(glabel status -s 2>/dev/null | awk -v l="gpt/$1" '$1 == l { print $3; exit }' | sed -E 's/p[0-9]+$//')
+	[ "$_ld" = "$INSTALL_DISK" ]
+}
+# add_part gpart-add-arguments...   create a partition and remember it
+add_part() {
+	_log "+ gpart add $*"
+	_o=$(gpart add "$@" 2>&1) || { _log "$_o"; return 1; }
+	_log "$_o"
+	NEW_PARTS="$NEW_PARTS ${_o%% *}"
+}
+
 do_partition() {
 	step "Partitioning $INSTALL_DISK"
+	PHASE=install
 	if [ "$INSTALL_MODE" = erase ]; then
 		gpart destroy -F "$INSTALL_DISK" >> "$LOG" 2>&1 || true
 		run gpart create -s gpt "$INSTALL_DISK"
-		run gpart add -a 1m -t efi -s 260m -l fbsd-esp "$INSTALL_DISK"
-		run gpart add -a 4k -t freebsd-boot -s 512k -l fbsd-boot "$INSTALL_DISK"
-		[ "$SWAP_SECTORS" -gt 0 ] && run gpart add -a 1m -t freebsd-swap -s "$SWAP_SECTORS" -l fbsd-swap "$INSTALL_DISK"
-		run gpart add -a 1m -t freebsd-zfs -l fbsd-zfs "$INSTALL_DISK"
+		pick_labels
+		add_part -a 1m -t efi -s 260m -l "$L_ESP" "$INSTALL_DISK"
+		add_part -a 4k -t freebsd-boot -s 512k -l "$L_BOOT" "$INSTALL_DISK"
+		if [ "$SWAP_SECTORS" -gt 0 ]; then add_part -a 1m -t freebsd-swap -s "$SWAP_SECTORS" -l "$L_SWAP" "$INSTALL_DISK"; fi
+		add_part -a 1m -t freebsd-zfs -l "$L_ZFS" "$INSTALL_DISK"
 		ESP_DEV=$(esp_of "$INSTALL_DISK")
 		run newfs_msdos -F 32 -c 1 -L EFISYS "/dev/$ESP_DEV"
 	else
-		gpart show -l "$INSTALL_DISK" | grep -qE ' (fbsd-swap|fbsd-zfs) ' &&
-			die "$INSTALL_DISK already has partitions labelled fbsd-zfs/fbsd-swap from an earlier attempt; remove them first"
-		run gpart add -t freebsd-zfs -l fbsd-zfs -b "$START" -s "$ZFS_SECTORS" "$INSTALL_DISK"
-		[ "$SWAP_SECTORS" -gt 0 ] && run gpart add -t freebsd-swap -l fbsd-swap -b $(( START + ZFS_SECTORS )) -s "$SWAP_SECTORS" "$INSTALL_DISK"
+		pick_labels
+		add_part -t freebsd-zfs -l "$L_ZFS" -b "$START" -s "$ZFS_SECTORS" "$INSTALL_DISK"
+		if [ "$SWAP_SECTORS" -gt 0 ]; then
+			add_part -t freebsd-swap -l "$L_SWAP" -b $(( START + ZFS_SECTORS )) -s "$SWAP_SECTORS" "$INSTALL_DISK"
+		fi
 		ESP_DEV=$(esp_of "$INSTALL_DISK")
 	fi
-	for _i in 1 2 3 4 5 6 7 8 9 10; do [ -c /dev/gpt/fbsd-zfs ] && break; sleep 1; done
-	[ -c /dev/gpt/fbsd-zfs ] || die "/dev/gpt/fbsd-zfs did not appear"
+	for _i in 1 2 3 4 5 6 7 8 9 10; do [ -c "/dev/gpt/$L_ZFS" ] && break; sleep 1; done
+	[ -c "/dev/gpt/$L_ZFS" ] || die "/dev/gpt/$L_ZFS did not appear"
+	label_on_disk "$L_ZFS" ||
+		die "/dev/gpt/$L_ZFS is not on $INSTALL_DISK - refusing to touch it (another disk carries the same partition label)"
+	if [ "$SWAP_SECTORS" -gt 0 ]; then
+		label_on_disk "$L_SWAP" || die "/dev/gpt/$L_SWAP is not on $INSTALL_DISK - refusing to continue"
+	fi
 	gpart show -l "$INSTALL_DISK" | tee -a "$LOG"
 }
 
 do_pool() {
-	ZDEV=/dev/gpt/fbsd-zfs
+	ZDEV=/dev/gpt/$L_ZFS
 	if is_yes ENCRYPT; then
 		step "Encrypting the FreeBSD partition (GELI, AES-XTS 256)"
-		_k=$(mktemp /tmp/fbs-geli.XXXXXX)
-		chmod 600 "$_k"
-		printf '%s' "$ENCRYPT_PASSPHRASE" > "$_k"
+		GELI_KEYFILE=$(mktemp /tmp/fbs-geli.XXXXXX)      # removed by cleanup() too
+		chmod 600 "$GELI_KEYFILE"
+		printf '%s' "$ENCRYPT_PASSPHRASE" > "$GELI_KEYFILE"
 		# -b: unlock at boot; -g: the boot loader asks for the passphrase
-		run geli init -b -g -e AES-XTS -l 256 -s 4096 -B /tmp/fbsd-zfs.eli.backup -J "$_k" /dev/gpt/fbsd-zfs
-		run geli attach -j "$_k" /dev/gpt/fbsd-zfs
-		rm -f "$_k"
-		ZDEV=/dev/gpt/fbsd-zfs.eli
+		run geli init -b -g -e AES-XTS -l 256 -s 4096 -B /tmp/fbsd-zfs.eli.backup -J "$GELI_KEYFILE" "/dev/gpt/$L_ZFS"
+		run geli attach -j "$GELI_KEYFILE" "/dev/gpt/$L_ZFS"
+		GELI_ATTACHED=yes
+		rm -f "$GELI_KEYFILE"; GELI_KEYFILE=""
+		ZDEV=/dev/gpt/$L_ZFS.eli
 	fi
 	step "Creating the ZFS pool $POOL"
 	mkdir -p "$MNT"
 	run zpool create -f -o altroot="$MNT" -o ashift=12 -o autotrim=on \
 		-O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none "$POOL" "$ZDEV"
+	POOL_CREATED=yes
 	run zfs create -o mountpoint=none "$POOL/ROOT"
 	run zfs create -o mountpoint=/ -o canmount=noauto "$POOL/ROOT/default"
 	run zfs mount "$POOL/ROOT/default"
@@ -566,12 +693,12 @@ kern.geom.label.disk_ident.enable="0"
 kern.geom.label.gptid.enable="0"
 autoboot_delay="3"
 EOF
-	_swapdev=/dev/gpt/fbsd-swap
+	_swapdev=/dev/gpt/$L_SWAP
 	if is_yes ENCRYPT; then
 		echo 'geom_eli_load="YES"' >> "$MNT/boot/loader.conf"
 		mkdir -p "$MNT/var/backups"
 		cp /tmp/fbsd-zfs.eli.backup "$MNT/var/backups/" 2>/dev/null || true
-		_swapdev=/dev/gpt/fbsd-swap.eli     # encrypted with a new random key at every start
+		_swapdev=/dev/gpt/$L_SWAP.eli     # encrypted with a new random key at every start
 	fi
 	{
 		echo "# Device		Mountpoint	FStype	Options		Dump	Pass#"
@@ -613,9 +740,16 @@ EOF
 
 do_users() {
 	step "Creating the user account"
-	printf '%s\n' "$ROOT_PASSWORD" | chroot "$MNT" pw usermod root -h 0
-	printf '%s\n' "$USER_PASSWORD" | chroot "$MNT" pw useradd "$USERNAME" -m -c "${USER_FULLNAME:-$USERNAME}" \
-		-G wheel,operator,video -s /bin/sh -h 0
+	# -h 0: clear-text password on stdin; -H 0: an already hashed one
+	if [ -n "$ROOT_PASSWORD_HASH" ]; then
+		printf '%s\n' "$ROOT_PASSWORD_HASH" | chroot "$MNT" pw usermod root -H 0
+	else
+		printf '%s\n' "$ROOT_PASSWORD" | chroot "$MNT" pw usermod root -h 0
+	fi
+	if [ -n "$USER_PASSWORD_HASH" ]; then _pwflag=-H _pw=$USER_PASSWORD_HASH; else _pwflag=-h _pw=$USER_PASSWORD; fi
+	printf '%s\n' "$_pw" | chroot "$MNT" pw useradd "$USERNAME" -m -c "${USER_FULLNAME:-$USERNAME}" \
+		-G wheel,operator,video -s /bin/sh "$_pwflag" 0
+	_pw=""
 	chroot "$MNT" pw usershow "$USERNAME" >/dev/null || die "creating the user failed"
 }
 
@@ -643,21 +777,39 @@ do_boot() {
 		umount "$MNT/boot/efi"
 	fi
 	if [ "$INSTALL_MODE" = erase ]; then
-		_bi=$(gpart show -l "$INSTALL_DISK" | awk '$4 == "fbsd-boot" { print $3 }')
+		_bi=$(gpart show -l "$INSTALL_DISK" | awk -v l="$L_BOOT" '$4 == l { print $3 }')
 		if [ -n "$_bi" ]; then
 			run gpart bootcode -b "$MNT/boot/pmbr" -p "$MNT/boot/gptzfsboot" -i "$_bi" "$INSTALL_DISK"
 		fi
 	fi
 }
 
+# Numbers of the firmware entries named "FreeBSD" that start the loader on
+# THIS install's EFI partition (matched by the partition's GPT UUID). A
+# FreeBSD on another disk has its own EFI partition and is never listed.
+efi_ours() {
+	[ -n "$ESP_UUID" ] || return 0
+	efibootmgr -v 2>/dev/null | awk -v u="$ESP_UUID" '
+		/^[ +]*Boot[0-9A-Fa-f]{4}\*? FreeBSD / && index(tolower($0), tolower(u)) {
+			sub(/^[ +]*Boot/, ""); sub(/\*.*/, ""); print $1 }'
+}
+
 efi_entry() {
-	# Remove entries left by an earlier attempt, then add ours.
-	for _b in $(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}\*? FreeBSD$/ { sub(/^[ +]*Boot/, ""); sub(/\*.*/, ""); print $1 }'); do
+	ESP_UUID=$(gpart list "$INSTALL_DISK" 2>/dev/null | awk -v n="$ESP_DEV" '
+		$2 == "Name:" { f = ($3 == n) } f && $1 == "rawuuid:" { print $2; exit }')
+	# Remove our own entries left by an earlier attempt, then add a new one.
+	for _b in $(efi_ours); do
 		efibootmgr -B -b "$_b" >/dev/null 2>&1 || true
 	done
 	_old=$(efibootmgr | awk -F': *' '/^BootOrder/ { gsub(/ /, "", $2); print $2 }')
+	_before=$(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}/ { sub(/^[ +]*Boot/, ""); print substr($0, 1, 4) }')
 	if efibootmgr -c -a -l "$MNT/boot/efi/EFI/freebsd/loader.efi" -L FreeBSD >> "$LOG" 2>&1; then
-		_new=$(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}\*? FreeBSD$/ { sub(/^[ +]*Boot/, ""); sub(/\*.*/, ""); print $1 }' | tail -1)
+		# The new entry is the one that was not there before.
+		_new=""
+		for _b in $(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}/ { sub(/^[ +]*Boot/, ""); print substr($0, 1, 4) }'); do
+			echo "$_before" | grep -qx "$_b" || _new=$_b
+		done
+		[ -n "$_new" ] || { warn "could not find the new firmware boot entry; choose FreeBSD in the firmware boot menu"; return 0; }
 		_old=$(echo "$_old" | tr ',' '\n' | grep -vx "$_new" | paste -sd, -)
 		if [ "$INSTALL_MODE" = erase ] || [ "$BOOT_DEFAULT" = freebsd ]; then
 			_order="$_new${_old:+,$_old}"
@@ -780,6 +932,7 @@ if [ -n "$WARNINGS" ]; then
 
 Things that need attention:$WARNINGS"
 fi
+PHASE=finished
 ui_msg "Done" "$_done"
 printf '%s\n' "$_done"
 if [ "$UI_MODE" != auto ] && ui_yesno "Restart" "Restart now?" yes; then shutdown -r now; fi

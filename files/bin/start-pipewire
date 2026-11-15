@@ -2,7 +2,9 @@
 # Start the PipeWire audio stack for this login session (idempotent).
 uid=$(id -u)
 running() { pgrep -u "$uid" -x "$1" >/dev/null 2>&1; }
-log=${XDG_RUNTIME_DIR:-/tmp}/pipewire-session.log
+logdir=${XDG_RUNTIME_DIR:-$HOME/.cache}
+mkdir -p "$logdir"
+log=$logdir/pipewire-session.log
 
 running pipewire || { pipewire >"$log" 2>&1 & sleep 1; }
 running wireplumber || { wireplumber >>"$log" 2>&1 & }

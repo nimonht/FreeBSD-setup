@@ -31,7 +31,8 @@ FONT_DIR=/usr/local/share/fonts/material-symbols
 if [ ! -s "$FONT_DIR/MaterialSymbolsRounded.ttf" ]; then
 	say "downloading the Material Symbols font"
 	mkdir -p "$FONT_DIR"
-	base="https://raw.githubusercontent.com/google/material-design-icons/master/variablefont"
+	# A fixed commit, not "master": the same files on every install.
+	base="https://raw.githubusercontent.com/google/material-design-icons/${MATERIAL_SYMBOLS_REF:-10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7}/variablefont"
 	for f in Rounded Outlined Sharp; do
 		fetch -qo "$FONT_DIR/MaterialSymbols$f.ttf" \
 			"$base/MaterialSymbols$f%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf" ||

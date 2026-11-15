@@ -206,13 +206,14 @@ added to systemd-boot's `loader/entries/`; a firmware boot entry *FreeBSD*.
 Nothing else on the disk is modified.
 
 **Setup:** packages, `/etc/rc.conf`, `/boot/loader.conf`, `/etc/sysctl.conf`,
-`/etc/devfs.rules`, `/etc/pf.conf` (backup kept), login screen, and per-user
+`/etc/devfs.rules` and `/etc/pf.conf` (backups kept), login screen, and per-user
 settings that you don't have yet (existing ones are never overwritten). The full
 log is `/var/log/freebsd-setup.log`; your answers are saved in
 `/usr/local/etc/freebsd-setup.conf`.
 
 **Removing FreeBSD (dual boot):** delete the `fbsd-zfs` and `fbsd-swap`
-partitions from the other system, remove `EFI/freebsd` from the EFI partition,
+partitions (the names end in a number, e.g. `fbsd-zfs1`, when another disk in
+the computer already used them) from the other system, remove `EFI/freebsd` from the EFI partition,
 the FreeBSD block from `limine.conf` (or `loader/entries/freebsd.conf`), and the
 firmware entry (`efibootmgr` on Linux).
 
@@ -232,7 +233,8 @@ All answers and their defaults are documented in
 `SSL_CA_CERT_FILE=/path/to/ca.pem` before running the installer; it is
 copied into the new system.
 
-Problems? See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+Problems? See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). Which hardware
+works, and why: [docs/HARDWARE.md](docs/HARDWARE.md).
 
 ## License
 
