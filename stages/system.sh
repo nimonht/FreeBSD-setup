@@ -51,6 +51,13 @@ if is_live; then mount /proc 2>/dev/null || true; mount /dev/fd 2>/dev/null || t
 
 # Device access for the desktop user: GPU, backlight, webcam, printers.
 say "device permissions (/etc/devfs.rules)"
+if [ -f /etc/devfs.rules ] && ! grep -q 'FreeBSD-setup' /etc/devfs.rules; then
+	cp /etc/devfs.rules /etc/devfs.rules.before-freebsd-setup
+	say "your previous /etc/devfs.rules was saved as /etc/devfs.rules.before-freebsd-setup"
+fi
+# No raw access to disks (da*): that would let the user read and overwrite
+# any file system on them, past all file permissions. USB drives are mounted
+# through bsdisks (see the desktop stage), which needs no such access.
 cat > /etc/devfs.rules <<'RULES'
 # Written by FreeBSD-setup.
 [localrules=10]
@@ -61,7 +68,6 @@ add path 'video*'      mode 0660 group video
 add path 'cuse'        mode 0660 group operator
 add path 'ugen*'       mode 0660 group operator
 add path 'usb/*'       mode 0660 group operator
-add path 'da*'         mode 0660 group operator
 add path 'cd*'         mode 0660 group operator
 RULES
 sysrc devfs_system_ruleset=localrules >/dev/null

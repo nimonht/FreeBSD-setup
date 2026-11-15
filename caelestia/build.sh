@@ -26,6 +26,9 @@ SHELL_REF="${SHELL_REF:-latest-tag}"
 CLI_REF="${CLI_REF:-latest-tag}"
 PREFIX=/usr/local
 CAVA_VERSION=0.10.6
+# sha256 of the two files fetched for that version (update with CAVA_VERSION)
+CAVA_SHA_cavacore_c=49c37fbb7e38a5967a6334746825f5172202a2efecc91a371450b70b31258482
+CAVA_SHA_cavacore_h=9a6e38d8083a77f9ecd02fb4150fd74ffa7a79584dcc99d9be64ff003e52b24f
 JOBS=$(sysctl -n hw.ncpu)
 
 say() { printf '\033[1;36m  ->\033[0m %s\n' "$*"; }
@@ -65,6 +68,11 @@ mkdir -p "$WORK/cava" "$WORK/shim/include/cava" "$WORK/shim/lib/pkgconfig"
 for f in cavacore.c cavacore.h; do
 	[ -s "$WORK/cava/$f" ] ||
 		fetch -qo "$WORK/cava/$f" "https://raw.githubusercontent.com/karlstav/cava/$CAVA_VERSION/$f"
+	eval "_want=\$CAVA_SHA_$(echo "$f" | tr . _)"
+	if [ "$(sha256 -q "$WORK/cava/$f")" != "$_want" ]; then
+		rm -f "$WORK/cava/$f"
+		die "$f (cava $CAVA_VERSION) does not have the expected checksum - download damaged or changed upstream"
+	fi
 done
 cc -O2 -fPIC -I"$PREFIX/include" -c "$WORK/cava/cavacore.c" -o "$WORK/cava/cavacore.o"
 ar rcs "$WORK/shim/lib/libcava.a" "$WORK/cava/cavacore.o"
@@ -97,6 +105,17 @@ checkout https://github.com/caelestia-dots/shell.git "$WORK/shell" "$SHELL_REF"
 S="$WORK/shell"
 
 # FreeBSD source adjustments (kept as sed so they survive upstream changes).
+# A pattern that no longer occurs means upstream changed that code: say so,
+# because the build may then compile but read the wrong paths at run time.
+adjusts() { # description pattern dir...
+	_d=$1 _p=$2; shift 2
+	grep -rqF -- "$_p" "$@" 2>/dev/null ||
+		say "note: nothing to adjust for '$_d' - upstream no longer has $_p (check the FreeBSD port of this change)"
+}
+adjusts "sysmacros include" '#include <sys/sysmacros.h>' "$S/plugin" "$S/extras"
+adjusts "linprocfs paths" 'u"/proc/' "$S/plugin" "$S/extras"
+adjusts "xkb rules path" '"/usr/share/X11/xkb/' "$S"
+adjusts "library directory" '"/usr/lib/caelestia"' "$S"
 find "$S/plugin" "$S/extras" \( -name '*.cpp' -o -name '*.hpp' \) -print0 | xargs -0 \
 	sed -i '' -e 's|#include <sys/sysmacros.h>|#include <sys/types.h>|' \
 	          -e 's|u"/proc/|u"/compat/linux/proc/|g'

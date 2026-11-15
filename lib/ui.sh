@@ -18,9 +18,17 @@ ui_init() {
 	else UI_MODE=text; fi
 }
 
+# ui_restore_tty   turn terminal echo back on if a password prompt was
+# interrupted (call it from the script's EXIT trap)
+UI_ECHO_OFF=no
+ui_restore_tty() {
+	if [ "$UI_ECHO_OFF" = yes ]; then stty echo < /dev/tty 2>/dev/null || true; UI_ECHO_OFF=no; fi
+}
+
 # _bd args...   run bsddialog with the screen on the terminal and the answer
 # on stdout
 _bd() {
+	local _out _rc
 	_out=$(bsddialog --backtitle "$UI_TITLE" --cr-wrap --output-fd 4 "$@" 4>&1 1>/dev/tty 2>/dev/tty)
 	_rc=$?
 	printf '%s' "$_out"
@@ -52,6 +60,7 @@ ui_text() {
 
 # ui_yesno title text [yes|no]   -> status 0 for yes; default answer last
 ui_yesno() {
+	local _def _a
 	_def=${3:-yes}
 	case "$UI_MODE" in
 	dialog)
@@ -133,7 +142,11 @@ ui_input() {
 ui_password() {
 	case "$UI_MODE" in
 	dialog) _bd --title "$1" --insecure --passwordbox "$2" 0 0 ;;
-	text)   _text_wrap "$1" "$2"; stty -echo < /dev/tty; read -r _a < /dev/tty; _rc=$?; stty echo < /dev/tty
+	text)   _text_wrap "$1" "$2"
+		# (runs in a $(...) subshell: restore echo here on Ctrl-C as well)
+		trap 'stty echo < /dev/tty; exit 130' INT TERM
+		stty -echo < /dev/tty; _rc=0; read -r _a < /dev/tty || _rc=$?; stty echo < /dev/tty
+		trap - INT TERM
 		echo > /dev/tty; printf '%s' "$_a"; return $_rc ;;
 	*)      return 1 ;;
 	esac

@@ -31,7 +31,7 @@ STAGES="base drivers system network zfs audio desktop kde hyprland caelestia inp
 . "$FBS_LIB/ui.sh"
 . "$FBS_LIB/wizard.sh"
 
-usage() { sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { awk 'NR > 2 && /^#/ { sub(/^# ?/, ""); print; next } NR > 2 { exit }' "$0"; exit "${1:-0}"; }
 
 list_stages() {
 	cat <<'EOF'
@@ -109,6 +109,8 @@ mkdir -p "$(dirname "$LOG")"
 : >> "$LOG"
 
 # ------------------------------------------------------------------ wizard ---
+trap ui_restore_tty EXIT
+trap 'exit 130' INT TERM
 ui_init
 if [ -z "$RUN" ] && [ "$UI_MODE" != auto ]; then
 	_rep=$(mktemp)

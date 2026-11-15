@@ -26,6 +26,7 @@ s|set)
 	v=${2:?usage: brightnessctl set VALUE}
 	c=$(cur)
 	n=$(echo "$v" | tr -d '%+-')
+	case "$n" in ""|*[!0-9]*) echo "brightnessctl: bad value '$v'" >&2; exit 1 ;; esac
 	case "$v" in
 	+*)  new=$(( c + n )) ;;
 	*-)  new=$(( c - n )) ;;
