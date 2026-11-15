@@ -3,7 +3,8 @@
 # install.sh - guided FreeBSD installer for desktops and laptops.
 #
 # Boot the official FreeBSD 15 USB stick, choose "Live System", log in as
-# root, connect to the internet (bsdinstall netconfig), then run this script
+# root, connect to the internet (env BSDINSTALL_CONFIGCURRENT=yes bsdinstall
+# netconfig), then run this script
 # (the one-line bootstrap does all of that for you; see README). It asks a
 # few questions, then installs FreeBSD on ZFS and sets up the desktop in one
 # go:
@@ -208,7 +209,7 @@ Wi-Fi: choose 'Connect' to pick a network." connect \
 			retry "Retry" \
 			quit "Quit the installer") || exit 1
 		case "$_a" in
-		connect) BSDINSTALL_TMPETC=/tmp/bsdinstall_etc bsdinstall netconfig < /dev/tty > /dev/tty 2>&1 || true ;;
+		connect) BSDINSTALL_TMPETC=/tmp/bsdinstall_etc BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig < /dev/tty > /dev/tty 2>&1 || true ;;
 		quit) exit 1 ;;
 		esac
 	done
