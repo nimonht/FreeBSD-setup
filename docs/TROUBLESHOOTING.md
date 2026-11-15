@@ -115,7 +115,10 @@ cat $XDG_RUNTIME_DIR/hypr-session.log   # Hyprland
   `nvidia-kmod*` and `nvidia-drm*` are the same version (`pkg info | grep nvidia`)
   and that `hw.nvidiadrm.modeset="1"` is in `/boot/loader.conf`.
 - **Laptop with NVIDIA, black screen**: the desktop must run on the Intel/AMD
-  GPU. For Hyprland, force it in `~/.config/hypr-session.env`:
+  GPU. The login screen is pinned to it in
+  `/usr/local/etc/X11/xorg.conf.d/20-primary-gpu.conf`; if that file is
+  missing, run `doas freebsd-setup drivers` and `doas service sddm restart`.
+  For Hyprland, force it in `~/.config/hypr-session.env`:
   `export AQ_DRM_DEVICES=/dev/dri/card0`. To leave the NVIDIA card switched off
   entirely, set `GPU_DRIVERS="intel"` (or `amd`) in
   `/usr/local/etc/freebsd-setup.conf` and run `doas freebsd-setup drivers`.
