@@ -34,9 +34,12 @@ disk uses MBR instead of GPT, or the USB stick was started in legacy BIOS mode:
 start it again and pick the entry marked "UEFI" in the boot menu.
 
 **Download failed / checksum mismatch**: the network dropped. Run the installer
-again: it starts over cleanly when you choose "erase", and for side-by-side
-installs it refuses to continue over a half-done attempt. Delete the
-`fbsd-zfs`/`fbsd-swap` partitions with `gpart delete -i N <disk>` first.
+again. When an install stops half-way the installer cleans up after itself:
+it unmounts everything, releases the disk, and for side-by-side installs
+removes the partitions it had just created, so the free space is whole again.
+If a partition was left behind anyway (power cut), delete it with
+`gpart delete -i N <disk>` (`gpart show -l <disk>` lists them: `fbsd-zfs`,
+`fbsd-swap`).
 
 **Company network with a TLS-inspecting proxy**:
 `export SSL_CA_CERT_FILE=/path/to/proxy-ca.pem` before starting the installer.
@@ -162,6 +165,14 @@ the `webcamd` group (log out and in after the setup).
 
 ## Hyprland + Caelestia
 
+- **Updating Caelestia**: it is built from source here, so `pkg upgrade` and
+  `sysup` do not update it. Run `doas freebsd-setup caelestia`: it fetches the
+  newest release of the shell and CLI, rebuilds them and refreshes the
+  dotfiles. Your own settings in `~/.config/caelestia/` (`hypr-user.lua`,
+  `hypr-vars.lua`, `shell.json`) are kept; edits made directly inside the
+  managed folders (`~/.config/hypr`, `fish`, `foot`...) are overwritten.
+  Run it again after a big `pkg upgrade` too (a new Qt or Quickshell needs a
+  rebuild).
 - **The Caelestia build failed**: logs are in `/var/tmp/caelestia-build/*.log`.
   A new Caelestia release may need a newer Quickshell than FreeBSD has yet:
   pin the last release that worked in `/usr/local/etc/freebsd-setup.conf`

@@ -29,13 +29,19 @@ files)
 rollback)
 	need_root "$@"
 	s=${2:?usage: snap rollback dataset@snapshot}
+	case "$s" in ?*@?*) ;; *) echo "snap: '$s' is not a snapshot (dataset@name)" >&2; exit 2 ;; esac
 	printf 'Roll %s back? Everything newer in that dataset is lost. Type yes: ' "$s"
 	read -r a; [ "$a" = yes ] || exit 1
 	zfs rollback -r "$s"
 	;;
 rm)
 	need_root "$@"
-	zfs destroy "${2:?usage: snap rm dataset@snapshot}"
+	s=${2:?usage: snap rm dataset@snapshot}
+	# Only ever a snapshot: "zfs destroy" on a plain name deletes the dataset.
+	case "$s" in ?*@?*) ;; *) echo "snap: '$s' is not a snapshot (dataset@name)" >&2; exit 2 ;; esac
+	printf 'Delete the snapshot %s? Type yes: ' "$s"
+	read -r a; [ "$a" = yes ] || exit 1
+	zfs destroy "$s"
 	;;
 *)
 	sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'

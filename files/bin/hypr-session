@@ -14,8 +14,14 @@ export QT_QPA_PLATFORMTHEME=qt6ct
 
 # pam_xdg normally provides this; fall back for unusual login paths.
 if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "$XDG_RUNTIME_DIR" ]; then
+	# Never trust a directory somebody else may have made under this name.
 	XDG_RUNTIME_DIR="/tmp/xdg-runtime-$(id -u)"
-	mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+	if mkdir -m 700 "$XDG_RUNTIME_DIR" 2>/dev/null ||
+		{ [ -d "$XDG_RUNTIME_DIR" ] && [ ! -L "$XDG_RUNTIME_DIR" ] && [ "$(stat -f %u "$XDG_RUNTIME_DIR")" = "$(id -u)" ]; }; then
+		chmod 700 "$XDG_RUNTIME_DIR"
+	else
+		XDG_RUNTIME_DIR=$(mktemp -d /tmp/xdg-runtime.XXXXXXXX) || exit 1
+	fi
 	export XDG_RUNTIME_DIR
 fi
 
@@ -23,20 +29,28 @@ fi
 export CAELESTIA_LIB_DIR=/usr/local/lib/caelestia
 export CAELESTIA_XKB_RULES_PATH=/usr/local/share/X11/xkb/rules/base.lst
 
-# Hybrid graphics: make the Intel GPU (the one wired to the panel) primary and
-# keep NVIDIA as a secondary render device.
-intel=; nvidia=
-for i in 0 1 2 3; do
+# Hybrid graphics: make the integrated GPU (Intel or AMD, the one wired to
+# the panel) primary and keep NVIDIA as a secondary render device.
+intel=; amd=; nvidia=
+for i in 0 1 2 3 4 5 6 7; do
 	name=$(sysctl -n "hw.dri.$i.name" 2>/dev/null) || continue
 	case "$name" in
-	i915*)   [ -z "$intel" ]  && intel="/dev/dri/card$i" ;;
-	nvidia*) [ -z "$nvidia" ] && nvidia="/dev/dri/card$i" ;;
+	i915*)          [ -z "$intel" ]  && intel="/dev/dri/card$i" ;;
+	amdgpu*|radeon*) [ -z "$amd" ]   && amd="/dev/dri/card$i" ;;
+	nvidia*)        [ -z "$nvidia" ] && nvidia="/dev/dri/card$i" ;;
 	esac
 done
-if [ -n "$intel" ] && [ -z "${AQ_DRM_DEVICES:-}" ]; then
-	export AQ_DRM_DEVICES="$intel${nvidia:+:$nvidia}"
+igpu=${intel:-$amd}
+if [ -n "$igpu" ] && [ -n "$nvidia" ] && [ -z "${AQ_DRM_DEVICES:-}" ]; then
+	export AQ_DRM_DEVICES="$igpu:$nvidia"
+elif [ -n "$intel" ] && [ -z "$amd" ] && [ -z "${AQ_DRM_DEVICES:-}" ]; then
+	export AQ_DRM_DEVICES="$intel"
 fi
-export LIBVA_DRIVER_NAME="${LIBVA_DRIVER_NAME:-iHD}"
+# Video decoding driver: only name Intel's when the screen runs on Intel
+# (AMD and NVIDIA pick theirs without help).
+if [ -n "$intel" ]; then
+	export LIBVA_DRIVER_NAME="${LIBVA_DRIVER_NAME:-iHD}"
+fi
 
 [ -f "$HOME/.config/hypr-session.env" ] && . "$HOME/.config/hypr-session.env"
 
