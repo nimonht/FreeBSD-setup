@@ -9,7 +9,9 @@
 # are passed on:   ... | sh -s -- --dry-run
 #
 # Environment: FBS_REPO=owner/name, FBS_REF=branch/tag/commit (defaults:
-# nimonht/FreeBSD-setup, main).
+# nimonht/FreeBSD-setup, main). For a reproducible install, pin what runs:
+#   FBS_REF=<tag or full commit id>     that exact version instead of "main"
+#   FBS_SHA256=<sha256 of the archive>  refuse to run anything else
 set -eu
 
 REPO="${FBS_REPO:-nimonht/FreeBSD-setup}"
@@ -24,6 +26,14 @@ if ! fetch -q -o /tmp/freebsd-setup.tar.gz "$URL"; then
 	echo "Download failed. Is the network up? On the USB stick, connect first with:" >&2
 	echo "    bsdinstall netconfig" >&2
 	exit 1
+fi
+if [ -n "${FBS_SHA256:-}" ]; then
+	got=$(sha256 -q /tmp/freebsd-setup.tar.gz)
+	if [ "$got" != "$FBS_SHA256" ]; then
+		rm -f /tmp/freebsd-setup.tar.gz
+		echo "Checksum mismatch: expected $FBS_SHA256, got $got. Nothing was run." >&2
+		exit 1
+	fi
 fi
 rm -rf "$DIR" && mkdir -p "$DIR"
 tar -xzf /tmp/freebsd-setup.tar.gz -C "$DIR" --strip-components 1

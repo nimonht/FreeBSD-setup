@@ -49,7 +49,7 @@ pkg_install doas sudo git curl bash nano htop rsync unzip zip 7-zip jq ca_root_n
 # doas for the wheel group; "persist" remembers the password for a while.
 if [ ! -f /usr/local/etc/doas.conf ]; then
 	cat > /usr/local/etc/doas.conf <<CONF
-permit persist keepenv :wheel
+permit persist :wheel
 permit nopass :wheel cmd /sbin/shutdown
 permit nopass :wheel cmd /usr/sbin/zzz
 CONF

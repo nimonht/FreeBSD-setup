@@ -39,7 +39,7 @@ is_chroot() { [ "$FBS_TARGET" = chroot ]; }
 is_yes() { eval "_v=\${$1:-}"; case "$_v" in [Yy][Ee][Ss]|[Tt][Rr][Uu][Ee]|1|[Oo][Nn]) return 0 ;; esac; return 1; }
 
 # in_list word list...  -> true when word is one of the following words
-in_list() { _w=$1; shift; for _x in "$@"; do [ "$_x" = "$_w" ] && return 0; done; return 1; }
+in_list() { local _w _x; _w=$1; shift; for _x in "$@"; do [ "$_x" = "$_w" ] && return 0; done; return 1; }
 
 # ---------------------------------------------------------------- packages ---
 
@@ -49,6 +49,7 @@ pkg_has() { pkg rquery -U '%n' "$1" >/dev/null 2>&1; }
 # run_shown pattern command...   run a command, log all its output, show
 # the lines matching the pattern (progress), return the command's status
 run_shown() {
+	local _pat _rcf _r
 	_pat=$1; shift
 	_rcf=$(mktemp)
 	{ "$@"; echo $? > "$_rcf"; } 2>&1 | tee -a "$LOG" |
@@ -69,6 +70,7 @@ pkg_install() {
 # pkg_try name...   install each package that is available; missing or
 # broken packages only produce a warning
 pkg_try() {
+	local _p
 	for _p in "$@"; do
 		pkg info -e "$_p" 2>/dev/null && continue
 		if env ASSUME_ALWAYS_YES=yes pkg install -y "$_p" >> "$LOG" 2>&1; then
@@ -89,6 +91,7 @@ pkg_flavor() {
 
 # set_kv file key value   key=value line, replaced in place or appended
 set_kv() {
+	local _f _k _v _tmp
 	_f=$1 _k=$2 _v=$3
 	touch "$_f"
 	if grep -q "^${_k}=" "$_f"; then
@@ -101,7 +104,6 @@ set_kv() {
 	fi
 }
 loader_set() { set_kv /boot/loader.conf "$1" "\"$2\""; }
-loader_unset() { [ -f /boot/loader.conf ] && sed -i '' "/^$1=/d" /boot/loader.conf; true; }
 sysctl_set() {
 	set_kv /etc/sysctl.conf "$1" "$2"
 	is_live && { sysctl "$1=$2" >/dev/null 2>&1 || true; }
@@ -113,15 +115,11 @@ add_line() { touch "$1"; grep -qxF -- "$2" "$1" || printf '%s\n' "$2" >> "$1"; }
 
 # kld_add module...   append to rc.conf kld_list (order kept, no duplicates)
 kld_add() {
+	local _cur _m
 	_cur=$(sysrc -n kld_list 2>/dev/null || true)
 	for _m in "$@"; do
 		case " $_cur " in *" $_m "*) ;; *) _cur="$_cur $_m" ;; esac
 	done
-	sysrc kld_list="$(echo $_cur)" >/dev/null
-}
-kld_remove() {
-	_cur=" $(sysrc -n kld_list 2>/dev/null || true) "
-	for _m in "$@"; do _cur=$(echo "$_cur" | sed "s/ $_m / /g"); done
 	sysrc kld_list="$(echo $_cur)" >/dev/null
 }
 
@@ -131,6 +129,7 @@ kld_now() { is_live && { kldload -n "$1" >> "$LOG" 2>&1 || return 1; }; return 0
 # svc rcvar [script]   enable a service and (on a live system) start it;
 # script defaults to rcvar (they differ for e.g. avahi_daemon/avahi-daemon)
 svc() {
+	local _s
 	sysrc "${1}_enable=YES" >/dev/null
 	if is_live; then
 		_s=${2:-$1}
@@ -154,6 +153,7 @@ as_user() {
 # user_file src dest-relative-to-home   copy into the user's home, never
 # overwriting a file they already have
 user_file() {
+	local _dst
 	_dst="$TARGET_HOME/$2"
 	mkdir -p "$(dirname "$_dst")"
 	if [ -e "$_dst" ]; then

@@ -152,7 +152,7 @@ resolve_config() {
 	[ "$DESKTOP" = auto ] && { [ "$HW_DESKTOP" = yes ] && DESKTOP=kde || DESKTOP=none; }
 	case "$DESKTOP" in kde|hyprland|both|none) ;; *) die "DESKTOP must be kde, hyprland, both, none or auto (got '$DESKTOP')" ;; esac
 	WANT_KDE=no WANT_HYPR=no
-	case "$DESKTOP" in kde) WANT_KDE=yes ;; hyprland) WANT_HYPR=yes ;; both) WANT_KDE=is_yes WANT_HYPR=yes ;; esac
+	case "$DESKTOP" in kde) WANT_KDE=yes ;; hyprland) WANT_HYPR=yes ;; both) WANT_KDE=yes WANT_HYPR=yes ;; esac
 	if [ "$PKG_BRANCH" = auto ]; then
 		PKG_BRANCH=quarterly; [ "$WANT_HYPR" = yes ] && PKG_BRANCH=latest
 	fi
