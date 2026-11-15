@@ -1,0 +1,89 @@
+#!/bin/sh
+# gpu-xorg-config - tell the X server (the SDDM login screen) which graphics
+# card drives the screen. Run at every start (service freebsd_setup_gpu) and by
+# "freebsd-setup drivers", so the answer follows the hardware: a laptop
+# switched between hybrid and discrete mode in the firmware setup, or a PC
+# whose graphics card was replaced.
+#
+# It only writes and removes its own two files in xorg.conf.d:
+#   20-nvidia.conf       the NVIDIA card drives the screen
+#   20-primary-gpu.conf  an Intel/AMD GPU drives the screen and an NVIDIA
+#                        card is present too: keep X on the Intel/AMD one
+FBS_LIB="${FBS_LIB:-/usr/local/share/freebsd-setup/lib}"
+XDIR="${FBS_XORG_DIR:-/usr/local/etc/X11/xorg.conf.d}"
+[ -f "$FBS_LIB/hw.sh" ] || { echo "gpu-xorg-config: $FBS_LIB/hw.sh not found" >&2; exit 1; }
+. "$FBS_LIB/hw.sh"
+hw_detect_gpu
+
+# Is the NVIDIA X driver installed? (FBS_NVIDIA_X overrides, for tests.)
+nvx=${FBS_NVIDIA_X:-}
+if [ -z "$nvx" ]; then
+	nvx=no; [ -f /usr/local/lib/xorg/modules/drivers/nvidia_drv.so ] && nvx=yes
+fi
+
+put() { # file < content: replace only when different; never a file of the user's own
+	_t=$(mktemp) || exit 1
+	cat > "$_t"
+	if [ -f "$1" ] && ! grep -q 'Written by FreeBSD-setup' "$1"; then rm -f "$_t"; return 0; fi
+	if cmp -s "$_t" "$1"; then rm -f "$_t"; else mkdir -p "$XDIR" && mv "$_t" "$1" && chmod 644 "$1"; fi
+}
+drop() { [ -f "$1" ] && grep -q 'Written by FreeBSD-setup' "$1" && rm -f "$1"; return 0; }
+
+want=none
+case "$HW_GPU_PRIMARY" in
+nvidia)	[ "$nvx" = yes ] && want=nvidia ;;
+intel|amd)
+	[ -n "$HW_GPU_NVIDIA" ] && [ "$nvx" = yes ] && want=pin ;;
+esac
+
+case "$want" in
+nvidia)
+	drop "$XDIR/20-primary-gpu.conf"
+	put "$XDIR/20-nvidia.conf" <<'XORG'
+# Written by FreeBSD-setup (gpu-xorg-config, checked at every start): the
+# NVIDIA card drives the screen, so X11 (login screen, X apps) uses its driver.
+Section "Device"
+	Identifier "NVIDIA Card"
+	Driver     "nvidia"
+EndSection
+XORG
+	;;
+pin)
+	bus=$(hw_gpu_busid "$HW_GPU_PRIMARY")
+	drop "$XDIR/20-nvidia.conf"
+	if [ -n "$bus" ]; then
+		put "$XDIR/20-primary-gpu.conf" <<XORG
+# Written by FreeBSD-setup (gpu-xorg-config, checked at every start): the
+# login screen (X11) runs on the GPU that drives the screen ($HW_GPU_PRIMARY);
+# the NVIDIA card is left to gpu-run. Without this the screen stays black.
+Section "ServerFlags"
+	Option "AutoAddGPU" "off"
+EndSection
+Section "Device"
+	Identifier "Screen GPU"
+	Driver     "modesetting"
+	BusID      "$bus"
+EndSection
+XORG
+	else
+		drop "$XDIR/20-primary-gpu.conf"
+	fi ;;
+*)
+	drop "$XDIR/20-nvidia.conf"
+	drop "$XDIR/20-primary-gpu.conf" ;;
+esac
+
+# A graphics card without a loaded driver (replaced card, firmware switch):
+# say what to do instead of leaving a black screen unexplained.
+[ -n "${HW_FIXTURES:-}" ] && exit 0
+case "$HW_GPU_PRIMARY" in
+intel)	mod=i915kms ;;
+amd)	mod=${HW_AMD_KMOD:-amdgpu} ;;
+nvidia)	mod=nvidia ;;
+*)	exit 0 ;;
+esac
+if ! kldstat -q -m "$mod" 2>/dev/null && ! kldstat -q -n "$mod.ko" 2>/dev/null; then
+	echo "gpu-xorg-config: the graphics card that drives the screen ($HW_GPU_PRIMARY) has no driver loaded."
+	echo "  Log in on this console and run:  freebsd-setup drivers   (needs internet), then restart."
+fi
+exit 0

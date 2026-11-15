@@ -116,12 +116,20 @@ cat $XDG_RUNTIME_DIR/hypr-session.log   # Hyprland
   and that `hw.nvidiadrm.modeset="1"` is in `/boot/loader.conf`.
 - **Laptop with NVIDIA, black screen**: the desktop must run on the Intel/AMD
   GPU. The login screen is pinned to it in
-  `/usr/local/etc/X11/xorg.conf.d/20-primary-gpu.conf`; if that file is
-  missing, run `doas freebsd-setup drivers` and `doas service sddm restart`.
+  `/usr/local/etc/X11/xorg.conf.d/20-primary-gpu.conf`, which
+  `gpu-xorg-config` rewrites at every start; run `doas gpu-xorg-config` and
+  `doas service sddm restart` if it is missing.
   For Hyprland, force it in `~/.config/hypr-session.env`:
   `export AQ_DRM_DEVICES=/dev/dri/card0`. To leave the NVIDIA card switched off
   entirely, set `GPU_DRIVERS="intel"` (or `amd`) in
   `/usr/local/etc/freebsd-setup.conf` and run `doas freebsd-setup drivers`.
+- **Black screen after switching the laptop between hybrid and discrete
+  graphics in the firmware setup, or after replacing the graphics card**: the
+  login screen's configuration follows the hardware by itself at every start,
+  but a driver that was never installed cannot: log in on a text console
+  (`Ctrl+Alt+F3`) and run `doas freebsd-setup drivers` (needs internet), then
+  restart. A laptop installed in discrete mode has no driver for the
+  integrated GPU until you do this.
 - **Back at the login screen right after logging in**: the session crashed.
   KDE: `cat ~/.local/share/sddm/wayland-session.log`.
   Hyprland: `cat $XDG_RUNTIME_DIR/hypr-session.log`.
