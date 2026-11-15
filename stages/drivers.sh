@@ -94,44 +94,18 @@ if in_list nvidia $GPU_DRIVERS && [ "$NVIDIA_BRANCH" != none ]; then
 			kld_add nvidia
 			warn "the NVIDIA $NVIDIA_BRANCH driver is X11 only: KDE Plasma 6.8 and Hyprland (Wayland) will not run on this GPU"
 		fi
-		if [ "$HW_GPU_PRIMARY" = nvidia ]; then
-			# The SDDM login screen runs on X11 and needs to be told about the driver.
-			mkdir -p /usr/local/etc/X11/xorg.conf.d
-			cat > /usr/local/etc/X11/xorg.conf.d/20-nvidia.conf <<'XORG'
-# Written by FreeBSD-setup: use the NVIDIA driver for X11 (login screen, X apps).
-Section "Device"
-	Identifier "NVIDIA Card"
-	Driver     "nvidia"
-EndSection
-XORG
-		fi
-		# Two GPUs: the SDDM login screen runs on X11, and X picks the
-		# NVIDIA card (no screen is wired to it on a laptop) as soon as its
-		# driver is loaded: a black screen. Pin X to the GPU that drives the
-		# screen and keep it off the other one.
-		_bus=""
-		case "$HW_GPU_PRIMARY" in intel|amd) [ "$HW_GPU_HYBRID" = yes ] && _bus=$(hw_gpu_busid "$HW_GPU_PRIMARY") ;; esac
-		if [ -n "$_bus" ]; then
-			mkdir -p /usr/local/etc/X11/xorg.conf.d
-			cat > /usr/local/etc/X11/xorg.conf.d/20-primary-gpu.conf <<XORG
-# Written by FreeBSD-setup: the login screen (X11) runs on the GPU that
-# drives the screen ($HW_GPU_PRIMARY); the NVIDIA card is left to gpu-run.
-Section "ServerFlags"
-	Option "AutoAddGPU" "off"
-EndSection
-Section "Device"
-	Identifier "Screen GPU"
-	Driver     "modesetting"
-	BusID      "$_bus"
-EndSection
-XORG
-			say "login screen pinned to the $HW_GPU_PRIMARY GPU ($_bus)"
-		fi
 		if is_live && [ -n "$_drmpkg" ]; then
 			kld_now nvidia-modeset || warn "nvidia-modeset did not load - check: dmesg | tail -30"
 		fi
 	fi
 fi
+
+# Which card X11 (the SDDM login screen) uses. Decided again at every start,
+# so it follows a firmware graphics switch or a replaced graphics card.
+install_file "$REPO_DIR/files/bin/gpu-xorg-config" /usr/local/bin/gpu-xorg-config 755
+install_file "$REPO_DIR/files/rc.d/freebsd_setup_gpu" /usr/local/etc/rc.d/freebsd_setup_gpu 755
+sysrc freebsd_setup_gpu_enable=YES >/dev/null
+FBS_LIB="$FBS_LIB" /usr/local/bin/gpu-xorg-config >> "$LOG" 2>&1 || warn "could not write the X11 graphics configuration (details: $LOG)"
 
 # Hybrid graphics: a helper to run a program on the second GPU.
 if [ "$HW_GPU_HYBRID" = yes ]; then

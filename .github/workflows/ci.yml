@@ -15,10 +15,13 @@ jobs:
           shellcheck --version
           shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
             setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* \
-            caelestia/build.sh tests/run.sh tests/config-test.sh tests/collect-fixture.sh tests/vm/run-iso-test.sh
+            caelestia/build.sh files/rc.d/* tests/gpu-config-test.sh tests/run.sh tests/config-test.sh tests/collect-fixture.sh tests/vm/run-iso-test.sh
 
       - name: Hardware detection tests (POSIX sh)
         run: sh tests/run.sh
 
       - name: Configuration tests (POSIX sh)
         run: sh tests/config-test.sh
+
+      - name: X11 graphics configuration tests (POSIX sh)
+        run: sh tests/gpu-config-test.sh
