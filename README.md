@@ -106,8 +106,13 @@ and write it to the stick (this erases the stick):
 3. Connect to the internet:
 
    ```sh
-   bsdinstall netconfig
+   env BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig
    ```
+
+   Type it exactly like this: `BSDINSTALL_CONFIGCURRENT=yes` tells the tool
+   to bring the network up right now in the Live System. Without it, Wi-Fi
+   setup stops with *"Wireless cannot be configured without making changes
+   to the local system!"* and a wired card is not actually connected.
 
    Pick your network card (Wi-Fi cards are named `iwlwifi0`, `iwm0`, `rtw880`...),
    answer *Yes* to DHCP, and pick your Wi-Fi network if you use one.

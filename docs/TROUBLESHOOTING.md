@@ -17,8 +17,11 @@ Start here:
 
 ## Installer
 
-**"No internet"**: run `bsdinstall netconfig` from the Live System shell, or
-choose *Connect* in the installer. Wired networks need only DHCP. If the Wi-Fi
+**"No internet"**: run
+`env BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig` from the Live System
+shell, or choose *Connect* in the installer. (Plain `bsdinstall netconfig`
+fails there with *"Wireless cannot be configured without making changes to the
+local system!"*: it only saves settings unless told to apply them now.) Wired networks need only DHCP. If the Wi-Fi
 card is not listed, use Ethernet, a USB Ethernet adapter, or USB tethering from
 a phone (`kldload if_urndis; dhclient ue0` for Android).
 
