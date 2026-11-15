@@ -24,7 +24,7 @@ DIR="/tmp/freebsd-setup"
 echo "==> Downloading FreeBSD-setup ($REPO $REF)"
 if ! fetch -q -o /tmp/freebsd-setup.tar.gz "$URL"; then
 	echo "Download failed. Is the network up? On the USB stick, connect first with:" >&2
-	echo "    bsdinstall netconfig" >&2
+	echo "    env BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig" >&2
 	exit 1
 fi
 if [ -n "${FBS_SHA256:-}" ]; then
