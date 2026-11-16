@@ -14,6 +14,34 @@ if [ "$HW_VM" = none ]; then
 	is_live && { service powerd status >/dev/null 2>&1 || service powerd start >> "$LOG" 2>&1 || true; }
 fi
 
+# Power profiles (power saver / balanced / performance) in KDE's battery
+# applet and Caelestia: our own service answering as power-profiles-daemon
+# (Linux-only) on D-Bus. It decides at every start whether this machine has
+# a CPU power setting to change, and stays off when it has none.
+say "power profiles service (power saver / balanced / performance)"
+_py=$(pkg_flavor python3 'python3[0-9]+')
+_pygo="py${_py#python}-pygobject"
+[ -n "$_py" ] && pkg_try python3 polkit "$_pygo"
+if [ -n "$_py" ] && [ -x /usr/local/bin/python3 ] && pkg info -e "$_pygo" 2>/dev/null; then
+	_pp="$REPO_DIR/files/power-profiles"
+	mkdir -p /usr/local/libexec /usr/local/share/dbus-1/system.d \
+		/usr/local/share/polkit-1/actions /usr/local/etc/polkit-1/rules.d
+	install_file "$_pp/fbs-power-profiles" /usr/local/libexec/fbs-power-profiles 755
+	install_file "$_pp/fbs-power-profiles.conf" /usr/local/share/dbus-1/system.d/fbs-power-profiles.conf
+	install_file "$_pp/org.freedesktop.UPower.PowerProfiles.policy" \
+		/usr/local/share/polkit-1/actions/org.freedesktop.UPower.PowerProfiles.policy
+	install_file "$_pp/50-fbs-power-profiles.rules" /usr/local/etc/polkit-1/rules.d/50-fbs-power-profiles.rules
+	install_file "$REPO_DIR/files/rc.d/fbs_power_profiles" /usr/local/etc/rc.d/fbs_power_profiles 755
+	sysrc fbs_power_profiles_enable=YES >/dev/null
+	if is_live; then
+		# read the new access rules (FreeBSD's rc.d/dbus has no "reload")
+		dbus-send --system --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ReloadConfig >> "$LOG" 2>&1 || true
+		service fbs_power_profiles restart >> "$LOG" 2>&1 || true
+	fi
+else
+	warn "the power profile switch is not available: Python's GObject package could not be installed (rerun: freebsd-setup system)"
+fi
+
 if [ "$HW_LAPTOP" = yes ]; then
 	say "laptop: deeper idle states, unused devices powered down"
 	sysrc performance_cx_lowest=Cmax economy_cx_lowest=Cmax >/dev/null
