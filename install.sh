@@ -470,7 +470,7 @@ Which system should start when you turn the computer on?" keep \
 
 ask_desktop() {
 	wiz_desktop || exit 1
-	if [ "$DESKTOP" != none ]; then wiz_input_methods || exit 1; fi
+	if [ "$DESKTOP" != none ]; then wiz_input_methods || exit 1; wiz_terminal || exit 1; fi
 	wiz_extras || exit 1
 }
 

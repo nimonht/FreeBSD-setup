@@ -56,7 +56,11 @@
 ? Info Center (KInfoCenter): which pages are empty or show errors        |
 ? Discover: can it list, install or update anything                      |
 ? Dolphin: browse files, open a ZIP, trash                               |
-? Konsole                                                                 |
+? Konsole opens with the FreeBSD profile, fish (or your chosen shell)    |
+? Konsole: font is JetBrainsMono, prompt icons show (no empty boxes)      |
+? Konsole: system summary (logo + info) at the top, every row filled      |
+? Konsole (fish/zsh): type "ls -", grey suggestion shows; Up searches    |
+? Konsole: colours readable with the light and the dark Plasma theme      |
 ? Firefox: plays a YouTube video with sound                              |
 ? Firefox: video call test with webcam + microphone                      |
 ? Screenshot (Spectacle / Print key)                                     |
@@ -69,6 +73,7 @@
 ? Restart and Shut Down from the menu                                    |
 
 ## Hyprland / Caelestia
+? Terminal (Super+T): Caelestia box at the top, every row filled           |
 ? Bar: workspaces, clock                                                 |
 ? Bar: network icon (what does it show / does clicking work)             |
 ? Bar: Bluetooth icon                                                    |

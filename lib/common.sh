@@ -140,6 +140,49 @@ svc() {
 # install_file src dst [mode]   copy a file from the repository
 install_file() { install -m "${3:-644}" "$1" "$2"; }
 
+# sys_file src dst [mode]   a system-wide config file of ours: written only
+# where there is none yet, where the one there is ours (has the marker), or
+# where it is still the package's untouched default (a copy of dst.sample).
+# Someone else's file is kept, and the call returns 1.
+sys_file() {
+	if [ -e "$2" ] && ! grep -q 'Written by FreeBSD-setup' "$2" 2>/dev/null &&
+		! { [ -f "$2.sample" ] && cmp -s "$2" "$2.sample"; }; then
+		say "kept your own $2"
+		return 1
+	fi
+	mkdir -p "$(dirname "$2")"
+	install -m "${3:-644}" "$1" "$2"
+}
+# sys_file_rm dst   remove a file, only when it is ours (the package's
+# default comes back when it has one)
+sys_file_rm() {
+	[ -f "$1" ] && grep -q 'Written by FreeBSD-setup' "$1" 2>/dev/null || return 0
+	rm -f "$1"
+	[ -f "$1.sample" ] && cp "$1.sample" "$1"
+	return 0
+}
+
+# foot_set_shell FILE   start the terminal style's shell in this foot.ini,
+# only when it is Caelestia's copy (marked .caelestia-managed, ours to
+# change), never the user's own; with no style, Caelestia's choice (fish).
+foot_set_shell() {
+	local _s
+	_s=$(terminal_shell)
+	[ -n "$_s" ] && [ -x "$_s" ] || _s=/usr/local/bin/fish
+	[ -e "$(dirname "$1")/.caelestia-managed" ] && [ -f "$1" ] && grep -q '^shell=' "$1" || return 0
+	sed -i '' "s|^shell=.*|shell=$_s|" "$1"
+}
+
+# terminal_shell   the shell the chosen terminal style runs (empty for none;
+# bash, which base installs, when the chosen shell could not be installed)
+terminal_shell() {
+	case "${TERMINAL_STYLE:-none}" in
+	fish|zsh|bash)
+		if [ -x "/usr/local/bin/$TERMINAL_STYLE" ]; then echo "/usr/local/bin/$TERMINAL_STYLE"
+		else echo /usr/local/bin/bash; fi ;;
+	esac
+}
+
 # --------------------------------------------------------------- the user ---
 
 # as_user command   run a shell command as the desktop user, in their home.
