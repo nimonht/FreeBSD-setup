@@ -56,9 +56,16 @@ CONF
 	chmod 600 /usr/local/etc/doas.conf
 fi
 # sudo as well: many scripts and desktop tools written for Linux call it.
+# sudo reads sudoers.d in name order and the last matching rule wins, so this
+# general rule must sort first: packages add password-free rules for single
+# tools (networkmgr's tray applet is started as "sudo networkmgr" at login,
+# with no terminal to ask for a password).
 mkdir -p /usr/local/etc/sudoers.d
-echo '%wheel ALL=(ALL:ALL) ALL' > /usr/local/etc/sudoers.d/wheel
-chmod 440 /usr/local/etc/sudoers.d/wheel
+printf '# Written by FreeBSD-setup.\n%%wheel ALL=(ALL:ALL) ALL\n' > /usr/local/etc/sudoers.d/00-freebsd-setup
+chmod 440 /usr/local/etc/sudoers.d/00-freebsd-setup
+# Earlier versions wrote the same rule as "wheel", which sorted last.
+[ "$(cat /usr/local/etc/sudoers.d/wheel 2>/dev/null)" = '%wheel ALL=(ALL:ALL) ALL' ] &&
+	rm -f /usr/local/etc/sudoers.d/wheel
 
 say "adding $TARGET_USER to the wheel, operator and video groups"
 for g in wheel operator video; do pw groupmod "$g" -m "$TARGET_USER"; done
