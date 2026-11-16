@@ -58,7 +58,8 @@
 ? Dolphin: browse files, open a ZIP, trash                               |
 ? Konsole opens with the FreeBSD profile, fish (or your chosen shell)    |
 ? Konsole: font is JetBrainsMono, prompt icons show (no empty boxes)      |
-? Konsole: system summary (logo + info) at the top, every row filled      |
+? Konsole: system summary at the top, every row filled (with Hyprland     |
+?   installed too, it is Caelestia's box, since fish uses its setup)     |
 ? Konsole (fish/zsh): type "ls -", grey suggestion shows; Up searches    |
 ? Konsole: colours readable with the light and the dark Plasma theme      |
 ? Firefox: plays a YouTube video with sound                              |
