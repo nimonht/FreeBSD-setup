@@ -10,6 +10,62 @@ this file is a work brief, not permanent documentation.
 hardware, or in FreeBSD's package catalogue on 2026-11-15), or *to verify*
 (recalled or inferred; check before building on it).
 
+## 0. Progress log
+
+**2026-11-16, local session on the owner's Arch (CachyOS) host:**
+
+- The host **is** the ROG laptop from section 2. The owner's real FreeBSD
+  install is on the same disk (`nvme0n1p5` ZFS, `p6` swap): never attach it
+  to a VM. Both screen outputs are wired to the Intel GPU and the NVIDIA card
+  has none, so NVIDIA passthrough (6.2 option 1) cannot show a picture. IOMMU
+  is off. The owner chose **no host changes**: the dev VM uses SSH plus
+  software rendering, and hardware checks are done by the owner rebooting into
+  FreeBSD and running `tests/desktop-probe.sh` (results land on the shared
+  EFI partition, `/boot/fbs-probe/` from Linux). The owner can do hardware
+  rounds whenever needed. The USB Bluetooth adapter may be lent to the VM,
+  but ask each time.
+- Dev VM: `tests/vm/dev-vm.sh` (base image from `run-iso-test.sh`, overlays,
+  SSH on 127.0.0.1:2222). Files in `~/VMs/freebsd-setup-dev`.
+- Upstream research for 4.1 to 4.5, read from source at pinned versions:
+  [notes/upstream-research-2026-11.md](notes/upstream-research-2026-11.md).
+  Key outcomes:
+  - Power profiles: KDE and Quickshell both read only
+    `org.freedesktop.UPower.PowerProfiles`.
+  - Caelestia v2.5.0 networking is `nmcli` calls only, so an `nmcli`
+    look-alike would cover it.
+  - NetworkMgr was silently broken by our own sudoers file (fixed).
+  - No bluez-qt or bluedevil in ports, so KDE has no Bluetooth UI at all.
+  - Hibernate (S4) is unsupported on FreeBSD.
+  - Discover has no AppStream catalogue to browse.
+- Done, not yet verified on hardware:
+  - `files/power-profiles/` plus `stages/system.sh`: power-profiles D-Bus
+    service, tested by `tests/power-profiles-test.sh`.
+  - sudoers file order fix in `stages/base.sh`.
+- Checked in the dev VM (FreeBSD 15.1-p5, DESKTOP=both, over SSH, no
+  desktop session):
+  - `setup.sh base system security` runs again cleanly.
+  - sudo: `sudo -l -U tester` now lists the NetworkMgr NOPASSWD rule last,
+    so it wins. (`visudo -c` still complains that the networkmgr package's
+    own file is not mode 440; that file is the package's.)
+  - Power profiles on the real system bus with the real polkit, using the
+    fake backend: the desktop user (wheel, operator) can read and switch,
+    `nobody` is refused for switch and hold, and the legacy name answers.
+    The VM CPU has no power setting, so `--check` says `none` and the rc
+    script skips quietly.
+  - Found and fixed in the VM: the D-Bus activation file made dbus-daemon
+    wait 25 s on machines without a CPU setting (and PowerDevil counts an
+    activatable name as supported), so it was removed; FreeBSD's rc.d/dbus
+    has no `reload`, so the stage now calls `ReloadConfig`; our firewall
+    blocked the VM's SSH, which showed that user rules in `/etc/pf.conf`
+    were lost on every re-run, so `/etc/pf.local.conf` (created once, never
+    replaced) is now included.
+  - `tests/desktop-probe.sh` runs to the end as the user and as root, with no
+    unredacted MAC addresses, serials or UUIDs in the result.
+- Not yet checked: polkit inside a real desktop session (needs the laptop),
+  and everything visual.
+- Hardware round 1, prepared: `tests/desktop-probe.sh` and
+  `tests/desktop-walk.txt` (the systematic walk of 4.6 as a checklist).
+
 ## 1. What the owner wants
 
 A friendly, preconfigured, modern FreeBSD desktop, comparable in out-of-the-box
