@@ -29,6 +29,13 @@ case "${DESKTOP_LANGUAGE:-}" in
 	fi ;;
 esac
 chown -R "$TARGET_USER" "$_cfg"
+# File search indexing (Baloo) off by default: on FreeBSD it watches files
+# through kqueue, which keeps a file open per watched file and can run out of
+# file handles. Dolphin's search still works, only more slowly. Turn it back
+# on in System Settings > Search.
+mkdir -p /usr/local/etc/xdg
+[ -e /usr/local/etc/xdg/baloofilerc ] ||
+	printf '# Written by FreeBSD-setup\n[Basic Settings]\nIndexing-Enabled=false\n' > /usr/local/etc/xdg/baloofilerc
 say "KDE Plasma installed - choose 'Plasma (Wayland)' at the login screen"
 
 true   # (a stage must not end on a failed test: setup.sh runs under set -e)

@@ -109,7 +109,7 @@ cat $XDG_RUNTIME_DIR/hypr-session.log   # Hyprland
 
 - **No `/dev/dri`**: the graphics driver did not load. `dmesg | tail -40` shows
   why. Missing firmware: `doas fwget`. Then `doas freebsd-setup drivers`.
-- **In a virtual machine**: expected. KDE Plasma 6.8 and Hyprland need a 3D
+- **In a virtual machine**: expected. KDE Plasma 6 and Hyprland need a 3D
   graphics driver that FreeBSD does not have for VirtualBox, VMware or QEMU.
 - **NVIDIA desktop, black screen**: check that `nvidia-driver*`,
   `nvidia-kmod*` and `nvidia-drm*` are the same version (`pkg info | grep nvidia`)

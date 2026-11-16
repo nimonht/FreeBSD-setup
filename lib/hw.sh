@@ -246,7 +246,7 @@ EOF
 	_n=$(printf '%s' "$HW_GPUS" | grep -cE "^(intel|amd|nvidia)$US" || true)
 	[ "$_n" -ge 2 ] && HW_GPU_HYBRID=yes
 
-	# Can a Wayland desktop (KDE Plasma 6.8+, Hyprland) run? It needs a DRM/KMS
+	# Can a Wayland desktop (KDE Plasma 6, Hyprland) run? It needs a DRM/KMS
 	# driver for the GPU that drives the screen.
 	HW_DESKTOP=yes; HW_DESKTOP_WHY=""
 	case "$HW_GPU_PRIMARY" in
@@ -255,9 +255,9 @@ EOF
 	amd)	;;
 	nvidia)	case "$HW_NVIDIA_BRANCH" in
 		current|580) ;;
-		*) HW_DESKTOP=no; HW_DESKTOP_WHY="this NVIDIA GPU only has an X11 driver on FreeBSD; KDE Plasma 6.8 and Hyprland need Wayland" ;;
+		*) HW_DESKTOP=no; HW_DESKTOP_WHY="this NVIDIA GPU only has an X11 driver on FreeBSD; KDE Plasma 6 and Hyprland need Wayland" ;;
 		esac ;;
-	vm)	HW_DESKTOP=no; HW_DESKTOP_WHY="virtual machines ($HW_VM) have no 3D/KMS graphics driver on FreeBSD; KDE Plasma 6.8 and Hyprland need one. Install on real hardware, or use PCI passthrough of a real GPU" ;;
+	vm)	HW_DESKTOP=no; HW_DESKTOP_WHY="virtual machines ($HW_VM) have no 3D/KMS graphics driver on FreeBSD; KDE Plasma 6 and Hyprland need one. Install on real hardware, or use PCI passthrough of a real GPU" ;;
 	*)	HW_DESKTOP=no; HW_DESKTOP_WHY="no supported graphics card found" ;;
 	esac
 }

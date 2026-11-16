@@ -92,7 +92,7 @@ if in_list nvidia $GPU_DRIVERS && [ "$NVIDIA_BRANCH" != none ]; then
 		else
 			pkg_install "$NVIDIA_PKG"
 			kld_add nvidia
-			warn "the NVIDIA $NVIDIA_BRANCH driver is X11 only: KDE Plasma 6.8 and Hyprland (Wayland) will not run on this GPU"
+			warn "the NVIDIA $NVIDIA_BRANCH driver is X11 only: KDE Plasma 6 and Hyprland (Wayland) will not run on this GPU"
 		fi
 		if is_live && [ -n "$_drmpkg" ]; then
 			kld_now nvidia-modeset || warn "nvidia-modeset did not load - check: dmesg | tail -30"
