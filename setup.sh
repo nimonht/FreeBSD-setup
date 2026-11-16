@@ -24,7 +24,7 @@ set -eu
 # realpath: "freebsd-setup" in /usr/local/sbin is a symlink to this file
 REPO_DIR=$(dirname "$(realpath "$0")")
 FBS_LIB="$REPO_DIR/lib"
-STAGES="base drivers system network zfs audio desktop kde hyprland caelestia input printing apps gaming security finish"
+STAGES="base drivers system network zfs audio desktop kde hyprland caelestia terminal input printing apps gaming security finish"
 
 . "$FBS_LIB/common.sh"
 . "$FBS_LIB/hw.sh"
@@ -46,6 +46,7 @@ Stages, in order (each one skips itself when it does not apply):
   kde        KDE Plasma 6
   hyprland   Hyprland, its tools and session
   caelestia  Caelestia shell + dotfiles for Hyprland (built for FreeBSD)
+  terminal   optional ready-made terminal: fish, zsh or bash, prompt, fastfetch
   input      fcitx5 input methods (Vietnamese, Chinese, Japanese, Korean...)
   printing   CUPS printing, network printer discovery, scanners
   apps       browser, office, media, developer tools
@@ -86,7 +87,12 @@ case "$HW_OSREL" in 1[5-9].*) ;; *) die "FreeBSD 15 or newer is required (this i
 
 # Answers: defaults < saved answers < --config file < command line
 . "$FBS_LIB/defaults.conf"
-[ -f "$FBS_CONF" ] && . "$FBS_CONF"
+if [ -f "$FBS_CONF" ]; then
+	. "$FBS_CONF"
+	# Installed before the terminal style existed: keep the plain terminal
+	# unless the owner picks a style.
+	grep -q '^TERMINAL_STYLE=' "$FBS_CONF" || TERMINAL_STYLE=none
+fi
 [ -n "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 [ -n "$ARG_USER" ] && TARGET_USER=$ARG_USER
 : "${DESKTOP_LANGUAGE:=}"
@@ -122,6 +128,7 @@ if [ -z "$RUN" ] && [ "$UI_MODE" != auto ]; then
 		[ -n "$KEYBOARD_LAYOUT" ] || wiz_keyboard || exit 1
 		[ -n "$DESKTOP_LANGUAGE" ] || wiz_language || exit 1
 		wiz_input_methods || exit 1
+		wiz_terminal || exit 1
 	fi
 	wiz_extras || exit 1
 	resolve_config

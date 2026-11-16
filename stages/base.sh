@@ -45,6 +45,10 @@ fi
 
 pkg_install doas sudo git curl bash nano htop rsync unzip zip 7-zip jq ca_root_nss \
 	pciutils usbutils dmidecode smartmontools fastfetch
+# fastfetch looks for os-release under /usr/local/etc and otherwise shows no
+# OS name ("Could not detect OS"); FreeBSD keeps it in /etc.
+[ -e /usr/local/etc/os-release ] || [ -L /usr/local/etc/os-release ] ||
+	ln -s /etc/os-release /usr/local/etc/os-release
 
 # doas for the wheel group; "persist" remembers the password for a while.
 if [ ! -f /usr/local/etc/doas.conf ]; then

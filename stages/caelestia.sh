@@ -63,6 +63,18 @@ for pair in hypr:hypr fish:fish foot:foot fastfetch:fastfetch btop:btop micro:mi
 	touch "$CFG/$dst/.caelestia-managed"
 done
 [ -f "$DOTS/starship.toml" ] && [ ! -f "$CFG/starship.toml" ] && cp "$DOTS/starship.toml" "$CFG/starship.toml"
+# Caelestia's system summary (fastfetch, shown in every new terminal) calls
+# Linux-only commands; switch those rows to ones that work on FreeBSD.
+_ffc="$CFG/fastfetch/config.jsonc"
+if [ -f "$_ffc" ] && command -v jq >/dev/null; then
+	if jq -f "$REPO_DIR/files/caelestia/fastfetch-freebsd.jq" "$_ffc" > "$_ffc.new"; then
+		mv "$_ffc.new" "$_ffc"
+	else
+		rm -f "$_ffc.new"; warn "could not adapt Caelestia's fastfetch settings for FreeBSD; some rows will be empty"
+	fi
+fi
+# The terminal (foot) starts the shell of the chosen terminal style.
+foot_set_shell "$CFG/foot/foot.ini"
 
 # FreeBSD-specific user config. These three files are never touched by
 # upstream updates, and existing copies of yours are never overwritten.

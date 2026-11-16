@@ -63,6 +63,22 @@ hardware, or in FreeBSD's package catalogue on 2026-11-15), or *to verify*
     unredacted MAC addresses, serials or UUIDs in the result.
 - Not yet checked: polkit inside a real desktop session (needs the laptop),
   and everything visual.
+- Terminal style (owner request: an optional CachyOS-like terminal). Research:
+  [notes/terminal-research-2026-11.md](notes/terminal-research-2026-11.md).
+  Owner decisions: fish preselected; zsh without oh-my-zsh (the port is a
+  stale 2024 snapshot, powerlevel10k is not packaged); fastfetch in every new
+  shell, as CachyOS does; JetBrainsMono Nerd Font on KDE too. The login shell
+  is never changed (fish as login shell breaks `as_user`; zsh drops
+  `~/.profile` from desktop sessions). `stages/terminal.sh`, `files/shell/`,
+  `terminal-style` (per-user off switch). Caelestia's own fastfetch box called
+  Linux-only commands; `files/caelestia/fastfetch-freebsd.jq` fixes the
+  downloaded copy (the dots are GPL-3, so no modified copy is shipped).
+  Checked in the dev VM: each style starts with greeting and prompt and no
+  errors, scripted shells stay silent, `terminal-style` switches work,
+  switching to `none` removes only our files, re-runs are clean, foot accepts
+  both foot.ini files, Konsole lists the profile and KConfig resolves it as
+  default with Plasma's XDG_CONFIG_DIRS. Not checked: how it looks (font,
+  icons, colours) - see tests/desktop-walk.txt.
 - Hardware round 1, prepared: `tests/desktop-probe.sh` and
   `tests/desktop-walk.txt` (the systematic walk of 4.6 as a checklist).
 

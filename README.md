@@ -174,6 +174,28 @@ choosing it in the boot menu undoes everything the setup did.
 | Hardware report | `freebsd-setup --report` |
 | Sound output | `pavucontrol`, or `cat /dev/sndstat` and `sysctl hw.snd.default_unit=N` |
 | Windows/Linux partitions | Dolphin shows them; NTFS, exFAT and ext4 can be opened |
+| Firewall: open a port | Add a rule to `/etc/pf.local.conf` (yours, never replaced), then `doas service pf reload` |
+| Terminal: turn the ready-made setup off for you | `terminal-style off` (or `greeting-off` for just the system summary); `terminal-style on` undoes it |
+
+### The terminal
+
+The installer asks for a **terminal style**: **fish** (the default), **zsh**,
+**bash** or **plain**. The first three give the terminal (Konsole, foot)
+colours, completion, history search on the Up arrow (fish and zsh also
+suggest as you type),
+a prompt that shows the git branch ([starship](https://starship.rs)), the
+JetBrainsMono Nerd Font and a system summary (fastfetch) in every new shell,
+similar to CachyOS. Short extra commands: `ll`, `la`, `lt` (listings), `z DIR`
+(jump to a folder you used before), `update` (`sysup`), `cleanup`, `psmem`.
+Standard commands such as `ls`, `cat` and `cd` are left as they are, so guides
+and scripts keep working.
+
+Your **login shell stays `sh`**: the style only applies inside the terminal
+app, so a broken shell setup can never stop you from logging in. To change the
+style for everyone, set `TERMINAL_STYLE` in `/usr/local/etc/freebsd-setup.conf`
+and run `doas freebsd-setup terminal`. Your own `~/.config/fish/config.fish`,
+`~/.zshrc` or `~/.bashrc` always run after ours. With Caelestia, fish uses
+Caelestia's own setup.
 
 ### The desktops
 
@@ -211,7 +233,9 @@ added to systemd-boot's `loader/entries/`; a firmware boot entry *FreeBSD*.
 Nothing else on the disk is modified.
 
 **Setup:** packages, `/etc/rc.conf`, `/boot/loader.conf`, `/etc/sysctl.conf`,
-`/etc/devfs.rules` and `/etc/pf.conf` (backups kept), login screen, and per-user
+`/etc/devfs.rules` and `/etc/pf.conf` (backups kept), login screen, the
+terminal style (system-wide files in `/usr/local/etc` and `/usr/local/share`,
+only where you have none of your own), and per-user
 settings that you don't have yet (existing ones are never overwritten). The full
 log is `/var/log/freebsd-setup.log`; your answers are saved in
 `/usr/local/etc/freebsd-setup.conf`.

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Written by FreeBSD-setup: the system summary (fastfetch) shown when a shell
+# starts in a terminal window (terminal style).
+#   Off for you:      terminal-style greeting-off
+#   Off for everyone: TERMINAL_GREETING="no" in /usr/local/etc/freebsd-setup.conf,
+#                     then: doas freebsd-setup terminal
+[ "$(id -u)" = 0 ] && exit 0
+[ -t 1 ] || exit 0
+[ -e "${XDG_CONFIG_HOME:-$HOME/.config}/freebsd-setup/greeting-off" ] && exit 0
+[ -e "${XDG_CONFIG_HOME:-$HOME/.config}/freebsd-setup/terminal-off" ] && exit 0
+case "$(tty 2>/dev/null)" in /dev/ttyv*) exit 0 ;; esac    # text console
+command -v fastfetch >/dev/null 2>&1 || exit 0
+exec fastfetch
