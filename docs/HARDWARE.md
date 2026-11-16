@@ -15,7 +15,7 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstra
 
 ## Graphics: what decides whether the desktop runs
 
-KDE Plasma 6.8 (the current version in FreeBSD packages) and Hyprland are
+KDE Plasma 6 (6.8 on the "latest" package branch, 6.7 on "quarterly") and Hyprland are
 Wayland desktops: they need a graphics driver with kernel mode setting (KMS).
 
 | GPU | Driver chosen | Desktop |

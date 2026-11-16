@@ -82,7 +82,8 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
 - The installed copy of this repo lives in `/usr/local/share/freebsd-setup`;
   `freebsd-setup` is a symlink to its `setup.sh`. Saved answers:
   `/usr/local/etc/freebsd-setup.conf`. Log: `/var/log/freebsd-setup.log`.
-- KDE Plasma in FreeBSD packages is Wayland-only (6.8). The SDDM login screen
+- KDE Plasma in FreeBSD packages is Wayland-only (6.8 on "latest", 6.7.5 on
+  "quarterly", which KDE-only installs use). The SDDM login screen
   still runs on X11.
 - Hyprland + Caelestia need the `latest` package branch; KDE alone uses
   `quarterly`. Kernel modules come from the `FreeBSD-ports-kmods` repository
