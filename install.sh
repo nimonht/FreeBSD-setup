@@ -836,7 +836,7 @@ boot_integrate() {
 		if limine_locked "$_esp"; then
 			# Changing limine.conf would make Limine refuse to start.
 			LIMINE_LOCKED=yes
-			say "Limine protects its menu with a checksum: not changed (add FreeBSD from Linux, see the end)"
+			say "Limine menu not changed: it is protected by a checksum, or could not be checked (add FreeBSD from Linux, see the end)"
 		elif ! grep -q 'EFI/freebsd/loader.efi' "$_esp/$LIMINE_CONF"; then
 			cp "$_esp/$LIMINE_CONF" "$_esp/$LIMINE_CONF.before-freebsd"
 			printf '\n/FreeBSD\n    comment: FreeBSD on ZFS (added by FreeBSD-setup)\n    protocol: efi\n    path: boot():/EFI/freebsd/loader.efi\n' >> "$_esp/$LIMINE_CONF"
@@ -942,9 +942,9 @@ fi
 if [ "$INSTALL_MODE" = alongside ] && [ "${LIMINE_LOCKED:-no}" = yes ]; then
 	_done="$_done
 
-Your Limine menu protects itself with a checksum, so it was not changed
-(a changed menu file would stop Limine from starting). To add FreeBSD to it,
-start Linux and run:
+Your Limine menu was not changed: it is protected by a checksum, or it could
+not be checked safely (a changed menu file can stop Limine from starting).
+To add FreeBSD to it, start Linux and run:
   sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi
 (/boot is where CachyOS mounts the EFI partition. Without limine-entry-tool:
 see docs/DUAL-BOOT.md.)"
