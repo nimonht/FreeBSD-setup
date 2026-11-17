@@ -95,6 +95,17 @@ hardware, or in FreeBSD's package catalogue on 2026-11-15), or *to verify*
   `limine.conf.before-freebsd`; checked in QEMU). Tests:
   `tests/limine-test.sh`, and the VM test with `LIMINE_ENROLL=yes`.
 
+- **2026-11-17, out-of-the-box polish (owner asked for all of it):** Baloo
+  indexing off (`/usr/local/etc/xdg/baloofilerc`); KDE theme Breeze Dark
+  (`/usr/local/etc/xdg/kdeglobals`, read by startplasma's look-and-feel
+  defaults); Ark opens the destination folder (`/etc/xdg/arkrc`, because the
+  ark package owns `/usr/local/etc/xdg/arkrc`; the About page is branded by
+  kinfocenter's own file already); Firefox `policies.json` in
+  `/etc/firefox/policies/` (about:policies in the VM lists all of it, no
+  errors); `noto-sans-sc` as CJK fallback for everyone (fontconfig matches it
+  for ja, ko, zh-tw); printer drivers hplip, brlaser, splix, escpr. Checked in
+  the dev VM with kreadconfig6; nothing visual seen yet.
+
 ## 1. What the owner wants
 
 A friendly, preconfigured, modern FreeBSD desktop, comparable in out-of-the-box

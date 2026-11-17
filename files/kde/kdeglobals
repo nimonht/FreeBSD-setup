@@ -1,0 +1,4 @@
+# Written by FreeBSD-setup: KDE defaults. Your own settings (System Settings)
+# are saved in ~/.config and always win.
+[KDE]
+LookAndFeelPackage=org.kde.breezedark.desktop

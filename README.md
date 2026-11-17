@@ -238,7 +238,10 @@ Nothing else on the disk is modified.
 **Setup:** packages, `/etc/rc.conf`, `/boot/loader.conf`, `/etc/sysctl.conf`,
 `/etc/devfs.rules` and `/etc/pf.conf` (backups kept), login screen, the
 terminal style (system-wide files in `/usr/local/etc` and `/usr/local/share`,
-only where you have none of your own), and per-user
+only where you have none of your own), KDE defaults in `/usr/local/etc/xdg`
+(dark Breeze theme, file indexing off) and `/etc/xdg/arkrc`, Firefox privacy
+defaults in `/etc/firefox/policies/policies.json` (no telemetry, studies or
+sponsored content), and per-user
 settings that you don't have yet (existing ones are never overwritten). The full
 log is `/var/log/freebsd-setup.log`; your answers are saved in
 `/usr/local/etc/freebsd-setup.conf`.

@@ -1,0 +1,3 @@
+# Written by FreeBSD-setup: open the folder after extracting an archive.
+[Extraction]
+openDestinationFolderAfterExtraction=true

@@ -36,6 +36,13 @@ chown -R "$TARGET_USER" "$_cfg"
 mkdir -p /usr/local/etc/xdg
 [ -e /usr/local/etc/xdg/baloofilerc ] ||
 	printf '# Written by FreeBSD-setup\n[Basic Settings]\nIndexing-Enabled=false\n' > /usr/local/etc/xdg/baloofilerc
+# System-wide KDE defaults (each user's own settings win): the dark Breeze
+# theme, and Ark opening the folder it extracted to. The arkrc goes to
+# /etc/xdg because the ark package ships its own /usr/local/etc/xdg/arkrc;
+# KDE merges both, key by key. (The About page is branded by the
+# kinfocenter package already.)
+sys_file "$REPO_DIR/files/kde/kdeglobals" /usr/local/etc/xdg/kdeglobals || true
+sys_file "$REPO_DIR/files/kde/arkrc" /etc/xdg/arkrc || true
 say "KDE Plasma installed - choose 'Plasma (Wayland)' at the login screen"
 
 true   # (a stage must not end on a failed test: setup.sh runs under set -e)
