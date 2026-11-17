@@ -18,7 +18,13 @@
 #                           FreeBSD, logs in, restarts, and uses "Start ... (L)"
 #                           in FreeBSD's menu to chain back to the other loader.
 #   LIMINE_EFI=/path/BOOTX64.EFI   Limine binary for DISK_SETUP=dualboot
-#                           (default: downloaded from the Limine project)
+#                           (default: the limine package's, or downloaded
+#                           from the Limine project)
+#   LIMINE_ENROLL=yes       DISK_SETUP=dualboot with Limine checking its menu
+#                           file against an enrolled checksum, as CachyOS
+#                           sets it up (needs the limine tool and b2sum): the
+#                           installer must leave limine.conf alone, and
+#                           Limine must still start afterwards
 #
 # Result: tests/vm/work/serial.log (and boot.log); exit status 0 on success.
 set -eu
@@ -49,17 +55,28 @@ if [ "${DISK_SETUP:-}" = dualboot ]; then
 	# FreeBSD up to match: give the VM such a clock, or TLS dates are off.
 	TARGET="$W/target.raw" FMT=raw RTC=localtime
 	truncate -s 40G "$TARGET"
-	sgdisk -n1:2048:+260M -t1:ef00 -c1:EFI -n2:0:+4G -t2:8300 -n3:0:+5G -t3:0700 "$TARGET" >/dev/null
+	if command -v sgdisk >/dev/null; then
+		sgdisk -n1:2048:+260M -t1:ef00 -c1:EFI -n2:0:+4G -t2:8300 -n3:0:+5G -t3:0700 "$TARGET" >/dev/null
+	else
+		printf 'label: gpt\nstart=2048, size=260M, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name=EFI\nsize=4G, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\nsize=5G, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7\n' |
+			sfdisk --quiet "$TARGET"
+	fi
+	[ -f /usr/share/limine/BOOTX64.EFI ] && : "${LIMINE_EFI:=/usr/share/limine/BOOTX64.EFI}"
 	LIMINE_EFI=${LIMINE_EFI:-$W/limine.efi}
 	[ -f "$LIMINE_EFI" ] || curl -sSL -o "$LIMINE_EFI" https://raw.githubusercontent.com/limine-bootloader/limine/v10.x-binary/BOOTX64.EFI
+	printf 'timeout: 3\nserial: yes\n\n/Other OS (stand-in)\n    protocol: efi\n    path: boot():/EFI/Microsoft/Boot/bootmgfw.efi\n' > "$W/limine.conf"
+	cp "$LIMINE_EFI" "$W/limine-boot.efi"
+	if [ "${LIMINE_ENROLL:-no}" = yes ]; then
+		limine enroll-config "$W/limine-boot.efi" "$(b2sum "$W/limine.conf" | cut -d' ' -f1)" >/dev/null ||
+			{ echo "FAIL: could not enroll the Limine config checksum"; exit 1; }
+	fi
 	img="$TARGET@@1M"
 	mformat -i "$img" -F -T $((260 * 2048)) -h 64 -s 32 -v EFI ::
 	mmd -i "$img" ::/EFI ::/EFI/BOOT ::/EFI/Microsoft ::/EFI/Microsoft/Boot
-	mcopy -i "$img" "$LIMINE_EFI" ::/EFI/BOOT/BOOTX64.EFI
+	mcopy -i "$img" "$W/limine-boot.efi" ::/EFI/BOOT/BOOTX64.EFI
 	# Stand-in for Windows: another copy of Limine, so chainloading it shows
 	# a recognisable menu.
-	mcopy -i "$img" "$LIMINE_EFI" ::/EFI/Microsoft/Boot/bootmgfw.efi
-	printf 'timeout: 3\nserial: yes\n\n/Other OS (stand-in)\n    protocol: efi\n    path: boot():/EFI/Microsoft/Boot/bootmgfw.efi\n' > "$W/limine.conf"
+	mcopy -i "$img" "$W/limine-boot.efi" ::/EFI/Microsoft/Boot/bootmgfw.efi
 	mcopy -i "$img" "$W/limine.conf" ::/limine.conf
 else
 	qemu-img create -q -f qcow2 "$TARGET" 40G
@@ -106,9 +123,10 @@ echo "PASS: installer"
 # "Start ... (L)" in FreeBSD's menu to chain back to the other loader.
 # Encrypted installs: answer the boot loader's passphrase prompt.
 . "$W/cfg/answers.conf"
-python3 - "$W/boot-steps.json" "$USERNAME" "$USER_PASSWORD" "${DISK_SETUP:-}" "${ENCRYPT:-no}" "${ENCRYPT_PASSPHRASE:-}" <<'PY'
+python3 - "$W/boot-steps.json" "$USERNAME" "$USER_PASSWORD" "${DISK_SETUP:-}" "${ENCRYPT:-no}" "${ENCRYPT_PASSPHRASE:-}" "${BOOT_DEFAULT:-keep}" <<'PY'
 import json, sys
-out, user, pw, setup, enc, encpw = sys.argv[1:7]
+out, user, pw, setup, enc, encpw, bootdef = sys.argv[1:8]
+limine_first = setup == "dualboot" and bootdef != "freebsd"
 # printf, not echo: the marker must not appear in the echo of the typed command
 checks = ("printf 'CHECKS-%s\\n' BEGIN; freebsd-version; zfs list -H -o name | head -3; "
           "kenv -q vfs.root.mountfrom; geli status 2>/dev/null; "
@@ -116,9 +134,11 @@ checks = ("printf 'CHECKS-%s\\n' BEGIN; freebsd-version; zfs list -H -o name | h
           "pkg -N >/dev/null 2>&1 && pkg info -q plasma6-plasma firefox cups hyprland 2>/dev/null; "
           "ls /usr/local/share/wayland-sessions 2>/dev/null; for c in caelestia Hyprland startplasma-wayland sddm ly fcitx5 steam-setup; do command -v $c; done; "
           "grep -c WARNING /var/log/freebsd-setup.log; tail -3 /var/log/freebsd-setup.log; "
-          "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; printf 'CHECKS-%s\\n' DONE\r")
+          "zfs list -H -t snapshot -o name | head -3; grep fbs_chain /boot/loader.conf; "
+          "printf 'limine.conf FreeBSD entries: %s\\n' $(grep -c -i freebsd /boot/efi/limine.conf 2>/dev/null); "
+          "printf 'CHECKS-%s\\n' DONE\r")
 steps = []
-if setup == "dualboot":
+if limine_first:
     steps.append([r"FreeBSD", "\x1b[B\r", 600])            # Limine menu: FreeBSD entry
 if enc == "yes":
     steps.append([r"[Pp]assphrase", (encpw or pw) + "\r", 900])
@@ -133,7 +153,8 @@ steps += [
     [r"Password:", pw + "\r", 60],
 ]
 if setup == "dualboot":
-    steps.append([r"FreeBSD", "\x1b[B\r", 900])             # Limine again
+    if limine_first:
+        steps.append([r"FreeBSD", "\x1b[B\r", 900])         # Limine again
     if enc == "yes":
         steps.append([r"[Pp]assphrase", (encpw or pw) + "\r", 900])
     steps += [
@@ -157,7 +178,12 @@ tr -d '\r' < "$W/boot.log" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g' > "$W/boot.txt"
 [ "$rc" -eq 0 ] && grep -a -q 'CHECKS-DONE' "$W/boot.txt" || { echo "FAIL: boot test (see $W/boot.txt)"; exit 1; }
 sed -n '/^CHECKS-BEGIN/,/^CHECKS-DONE/p' "$W/boot.txt" | grep -av 'CHECKS-' || true
 if [ "${DISK_SETUP:-}" = dualboot ]; then
+	if grep -a -q 'CHECKSUM MISMATCH' "$W/boot.txt"; then echo "FAIL: Limine refuses to start: CHECKSUM MISMATCH FOR CONFIG FILE"; exit 1; fi
 	grep -a -q 'Other OS (stand-in)' "$W/boot.txt" || { echo "FAIL: chainloading from FreeBSD's menu"; exit 1; }
+	if [ "${LIMINE_ENROLL:-no}" = yes ]; then
+		grep -a -q 'limine.conf FreeBSD entries: 0' "$W/boot.txt" || { echo "FAIL: limine.conf was changed although Limine checks it"; exit 1; }
+		echo "PASS: Limine with an enrolled checksum was left alone and still starts"
+	fi
 	echo "PASS: boot through Limine, login, and chainload from FreeBSD's menu"
 else
 	echo "PASS: the installed system boots and logs in"

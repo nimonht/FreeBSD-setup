@@ -82,6 +82,19 @@ hardware, or in FreeBSD's package catalogue on 2026-11-15), or *to verify*
 - Hardware round 1, prepared: `tests/desktop-probe.sh` and
   `tests/desktop-walk.txt` (the systematic walk of 4.6 as a checklist).
 
+- **2026-11-17, Limine lock-out (reported by the owner, fixed):** next to a
+  Limine whose binary has an enrolled checksum of `limine.conf` (CachyOS's
+  default, `ENABLE_ENROLL_LIMINE_CONFIG=yes`), appending the FreeBSD entry made
+  Limine stop with "CHECKSUM MISMATCH FOR CONFIG FILE" (Limine source
+  `common/lib/config.c` `init_config`; reproduced in QEMU with Limine 12.10).
+  The installer now checks every Limine binary on the EFI partition
+  (`limine_locked`) and leaves `limine.conf` alone when one is enrolled or
+  when it cannot tell; the end of the install shows the
+  `limine-entry-tool --add-efi` command. Recovery for machines already hit:
+  docs/TROUBLESHOOTING.md (firmware menu -> FreeBSD -> restore
+  `limine.conf.before-freebsd`; checked in QEMU). Tests:
+  `tests/limine-test.sh`, and the VM test with `LIMINE_ENROLL=yes`.
+
 ## 1. What the owner wants
 
 A friendly, preconfigured, modern FreeBSD desktop, comparable in out-of-the-box

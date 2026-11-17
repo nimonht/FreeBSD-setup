@@ -59,12 +59,13 @@ sh tests/run.sh                 # hardware detection against recorded machines
 sh tests/config-test.sh         # wizard answers -> stages and login screen
 sh tests/gpu-config-test.sh     # X11 graphics config per machine
 sh tests/power-profiles-test.sh # power-profiles D-Bus service (needs python3-gobject, dbus)
+sh tests/limine-test.sh         # never edit a checksum-protected limine.conf
 shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
   setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* files/rc.d/*
 sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-erase-kde.conf
 ```
 
-The first five run on Linux. The last one installs FreeBSD in QEMU through the
+The first six run on Linux. The last one installs FreeBSD in QEMU through the
 serial console (slow: mostly package downloads); it proves the installer and stages
 finish, not that the desktop works: a plain QEMU guest has no KMS graphics.
 
@@ -82,6 +83,11 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
 - The installed copy of this repo lives in `/usr/local/share/freebsd-setup`;
   `freebsd-setup` is a symlink to its `setup.sh`. Saved answers:
   `/usr/local/etc/freebsd-setup.conf`. Log: `/var/log/freebsd-setup.log`.
+- **Never change another system's boot files unless it is known to be safe.**
+  Limine can enroll a checksum of `limine.conf` into its binary (CachyOS does
+  by default); any change then stops Limine from starting. `limine_locked`
+  (lib/common.sh) checks this; test with
+  `DISK_SETUP=dualboot LIMINE_ENROLL=yes ... tests/install-alongside-limine.conf`.
 - KDE Plasma in FreeBSD packages is Wayland-only (6.8 on "latest", 6.7.5 on
   "quarterly", which KDE-only installs use). The SDDM login screen
   still runs on X11.
