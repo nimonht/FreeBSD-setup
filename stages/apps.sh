@@ -5,6 +5,9 @@
 if is_yes INSTALL_APPS; then
 	say "browser, office, media"
 	pkg_install firefox vlc
+	# Firefox privacy defaults: no telemetry, studies, sponsored tiles or
+	# recommendation pop-ups (all can still be changed in Firefox).
+	sys_file "$REPO_DIR/files/firefox/policies.json" /etc/firefox/policies/policies.json || true
 	pkg_try libreoffice thunderbird gimp keepassxc
 	# LibreOffice in the desktop language, when a translation exists
 	case "${DESKTOP_LANGUAGE:-}" in

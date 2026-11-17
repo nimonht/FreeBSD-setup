@@ -7,6 +7,9 @@
 say "fonts"
 pkg_install noto-basic noto-emoji dejavu liberation-fonts-ttf
 pkg_try webfonts                       # Arial, Times New Roman... for documents
+# Chinese, Japanese and Korean text on web pages and in file names shows as
+# empty boxes without a font that has those characters: one for everybody.
+pkg_try noto-sans-sc
 case " $INPUT_METHODS ${DESKTOP_LANGUAGE:-} " in
 *" zh-cn "*|*" zh-tw "*|*" ja "*|*" ko "*) pkg_try noto-sc noto-tc noto-jp noto-kr ;;
 esac
