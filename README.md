@@ -135,7 +135,9 @@ When it says *FreeBSD is installed*, remove the stick and restart.
 
 - **Whole disk:** FreeBSD starts directly.
 - **Next to other systems:** FreeBSD is added to the **Limine** or
-  **systemd-boot** menu when it finds one, **rEFInd** finds it by itself, and
+  **systemd-boot** menu when it finds one (a Limine that protects its menu
+  with a checksum, as CachyOS's does, is left alone: the installer shows the
+  one command to run in Linux), **rEFInd** finds it by itself, and
   it always appears as *FreeBSD* in the firmware boot menu (F12/F8/Esc). If
   you chose "FreeBSD's menu" as the default, press **L** in that menu to start
   Windows (or whatever started the computer before). GRUB users: see
@@ -228,7 +230,8 @@ in `EFI/freebsd/fbsd-zfs.eli.backup` on the EFI partition.
 
 **Installer, next to other systems:** two new partitions (ZFS and swap) in the
 largest free space; `EFI/freebsd/` added to the existing EFI partition; one
-entry appended to Limine's `limine.conf` (backup saved next to it) or one file
+entry appended to Limine's `limine.conf` (backup saved next to it; never when
+Limine checks that file against an enrolled checksum) or one file
 added to systemd-boot's `loader/entries/`; a firmware boot entry *FreeBSD*.
 Nothing else on the disk is modified.
 

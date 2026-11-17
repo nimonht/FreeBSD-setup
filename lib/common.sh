@@ -162,6 +162,20 @@ sys_file_rm() {
 	return 0
 }
 
+# limine_locked ESP_DIR   true when limine.conf on this EFI partition must
+# not be changed: a Limine binary there carries an enrolled checksum of it
+# (CachyOS enrolls one by default), and Limine refuses to start ("CHECKSUM
+# MISMATCH FOR CONFIG FILE") once the file differs by a single byte. Also
+# true when no Limine binary could be checked at all: when in doubt, leave
+# the other system's boot menu alone.
+limine_locked() {
+	local _sums
+	_sums=$(find "$1" -type f -iname '*.efi' -exec \
+		env LC_ALL=C grep -a -h -o -E '\+\+CONFIG_B2SUM_SIGNATURE\+\+[0-9A-Za-z]{128}' {} + 2>/dev/null) || true
+	[ -n "$_sums" ] || return 0
+	printf '%s\n' "$_sums" | sed 's/^++CONFIG_B2SUM_SIGNATURE++//' | grep -q '[^0]'
+}
+
 # foot_set_shell FILE   start the terminal style's shell in this foot.ini,
 # only when it is Caelestia's copy (marked .caelestia-managed, ours to
 # change), never the user's own; with no style, Caelestia's choice (fish).

@@ -49,6 +49,22 @@ If a partition was left behind anyway (power cut), delete it with
 
 ## Starting the computer
 
+**Limine stops with "CHECKSUM MISMATCH FOR CONFIG FILE"** (installed with an
+older FreeBSD-setup, next to CachyOS or another Linux whose Limine checks its
+menu file against an enrolled checksum): the installer added FreeBSD to
+`limine.conf`, which no longer matches. Nothing is lost, and no live USB is
+needed:
+
+1. Open the firmware boot menu at power-on (F12/F8/F11/Esc, depending on the
+   maker) and pick **FreeBSD**.
+2. Log in and put the original menu file back (the installer kept an exact
+   copy; on FreeBSD the EFI partition is `/boot/efi`):
+   `doas cp /boot/efi/limine.conf.before-freebsd /boot/efi/limine.conf`
+   (if your `limine.conf` is in a sub-folder such as `EFI/limine/`, use that
+   folder in both paths).
+3. Restart: Limine starts again. To get FreeBSD into its menu, run this in
+   CachyOS: `sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi`
+
 **FreeBSD does not appear in Limine / systemd-boot**: check the EFI partition
 from the other system: `EFI/freebsd/loader.efi` must exist, and the entry must
 be in the configuration file the boot manager actually reads (Limine:

@@ -414,15 +414,19 @@ Answer Yes when Windows is installed on this computer (Windows keeps the clock i
 esp_mount_ro() { mkdir -p "$ESP_TMP"; mount -t msdosfs -o ro "/dev/$1" "$ESP_TMP" 2>/dev/null; }
 esp_umount()   { umount "$ESP_TMP" 2>/dev/null || true; }
 
-# Detect boot managers on the ESP: sets LIMINE_CONF, HAS_SDBOOT, HAS_REFIND,
-# HAS_GRUB, HAS_WINBOOT and CHAIN_PATH/CHAIN_NAME (the current default loader)
+# Detect boot managers on the ESP: sets LIMINE_CONF, LIMINE_LOCKED, HAS_SDBOOT,
+# HAS_REFIND, HAS_GRUB, HAS_WINBOOT and CHAIN_PATH/CHAIN_NAME (the current
+# default loader)
 detect_boot() {
-	LIMINE_CONF="" HAS_SDBOOT=no HAS_REFIND=no HAS_GRUB=no HAS_WINBOOT=no CHAIN_PATH="" CHAIN_NAME=""
+	LIMINE_CONF="" LIMINE_LOCKED=no HAS_SDBOOT=no HAS_REFIND=no HAS_GRUB=no HAS_WINBOOT=no CHAIN_PATH="" CHAIN_NAME=""
 	ESP_DEV=$(esp_of "$INSTALL_DISK")
 	[ -n "$ESP_DEV" ] && esp_mount_ro "$ESP_DEV" || return 0
 	for _c in limine.conf limine/limine.conf boot/limine.conf boot/limine/limine.conf EFI/BOOT/limine.conf EFI/limine/limine.conf EFI/Limine/limine.conf; do
 		[ -f "$ESP_TMP/$_c" ] && { LIMINE_CONF=$_c; break; }
 	done
+	# Limine with an enrolled checksum of its menu file (CachyOS's default)
+	# stops starting at all when that file changes: then it is left alone.
+	if [ -n "$LIMINE_CONF" ] && limine_locked "$ESP_TMP"; then LIMINE_LOCKED=yes; fi
 	[ -f "$ESP_TMP/loader/loader.conf" ] && [ -d "$ESP_TMP/EFI/systemd" ] && HAS_SDBOOT=yes
 	[ -d "$ESP_TMP/EFI/refind" ] && HAS_REFIND=yes
 	ls "$ESP_TMP"/EFI/*/grubx64.efi >/dev/null 2>&1 && HAS_GRUB=yes
@@ -447,8 +451,11 @@ ask_boot() {
 	[ "$INSTALL_MODE" = alongside ] || return 0
 	detect_boot
 	_where=""
-	[ -n "$LIMINE_CONF" ] && _where="$_where
+	if [ -n "$LIMINE_CONF" ] && [ "$LIMINE_LOCKED" = yes ]; then _where="$_where
+  - your Limine menu, after one command in Linux (shown at the end)"
+	elif [ -n "$LIMINE_CONF" ]; then _where="$_where
   - an entry in your Limine menu ($LIMINE_CONF)"
+	fi
 	[ "$HAS_SDBOOT" = yes ] && _where="$_where
   - an entry in your systemd-boot menu"
 	[ "$HAS_REFIND" = yes ] && _where="$_where
@@ -826,7 +833,11 @@ efi_entry() {
 boot_integrate() {
 	_esp="$MNT/boot/efi"
 	if is_yes BOOT_INTEGRATION && [ -n "$LIMINE_CONF" ] && [ -f "$_esp/$LIMINE_CONF" ]; then
-		if ! grep -q 'EFI/freebsd/loader.efi' "$_esp/$LIMINE_CONF"; then
+		if limine_locked "$_esp"; then
+			# Changing limine.conf would make Limine refuse to start.
+			LIMINE_LOCKED=yes
+			say "Limine protects its menu with a checksum: not changed (add FreeBSD from Linux, see the end)"
+		elif ! grep -q 'EFI/freebsd/loader.efi' "$_esp/$LIMINE_CONF"; then
 			cp "$_esp/$LIMINE_CONF" "$_esp/$LIMINE_CONF.before-freebsd"
 			printf '\n/FreeBSD\n    comment: FreeBSD on ZFS (added by FreeBSD-setup)\n    protocol: efi\n    path: boot():/EFI/freebsd/loader.efi\n' >> "$_esp/$LIMINE_CONF"
 			say "added FreeBSD to the Limine menu ($LIMINE_CONF; backup: $LIMINE_CONF.before-freebsd)"
@@ -927,6 +938,16 @@ if [ "$INSTALL_MODE" = alongside ] && [ "$BOOT_DEFAULT" != freebsd ]; then
 	_done="$_done
 Start FreeBSD from:${BOOT_SUMMARY:-
   - the firmware boot menu}"
+fi
+if [ "$INSTALL_MODE" = alongside ] && [ "${LIMINE_LOCKED:-no}" = yes ]; then
+	_done="$_done
+
+Your Limine menu protects itself with a checksum, so it was not changed
+(a changed menu file would stop Limine from starting). To add FreeBSD to it,
+start Linux and run:
+  sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi
+(/boot is where CachyOS mounts the EFI partition. Without limine-entry-tool:
+see docs/DUAL-BOOT.md.)"
 fi
 if [ -n "$WARNINGS" ]; then
 	_done="$_done

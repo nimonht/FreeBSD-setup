@@ -14,7 +14,7 @@ EFI partition and then, depending on what it finds there:
 | Found on the EFI partition | What the installer does |
 |---|---|
 | anything | adds a firmware boot entry **FreeBSD** (at the end of the boot order unless you chose FreeBSD as default) |
-| Limine (`limine.conf`) | appends a `/FreeBSD` entry (backup: `limine.conf.before-freebsd`) |
+| Limine (`limine.conf`) | appends a `/FreeBSD` entry (backup: `limine.conf.before-freebsd`), unless Limine checks that file against an enrolled checksum: then nothing (see below) |
 | systemd-boot (`loader/entries/`) | adds `loader/entries/freebsd.conf` |
 | rEFInd | nothing: rEFInd finds `EFI/freebsd/loader.efi` by itself |
 | GRUB | nothing (GRUB's menu is generated from Linux; see below) |
@@ -41,11 +41,20 @@ Before you restart, you choose which system starts by default: the current one
 
 ## Linux with Limine (e.g. CachyOS)
 
-The installer appends the FreeBSD entry to `limine.conf` and FreeBSD appears in
-the Limine menu right away. CachyOS's `limine-entry-tool` updates its own kernel
-entries and leaves other entries alone, but the officially supported way to add
-an entry there is its own command. Run this once from CachyOS so the entry is
-managed like the others:
+Limine can protect its menu file: a checksum of `limine.conf` is enrolled into
+the Limine program on the EFI partition, and Limine then refuses to start
+("CHECKSUM MISMATCH FOR CONFIG FILE") if the file changes by even one byte.
+CachyOS does this by default (`ENABLE_ENROLL_LIMINE_CONFIG=yes` in
+`/etc/default/limine`). The installer looks for an enrolled checksum in every
+Limine program on the EFI partition:
+
+- **None enrolled:** it appends the FreeBSD entry to `limine.conf`, and FreeBSD
+  appears in the Limine menu right away.
+- **Enrolled, or it cannot tell:** it leaves `limine.conf` alone. FreeBSD
+  starts from the firmware boot menu until you add the entry from Linux.
+
+Either way, the supported way to add the entry on CachyOS is its own command,
+which also enrolls the new checksum. Run it once from CachyOS:
 
 ```sh
 sudo limine-entry-tool --add-efi "FreeBSD" "/boot/EFI/freebsd/loader.efi" --comment "FreeBSD" --overwrite
@@ -54,6 +63,20 @@ sudo limine-entry-tool --add-efi "FreeBSD" "/boot/EFI/freebsd/loader.efi" --comm
 (`/boot` is where CachyOS mounts the EFI partition; adjust if yours differs.
 `sudo limine-scan` and picking *FreeBSD* from the firmware entries does the same
 interactively.)
+
+On other systems with an enrolled checksum, add the entry by hand, then enroll
+the new checksum into the Limine program the firmware starts (and sign it again
+if you use Secure Boot):
+
+```
+/FreeBSD
+    protocol: efi
+    path: boot():/EFI/freebsd/loader.efi
+```
+
+```sh
+sudo limine enroll-config /boot/EFI/BOOT/BOOTX64.EFI "$(b2sum /boot/limine.conf | cut -d' ' -f1)"
+```
 
 ## Linux with GRUB (Ubuntu, Fedora, Debian, Mint, openSUSE...)
 
