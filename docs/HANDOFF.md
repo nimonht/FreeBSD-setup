@@ -106,6 +106,14 @@ hardware, or in FreeBSD's package catalogue on 2026-11-15), or *to verify*
   for ja, ko, zh-tw); printer drivers hplip, brlaser, splix, escpr. Checked in
   the dev VM with kreadconfig6; nothing visual seen yet.
 
+- **2026-11-17, package downloads:** two VM installs lost KDE to one broken
+  download ("pkg: An error occurred while fetching package"); the warning
+  wrongly blamed package rebuilds. `pkg_get` now retries broken downloads (3
+  tries) for every package install, and the KDE warning names the real
+  cause. KDE-only VM install afterwards: one retry happened, Plasma, the KDE
+  defaults, `noto-sans-sc` and the fish terminal style all installed in the
+  chroot.
+
 ## 1. What the owner wants
 
 A friendly, preconfigured, modern FreeBSD desktop, comparable in out-of-the-box
