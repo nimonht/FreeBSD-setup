@@ -3,9 +3,12 @@
 [ "$WANT_KDE" = yes ] || { say "KDE Plasma not selected - skipped"; return 0; }
 
 say "KDE Plasma (several hundred packages; the longest download)"
-if ! run_shown '^\[[0-9]+/[0-9]+\] (Fetching|Installing|Upgrading)' \
-	env ASSUME_ALWAYS_YES=yes pkg install -y plasma6-plasma; then
-	warn "KDE Plasma (plasma6-plasma) cannot be installed from the '$PKG_BRANCH' package branch right now - FreeBSD rebuilds it after big updates. Try again in a few days: doas freebsd-setup kde"
+if ! pkg_get plasma6-plasma; then
+	if pkg_has plasma6-plasma; then
+		warn "KDE Plasma could not be downloaded completely (network or mirror trouble; details: $LOG). Check the connection and run: doas freebsd-setup kde"
+	else
+		warn "KDE Plasma (plasma6-plasma) cannot be installed from the '$PKG_BRANCH' package branch right now - FreeBSD rebuilds it after big updates. Try again in a few days: doas freebsd-setup kde"
+	fi
 	return 0
 fi
 pkg_try plasma6-xdg-desktop-portal-kde plasma6-sddm-kcm plasma6-kde-gtk-config \

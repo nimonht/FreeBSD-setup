@@ -58,13 +58,33 @@ run_shown() {
 	return "${_r:-1}"
 }
 
+# pkg_get [-q] name...   pkg install, showing its progress lines (-q: only
+# in the log). A broken download (a mirror or network hiccup: "An error
+# occurred while fetching package") is tried again, up to 3 times; pkg keeps
+# the packages it already has, so a retry only fetches the rest.
+pkg_get() {
+	local _n _q
+	_n=1 _q=no
+	[ "$1" = -q ] && { _q=yes; shift; }
+	while :; do
+		if [ "$_q" = yes ]; then
+			env ASSUME_ALWAYS_YES=yes pkg install -y "$@" >> "$LOG" 2>&1 && return 0
+		else
+			run_shown '^\[[0-9]+/[0-9]+\] (Fetching|Installing|Upgrading)' \
+				env ASSUME_ALWAYS_YES=yes pkg install -y "$@" && return 0
+		fi
+		[ "$_n" -lt 3 ] && tail -5 "$LOG" 2>/dev/null | grep -q 'error occurred while fetching' || return 1
+		_n=$((_n + 1))
+		say "a download was interrupted - trying again ($_n of 3)"
+		sleep "${FBS_RETRY_DELAY:-10}"
+	done
+}
+
 # pkg_install name...   install packages, one progress line per package;
 # fail the script if any is missing
 pkg_install() {
 	say "pkg install $*"
-	run_shown '^\[[0-9]+/[0-9]+\] (Fetching|Installing|Upgrading)' \
-		env ASSUME_ALWAYS_YES=yes pkg install -y "$@" ||
-		die "could not install: $*  (details: $LOG)"
+	pkg_get "$@" || die "could not install: $*  (details: $LOG)"
 }
 
 # pkg_try name...   install each package that is available; missing or
@@ -73,7 +93,7 @@ pkg_try() {
 	local _p
 	for _p in "$@"; do
 		pkg info -e "$_p" 2>/dev/null && continue
-		if env ASSUME_ALWAYS_YES=yes pkg install -y "$_p" >> "$LOG" 2>&1; then
+		if pkg_get -q "$_p"; then
 			say "installed $_p"
 		else
 			warn "package '$_p' is not available right now - skipped"
