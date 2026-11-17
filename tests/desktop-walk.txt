@@ -49,6 +49,9 @@
 ? Anything else that showed an error or an empty page                    |
 
 ## KDE Plasma: apps
+? Theme is dark (Breeze Dark) on first login; can switch to light          |
+? Firefox: about:policies lists telemetry/studies/sponsored off           |
+? Chinese / Japanese / Korean text on a web page shows (no empty boxes)   |
 ? System Monitor: overview page (CPU, memory, disk, network)             |
 ? System Monitor: Processes page                                         |
 ? System Monitor: Applications page                                      |
