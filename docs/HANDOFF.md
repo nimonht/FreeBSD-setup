@@ -114,6 +114,23 @@ hardware, or in FreeBSD's package catalogue on 2026-11-15), or *to verify*
   defaults, `noto-sans-sc` and the fish terminal style all installed in the
   chroot.
 
+- **2026-11-18, audit and safety fixes:** a source audit of boot managers,
+  firmware, the installer and first use found 66 problems
+  ([notes/audit-2026-11-18.md](notes/audit-2026-11-18.md); #0 and #10 turned
+  out wrong for FreeBSD 15.1). Fixed (owner's priority "safety first"):
+  Caelestia lock screen refusing every password (#51, pamtester in the VM);
+  passwords typed in US layout for non-US keyboards (#30); USB/backup disk
+  pre-selected and silent erase (#33) and erasing a disk other systems
+  depend on (#18, #19, #37); key L only for loaders FreeBSD's chain can start
+  (#1, #17, #45); systemd-boot entry becoming default (#3, bootctl);
+  BitLocker warning (#2, #16); GRUB steps printed (#5, #44); lock before
+  suspend (#52, ConsoleKit part tested in the VM); base download retries.
+  The owner's laptop had its old FreeBSD removed (Limine entry via
+  limine-remove-entry, partitions wiped); the owner will reinstall once the
+  safety fixes are pushed. Still open from the audit: first-use groups
+  (first boot, Hyprland controls, KDE everyday, devices and users) and the
+  remaining lower-priority findings.
+
 ## 1. What the owner wants
 
 A friendly, preconfigured, modern FreeBSD desktop, comparable in out-of-the-box
