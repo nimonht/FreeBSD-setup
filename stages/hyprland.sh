@@ -8,7 +8,8 @@ pkg_install seatd hyprland hyprlock hypridle hyprpaper hyprpicker hyprpolkitagen
 	xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
 	qt6-wayland qt5-wayland qt6ct \
 	foot fuzzel wl-clipboard cliphist grim slurp swappy wf-recorder libnotify \
-	thunar gvfs polkit-gnome gnome-keyring gammastep wlr-randr ydotool
+	thunar gvfs polkit-gnome gnome-keyring gammastep wlr-randr ydotool \
+	unix-selfauth-helper
 svc seatd
 
 say "fonts, icons and cursors used by the Hyprland setup"
