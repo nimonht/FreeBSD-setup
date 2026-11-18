@@ -1,0 +1,17 @@
+Boot to FW : false
+BootCurrent: 000a
+Timeout    : 0 seconds
+BootOrder  : 000A, 0000, 0001, 0005, 0006, 0007, 0008, 0009, 0002
++Boot000A* FreeBSD HD(1,GPT,cc3949ac-e18d-11f1-9a08-dbd088e46b75,0x800,0x82000)/File(\EFI\freebsd\loader.efi)
+                      gpt/fbsd-esp:/EFI/freebsd/loader.efi /boot/efi//EFI/freebsd/loader.efi
+ Boot0000* BootManagerMenuApp Fv(7cb8bdc9-f8eb-4f34-aaea-3ee4af6516a1)/FvFile(eec25bdc-67f2-4d95-b1d5-f81b2039d11d)
+ Boot0001* EFI Firmware Setup Fv(7cb8bdc9-f8eb-4f34-aaea-3ee4af6516a1)/FvFile(462caa21-7614-4503-836e-8ab6f4662331)
+ Boot0005* UEFI PXEv4 (MAC:525400123456) PciRoot(0x0)/Pci(0x2,0x0)/MAC(525400123456,0x1)/IPv4(0.0.0.0,0x0,DHCP,0.0.0.0,0.0.0.0,0.0.0.0)
+ Boot0006* UEFI PXEv6 (MAC:525400123456) PciRoot(0x0)/Pci(0x2,0x0)/MAC(525400123456,0x1)/IPv6(0000:0000:0000:0000:0000:0000:0000:0000,0x0,Static,0000:0000:0000:0000:0000:0000:0000:0000,0x40,0000:0000:0000:0000:0000:0000:0000:0000)
+ Boot0007* UEFI HTTPv4 (MAC:525400123456) PciRoot(0x0)/Pci(0x2,0x0)/MAC(525400123456,0x1)/IPv4(0.0.0.0,0x0,DHCP,0.0.0.0,0.0.0.0,0.0.0.0)/Uri()
+ Boot0008* UEFI HTTPv6 (MAC:525400123456) PciRoot(0x0)/Pci(0x2,0x0)/MAC(525400123456,0x1)/IPv6(0000:0000:0000:0000:0000:0000:0000:0000,0x0,Static,0000:0000:0000:0000:0000:0000:0000:0000,0x40,0000:0000:0000:0000:0000:0000:0000:0000)/Uri()
+ Boot0009* EFI Internal Shell Fv(7cb8bdc9-f8eb-4f34-aaea-3ee4af6516a1)/FvFile(7c04a583-9e3e-4f1c-ad65-e05268d0b4d1)
+ Boot0002* UEFI Misc Device PciRoot(0x0)/Pci(0x4,0x0)
+
+
+Unreferenced Variables:

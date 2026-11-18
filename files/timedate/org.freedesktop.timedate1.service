@@ -1,0 +1,6 @@
+# Written by FreeBSD-setup: start fbs-timedate when KDE's Date & Time page
+# (or anything else) asks for org.freedesktop.timedate1.
+[D-BUS Service]
+Name=org.freedesktop.timedate1
+Exec=/usr/local/libexec/fbs-timedate
+User=root

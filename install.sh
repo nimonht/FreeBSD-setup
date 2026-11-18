@@ -196,6 +196,92 @@ disk_free() {
 
 esp_of() { gpart show -p "$1" 2>/dev/null | awk '$4 == "efi" { print $3; exit }'; }
 
+# esp_uuid DISK   the partition UUID of the disk's EFI partition (firmware
+# boot entries name their partition by it)
+esp_uuid() {
+	_eu=$(esp_of "$1"); [ -n "$_eu" ] || return 0
+	gpart list "$1" 2>/dev/null | awk -v n="$_eu" '$2 == "Name:" { f = ($3 == n) } f && $1 == "rawuuid:" { print $2; exit }'
+}
+
+# USB disks: the devices on a USB storage (umass) bus
+disk_usb_list() {
+	camcontrol devlist -v 2>/dev/null | awk '/^scbus/ { u = /umass/; next }
+		u && match($0, /\([^)]*\)$/) { n = split(substr($0, RSTART + 1, RLENGTH - 2), a, ",")
+			for (i = 1; i <= n; i++) if (a[i] !~ /^pass/) print a[i] }'
+}
+disk_removable() {
+	case "$1" in mmcsd*|sdda*) return 0 ;; esac
+	disk_usb_list | grep -qx "$1"
+}
+
+# disk_efi_systems DISK   folders on the disk's EFI partition, i.e. the
+# systems it starts ("ubuntu, Microsoft"); BOOT (the fallback path) left out
+disk_efi_systems() {
+	_ee=$(esp_of "$1"); [ -n "$_ee" ] || return 0
+	_em=$(mktemp -d)
+	mount -t msdosfs -o ro "/dev/$_ee" "$_em" 2>/dev/null || { rmdir "$_em"; return 0; }
+	for _ed in "$_em"/EFI/*/; do
+		[ -d "$_ed" ] || continue
+		_ed=${_ed%/}; _ed=${_ed##*/}
+		case "$_ed" in [Bb][Oo][Oo][Tt]) ;; *) printf '%s\n' "$_ed" ;; esac
+	done | paste -sd, - | sed 's/,/, /g'
+	umount "$_em" 2>/dev/null || true
+	rmdir "$_em" 2>/dev/null || true
+}
+
+# efi_systems DISK here|elsewhere   firmware boot entries (not FreeBSD's)
+# that start a file from DISK's EFI partition (here) or from another
+# partition (elsewhere): NUMBER|NAME|/EFI/path, in boot order. Entries left
+# behind by a disk that is no longer in the computer are not systems.
+efi_systems() {
+	[ "$HW_BOOT" = UEFI ] || return 0
+	_su=$(esp_uuid "$1")
+	_attached=$(gpart list 2>/dev/null | awk '$1 == "rawuuid:" { print tolower($2) }')
+	efibootmgr -v 2>/dev/null | efi_entries | while IFS='|' read -r _sn _sname _sp; do
+		_sf=$(efi_file "$_sp"); [ -n "$_sf" ] || continue
+		[ "$_sname" = FreeBSD ] && continue
+		_pu=$(efi_part_uuid "$_sp")
+		[ -n "$_pu" ] && ! printf '%s\n' "$_attached" | grep -qx "$_pu" && continue
+		_sh=elsewhere
+		[ -n "$_su" ] && printf '%s' "$_sp" | grep -qi "$_su" && _sh=here
+		[ "$_sh" = "$2" ] && printf '%s|%s|%s\n' "$_sn" "$_sname" "$_sf"
+	done
+	return 0
+}
+
+# bitlocker_found [SKIP-DISK]   is a Windows partition on any disk (except
+# SKIP-DISK) BitLocker-encrypted? (BitLocker volumes carry "-FVE-FS-" at
+# byte 3, as util-linux's libblkid/src/superblocks/bitlocker.c checks.)
+bitlocker_found() {
+	for _bd in $(sysctl -n kern.disks); do
+		[ "$_bd" = "${1:-}" ] && continue
+		for _bp in $(gpart show -p "$_bd" 2>/dev/null | awk '$4 == "ms-basic-data" { print $3 }'); do
+			dd if="/dev/$_bp" bs=512 count=1 2>/dev/null | dd bs=1 skip=3 count=8 2>/dev/null |
+				LC_ALL=C grep -aq -- '-FVE-FS-' && return 0
+		done
+	done
+	return 1
+}
+
+# chain_ok FILE [ESP_DIR]   can FreeBSD's menu start this loader (key L)?
+# FreeBSD's "chain" command does not tell the started program where it was
+# loaded from. Windows Boot Manager does not need that; Limine then only
+# finds its menu in its default places; shim (Ubuntu, Fedora...) cannot find
+# GRUB at all. Everything else is reached from the firmware boot menu.
+chain_ok() {
+	case "$1" in
+	*/[Mm]icrosoft/[Bb]oot/bootmgfw.efi) return 0 ;;
+	*[Ll]imine*|*/BOOT/BOOTX64.EFI|*/boot/bootx64.efi)
+		[ -n "${2:-}" ] || return 1
+		LC_ALL=C grep -aq 'CONFIG_B2SUM_SIGNATURE' "$2$1" 2>/dev/null || return 1
+		for _cl in limine.conf limine/limine.conf boot/limine.conf boot/limine/limine.conf EFI/BOOT/limine.conf; do
+			[ -f "$2/$_cl" ] && return 0
+		done
+		return 1 ;;
+	esac
+	return 1
+}
+
 # ---------------------------------------------------------------- questions ---
 
 ask_network() {
@@ -216,12 +302,21 @@ Wi-Fi: choose 'Connect' to pick a network." connect \
 }
 
 ask_disk() {
-	_args=""
+	if [ "$UI_MODE" = auto ] && [ -z "$INSTALL_DISK" ]; then
+		die "the config file must set INSTALL_DISK (the disk to install on, e.g. nda0): an unattended install never picks a disk by itself"
+	fi
+	_args="" _def="" _defsize=0
 	for _d in $(disk_candidates); do
-		_args="$_args$_d$NL$(gb "$(disk_bytes "$_d")") GB  $(disk_descr "$_d")  [$(disk_contents "$_d")]$NL"
+		_sz=$(disk_bytes "$_d") _tag=""
+		_efi=$(disk_efi_systems "$_d")
+		if disk_removable "$_d"; then _tag=" (USB/removable)"
+		elif [ "$_sz" -gt "$_defsize" ]; then _def=$_d _defsize=$_sz; fi
+		_args="$_args$_d$NL$(gb "$_sz") GB  $(disk_descr "$_d")$_tag  [$(disk_contents "$_d")${_efi:+; starts: $_efi}]$NL"
 	done
 	[ -n "$_args" ] || die "no disk found to install on"
-	_def=${INSTALL_DISK:-$(disk_candidates | head -1)}
+	# Pre-select the largest built-in disk, never a USB drive (often the
+	# backup the README asked for, and the newest disk is listed first).
+	_def=${INSTALL_DISK:-${_def:-$(disk_candidates | head -1)}}
 	_old=$IFS; IFS=$NL
 	# shellcheck disable=SC2086
 	INSTALL_DISK=$(ui_menu "Disk" "Install FreeBSD on which disk?" "$_def" $_args) || exit 1
@@ -260,10 +355,17 @@ ask_mode() {
 			erase "Erase the whole disk and install FreeBSD") || exit 1
 	else
 		[ "$INSTALL_MODE" = alongside ] && die "cannot install next to the existing systems: $_why"
+		[ "$UI_MODE" = auto ] && [ -z "$INSTALL_MODE" ] && [ "$_contents" != empty ] &&
+			die "cannot install next to the existing systems on $INSTALL_DISK ($_why); set INSTALL_MODE=erase in the config file to erase it"
 		INSTALL_MODE=erase
 		[ "$_contents" = empty ] || ui_msg "Installation type" "FreeBSD cannot be installed next to the existing systems on $INSTALL_DISK: $_why.
 
 The only option on this disk is to ERASE it completely."
+	fi
+	# Erasing: Windows matters for the clock only when it stays (on another disk).
+	if [ "$INSTALL_MODE" = erase ]; then
+		HAS_WINDOWS=no
+		efi_systems "$INSTALL_DISK" elsewhere | grep -q '|Windows Boot Manager|' && HAS_WINDOWS=yes
 	fi
 	if [ "$INSTALL_MODE" = alongside ] && [ "$UI_MODE" != auto ]; then
 		while :; do
@@ -354,15 +456,22 @@ ask_encrypt() {
 
 Recommended for laptops: if the computer is lost or stolen, nobody can read your files without the passphrase. You type it every time the computer starts; at that moment the keyboard always uses the US layout." $_d; then
 		ENCRYPT=yes
-		if ui_yesno "Encryption" "Use your account password as the disk passphrase?" yes; then
+		# The boot loader reads the passphrase with the US layout. With another
+		# layout the same keys give other characters, so the account password
+		# cannot simply be reused, and the passphrase is typed in US layout.
+		if [ "${KEYBOARD_LAYOUT:-us}" = us ] &&
+			ui_yesno "Encryption" "Use your account password as the disk passphrase?" yes; then
 			ENCRYPT_PASSPHRASE=$USER_PASSWORD
 		else
+			[ "${KEYBOARD_LAYOUT:-us}" = us ] || ui_msg "Encryption" "Choose a disk passphrase now. The keyboard switches to the US layout while you type it, because that is the layout at startup: type it here exactly as you will then (some keys may give other characters than printed on them)."
+			kbd_load us.kbd
 			while :; do
-				_p1=$(ui_password "Encryption" "Disk passphrase:") || exit 1
-				_p2=$(ui_password "Encryption" "Type it again:") || exit 1
+				_p1=$(ui_password "Encryption" "Disk passphrase (US keyboard layout):") || { kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"; exit 1; }
+				_p2=$(ui_password "Encryption" "Type it again:") || { kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"; exit 1; }
 				[ "$_p1" = "$_p2" ] && [ -n "$_p1" ] && { ENCRYPT_PASSPHRASE=$_p1; break; }
 				ui_msg "Encryption" "The passphrases are empty or do not match. Try again."
 			done
+			kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"
 		fi
 	else
 		ENCRYPT=no
@@ -391,9 +500,23 @@ ask_timezone() {
 	IFS=$_old
 }
 
-ask_region() {
+# kbd_load MAP   use this keymap on the text console now (only on a real
+# console: over SSH or a serial line the other end decides the layout).
+kbd_load() {
+	[ "$UI_MODE" != auto ] || return 0
+	case "$(tty < /dev/tty 2>/dev/null)" in /dev/ttyv*) ;; *) return 0 ;; esac
+	kbdcontrol -l "$1" < /dev/tty >> "$LOG" 2>&1 || true
+}
+
+# Language and keyboard first, before anything is typed: passwords must be
+# typed with the layout the installed system will use at the login screen.
+ask_keyboard() {
 	wiz_language || exit 1
 	wiz_keyboard || exit 1
+	kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"
+}
+
+ask_region() {
 	if [ "$UI_MODE" != auto ] || [ -z "$TIMEZONE" ]; then ask_timezone; fi
 	[ -f "/usr/share/zoneinfo/$TIMEZONE" ] || die "unknown time zone '$TIMEZONE'"
 	if [ "$RTC_LOCAL" = auto ]; then
@@ -414,15 +537,19 @@ Answer Yes when Windows is installed on this computer (Windows keeps the clock i
 esp_mount_ro() { mkdir -p "$ESP_TMP"; mount -t msdosfs -o ro "/dev/$1" "$ESP_TMP" 2>/dev/null; }
 esp_umount()   { umount "$ESP_TMP" 2>/dev/null || true; }
 
-# Detect boot managers on the ESP: sets LIMINE_CONF, HAS_SDBOOT, HAS_REFIND,
-# HAS_GRUB, HAS_WINBOOT and CHAIN_PATH/CHAIN_NAME (the current default loader)
+# Detect boot managers on the ESP: sets LIMINE_CONF, LIMINE_LOCKED, HAS_SDBOOT,
+# HAS_REFIND, HAS_GRUB, HAS_WINBOOT and CHAIN_PATH/CHAIN_NAME (the current
+# default loader)
 detect_boot() {
-	LIMINE_CONF="" HAS_SDBOOT=no HAS_REFIND=no HAS_GRUB=no HAS_WINBOOT=no CHAIN_PATH="" CHAIN_NAME=""
+	LIMINE_CONF="" LIMINE_LOCKED=no HAS_SDBOOT=no HAS_REFIND=no HAS_GRUB=no HAS_WINBOOT=no CHAIN_PATH="" CHAIN_NAME="" DEFAULT_NAME=""
 	ESP_DEV=$(esp_of "$INSTALL_DISK")
 	[ -n "$ESP_DEV" ] && esp_mount_ro "$ESP_DEV" || return 0
 	for _c in limine.conf limine/limine.conf boot/limine.conf boot/limine/limine.conf EFI/BOOT/limine.conf EFI/limine/limine.conf EFI/Limine/limine.conf; do
 		[ -f "$ESP_TMP/$_c" ] && { LIMINE_CONF=$_c; break; }
 	done
+	# Limine with an enrolled checksum of its menu file (CachyOS's default)
+	# stops starting at all when that file changes: then it is left alone.
+	if [ -n "$LIMINE_CONF" ] && limine_locked "$ESP_TMP"; then LIMINE_LOCKED=yes; fi
 	[ -f "$ESP_TMP/loader/loader.conf" ] && [ -d "$ESP_TMP/EFI/systemd" ] && HAS_SDBOOT=yes
 	[ -d "$ESP_TMP/EFI/refind" ] && HAS_REFIND=yes
 	ls "$ESP_TMP"/EFI/*/grubx64.efi >/dev/null 2>&1 && HAS_GRUB=yes
@@ -431,12 +558,22 @@ detect_boot() {
 
 	# The loader the firmware starts today: offer it in FreeBSD's menu too.
 	if [ "$HW_BOOT" = UEFI ]; then
-		_first=$(efibootmgr 2>/dev/null | awk -F': *' '/^BootOrder/ { split($2, a, ","); gsub(/ /, "", a[1]); print a[1] }')
-		_line=$(efibootmgr -v 2>/dev/null | grep -E "^[ +]*Boot${_first}\*?" | head -1)
-		CHAIN_PATH=$(echo "$_line" | sed -n 's/.*File(\([^)]*\)).*/\1/p' | tr '\\' '/')
-		CHAIN_NAME=$(echo "$_line" | sed -E 's/^[ +]*Boot[0-9A-Fa-f]{4}\*? //; s/ (HD|PciRoot|Fv)\(.*//')
+		_ebm=$(efibootmgr -v 2>/dev/null) || _ebm=""
+		_first=$(printf '%s\n' "$_ebm" | efi_first)
+		_line=$(printf '%s\n' "$_ebm" | efi_entries | awk -F'|' -v n="$_first" '$1 == n { print; exit }')
+		CHAIN_NAME=$(printf '%s\n' "$_line" | cut -d'|' -f2)
+		CHAIN_PATH=$(efi_file "$(printf '%s\n' "$_line" | cut -d'|' -f3-)")
 		case "$CHAIN_PATH" in /EFI/*|/efi/*) ;; *) CHAIN_PATH="" ;; esac
-		case "$CHAIN_PATH" in */freebsd/*) CHAIN_PATH="" ;; esac
+		case "$CHAIN_PATH" in */freebsd/*) CHAIN_PATH="" CHAIN_NAME="" ;; esac
+		DEFAULT_NAME=$CHAIN_NAME
+		# Offer it as key L only when FreeBSD's menu can really start it.
+		if [ -n "$CHAIN_PATH" ]; then
+			_cdir=""
+			_cu=$(esp_uuid "$INSTALL_DISK")
+			if [ -n "$_cu" ] && printf '%s' "$_line" | grep -qi "$_cu" && esp_mount_ro "$ESP_DEV"; then _cdir=$ESP_TMP; fi
+			chain_ok "$CHAIN_PATH" "$_cdir" || CHAIN_PATH="" CHAIN_NAME=""
+			[ -n "$_cdir" ] && esp_umount
+		fi
 	fi
 	if [ -z "$CHAIN_PATH" ] && [ "$HAS_WINBOOT" = yes ]; then
 		CHAIN_PATH=/EFI/Microsoft/Boot/bootmgfw.efi CHAIN_NAME="Windows Boot Manager"
@@ -444,33 +581,64 @@ detect_boot() {
 }
 
 ask_boot() {
+	OTHER_SYSTEM=""
+	if [ "$INSTALL_MODE" = erase ]; then
+		# Another disk may hold a system the computer starts today: keep it
+		# reachable, and ask which one starts first.
+		_o=$(efi_systems "$INSTALL_DISK" elsewhere | head -1)
+		[ -n "$_o" ] || return 0
+		OTHER_SYSTEM=$(printf '%s' "$_o" | cut -d'|' -f2)
+		DEFAULT_NAME=$OTHER_SYSTEM CHAIN_PATH="" CHAIN_NAME=""
+		_cf=$(printf '%s' "$_o" | cut -d'|' -f3)
+		chain_ok "$_cf" && CHAIN_PATH=$_cf CHAIN_NAME=$OTHER_SYSTEM
+		BOOT_SUMMARY="
+  - '$OTHER_SYSTEM' (on another disk) is not touched and stays in the firmware boot menu"
+		[ -n "$CHAIN_PATH" ] && BOOT_SUMMARY="$BOOT_SUMMARY
+  - FreeBSD's own boot menu gets 'Start $CHAIN_NAME' (key L)"
+		[ "$UI_MODE" = auto ] && return 0
+		if [ -n "$CHAIN_PATH" ]; then _fb="FreeBSD's menu first ('Start $CHAIN_NAME' with key L)"
+		else _fb="FreeBSD first ($OTHER_SYSTEM from the firmware boot menu)"; fi
+		[ "$HAS_BITLOCKER" = yes ] && _fb="$_fb - Windows may then ask for its BitLocker key"
+		BOOT_DEFAULT=$(ui_menu "Starting the computer" "$OTHER_SYSTEM starts from another disk and is not touched.$BOOT_SUMMARY
+
+Which system should start when you turn the computer on?" keep \
+			keep "Keep $OTHER_SYSTEM first (FreeBSD from the firmware boot menu)" \
+			freebsd "$_fb") || exit 1
+		return 0
+	fi
 	[ "$INSTALL_MODE" = alongside ] || return 0
 	detect_boot
 	_where=""
-	[ -n "$LIMINE_CONF" ] && _where="$_where
+	if [ -n "$LIMINE_CONF" ] && [ "$LIMINE_LOCKED" = yes ]; then _where="$_where
+  - your Limine menu, after one command in Linux (shown at the end)"
+	elif [ -n "$LIMINE_CONF" ]; then _where="$_where
   - an entry in your Limine menu ($LIMINE_CONF)"
+	fi
 	[ "$HAS_SDBOOT" = yes ] && _where="$_where
   - an entry in your systemd-boot menu"
 	[ "$HAS_REFIND" = yes ] && _where="$_where
   - rEFInd finds FreeBSD by itself"
 	[ "$HAS_GRUB" = yes ] && _where="$_where
-  - GRUB: add FreeBSD from Linux later (see docs/DUAL-BOOT.md)"
+  - your GRUB menu, after a few commands in Linux (shown at the end)"
 	_where="$_where
-  - 'FreeBSD' in the firmware boot menu"
+  - 'FreeBSD' in the firmware boot menu (F12, F11, F8 or Esc right after power-on)"
 	[ -n "$CHAIN_PATH" ] && _where="$_where
   - FreeBSD's own boot menu gets 'Start ${CHAIN_NAME:-the other system}' (key L)"
 	BOOT_SUMMARY=$_where
 	[ "$UI_MODE" = auto ] && return 0
+	if [ -n "$CHAIN_PATH" ]; then _fb="FreeBSD's menu first ('Start $CHAIN_NAME' with key L)"
+	else _fb="FreeBSD first (${DEFAULT_NAME:-the other system} from the firmware boot menu)"; fi
+	[ "$HAS_BITLOCKER" = yes ] && _fb="$_fb - Windows may then ask for its BitLocker key"
 	BOOT_DEFAULT=$(ui_menu "Starting the computer" "FreeBSD will be reachable through:$_where
 
 Which system should start when you turn the computer on?" keep \
-		keep "Keep the current default (${CHAIN_NAME:-unchanged})" \
-		freebsd "FreeBSD's menu (other systems with key L)") || exit 1
+		keep "Keep the current default (${DEFAULT_NAME:-unchanged})" \
+		freebsd "$_fb") || exit 1
 }
 
 ask_desktop() {
 	wiz_desktop || exit 1
-	if [ "$DESKTOP" != none ]; then wiz_input_methods || exit 1; fi
+	if [ "$DESKTOP" != none ]; then wiz_input_methods || exit 1; wiz_terminal || exit 1; fi
 	wiz_extras || exit 1
 }
 
@@ -529,8 +697,27 @@ Language:    ${WIZ_LANG:-en}, keyboard ${KEYBOARD_LAYOUT:-us}, time zone $TIMEZO
 EOF
 	[ "$BASE_ONLY" = yes ] && { echo "Desktop:     not now (--base-only)"; return; }
 	wiz_summary_text
-	[ "$INSTALL_MODE" = alongside ] && printf 'Boot:        %s%s\n' "$( [ "$BOOT_DEFAULT" = freebsd ] && echo "FreeBSD starts first" || echo "current default kept")" "${BOOT_SUMMARY:-}"
+	{ [ "$INSTALL_MODE" = alongside ] || [ -n "${OTHER_SYSTEM:-}" ]; } &&
+		printf 'Boot:        %s%s\n' "$( [ "$BOOT_DEFAULT" = freebsd ] && echo "FreeBSD starts first" || echo "current default kept")" "${BOOT_SUMMARY:-}"
 	return 0
+}
+
+# Encrypted Windows (BitLocker): with Secure Boot off, which FreeBSD needs,
+# Windows asks for its recovery key once; started from FreeBSD's menu
+# (key L) it may ask every time. Say so before anything is written.
+bitlocker_note() {
+	HAS_BITLOCKER=no
+	# A Windows on the disk being erased does not matter: it is about to go.
+	_skip=""; [ "$INSTALL_MODE" = erase ] && _skip=$INSTALL_DISK
+	bitlocker_found "$_skip" || return 0
+	HAS_BITLOCKER=yes
+	[ "$UI_MODE" = auto ] && { say "note: Windows is BitLocker-encrypted; have its recovery key ready"; return 0; }
+	ui_yesno "Windows is encrypted (BitLocker)" "Windows on this computer is encrypted with BitLocker.
+
+Because FreeBSD needs Secure Boot switched off, Windows will ask once for its 48-digit recovery key the next time it starts. If you start Windows from FreeBSD's menu (key L), it may ask every time; starting it from the firmware boot menu or as the default avoids that.
+
+Find the key at https://aka.ms/myrecoverykey (your Microsoft account) or where you saved it. Do you have the recovery key?" no ||
+		{ ui_msg "Windows is encrypted (BitLocker)" "Get the recovery key first (https://aka.ms/myrecoverykey), then start the installer again. Nothing was changed."; exit 1; }
 }
 
 confirm() {
@@ -543,8 +730,16 @@ Downloads several GB; takes 30-90 minutes depending on the internet connection."
 
 Install now?" no || exit 1
 	if [ "$INSTALL_MODE" = erase ]; then
+		# Systems on other disks that start from this disk's EFI partition
+		# stop starting when it is erased: say so by name.
+		_lost=$(efi_systems "$INSTALL_DISK" here | cut -d'|' -f2 | sort -u | paste -sd, - | sed 's/,/, /g')
+		_efi=$(disk_efi_systems "$INSTALL_DISK")
+		_warn=""
+		[ -n "$_lost$_efi" ] && _warn="
+This disk's EFI partition starts: ${_lost:-$_efi}. If any of these systems lives on ANOTHER disk, it will no longer start after this (it would need its boot loader reinstalled).
+"
 		_t=$(ui_input "Last check" "ALL DATA ON $INSTALL_DISK WILL BE DELETED.
-
+$_warn
 Type the disk name ($INSTALL_DISK) to confirm:" "") || exit 1
 		[ "$_t" = "$INSTALL_DISK" ] || { ui_msg "Cancelled" "Nothing was changed."; exit 1; }
 	fi
@@ -665,9 +860,15 @@ do_base() {
 			cp "/usr/freebsd-dist/$_s.txz" "$_dist/"
 		else
 			say "downloading $_s.txz"
-			fetch -o "$_dist/$_s.txz" "$DIST_URL/$_s.txz" || die "download of $_s.txz failed"
+			fetch_retry "$_dist/$_s.txz" "$DIST_URL/$_s.txz" ||
+				die "download of $_s.txz failed (network or mirror trouble); check the connection and start the installer again"
 		fi
 		_want=$(awk -v f="$_s.txz" '$1 == f { print $2 }' "$_dist/MANIFEST")
+		if [ "$(sha256 -q "$_dist/$_s.txz")" != "$_want" ] && [ ! -f "/usr/freebsd-dist/$_s.txz" ]; then
+			say "$_s.txz arrived damaged - downloading it again"
+			rm -f "$_dist/$_s.txz"
+			fetch_retry "$_dist/$_s.txz" "$DIST_URL/$_s.txz" || die "download of $_s.txz failed"
+		fi
 		[ "$(sha256 -q "$_dist/$_s.txz")" = "$_want" ] || die "checksum mismatch for $_s.txz - the download is damaged, try again"
 		say "unpacking $_s.txz"
 		tar -xpf "$_dist/$_s.txz" -C "$MNT" || die "unpacking $_s.txz failed"
@@ -771,6 +972,7 @@ do_boot() {
 			# The fallback path firmware uses when its boot entries are lost.
 			mkdir -p "$MNT/boot/efi/EFI/BOOT"
 			cp "$MNT/boot/loader.efi" "$MNT/boot/efi/EFI/BOOT/BOOTX64.EFI"
+			chain_integrate
 		else
 			boot_integrate
 		fi
@@ -790,14 +992,12 @@ do_boot() {
 # FreeBSD on another disk has its own EFI partition and is never listed.
 efi_ours() {
 	[ -n "$ESP_UUID" ] || return 0
-	efibootmgr -v 2>/dev/null | awk -v u="$ESP_UUID" '
-		/^[ +]*Boot[0-9A-Fa-f]{4}\*? FreeBSD / && index(tolower($0), tolower(u)) {
-			sub(/^[ +]*Boot/, ""); sub(/\*.*/, ""); print $1 }'
+	efibootmgr -v 2>/dev/null | efi_entries | awk -F'|' -v u="$ESP_UUID" '
+		$2 == "FreeBSD" && index(tolower($3), tolower(u)) { print $1 }'
 }
 
 efi_entry() {
-	ESP_UUID=$(gpart list "$INSTALL_DISK" 2>/dev/null | awk -v n="$ESP_DEV" '
-		$2 == "Name:" { f = ($3 == n) } f && $1 == "rawuuid:" { print $2; exit }')
+	ESP_UUID=$(esp_uuid "$INSTALL_DISK")
 	# Remove our own entries left by an earlier attempt, then add a new one.
 	for _b in $(efi_ours); do
 		efibootmgr -B -b "$_b" >/dev/null 2>&1 || true
@@ -812,7 +1012,7 @@ efi_entry() {
 		done
 		[ -n "$_new" ] || { warn "could not find the new firmware boot entry; choose FreeBSD in the firmware boot menu"; return 0; }
 		_old=$(echo "$_old" | tr ',' '\n' | grep -vx "$_new" | paste -sd, -)
-		if [ "$INSTALL_MODE" = erase ] || [ "$BOOT_DEFAULT" = freebsd ]; then
+		if [ "$BOOT_DEFAULT" = freebsd ] || { [ "$INSTALL_MODE" = erase ] && [ -z "${OTHER_SYSTEM:-}" ]; }; then
 			_order="$_new${_old:+,$_old}"
 		else
 			_order="${_old:+$_old,}$_new"
@@ -826,7 +1026,11 @@ efi_entry() {
 boot_integrate() {
 	_esp="$MNT/boot/efi"
 	if is_yes BOOT_INTEGRATION && [ -n "$LIMINE_CONF" ] && [ -f "$_esp/$LIMINE_CONF" ]; then
-		if ! grep -q 'EFI/freebsd/loader.efi' "$_esp/$LIMINE_CONF"; then
+		if limine_locked "$_esp"; then
+			# Changing limine.conf would make Limine refuse to start.
+			LIMINE_LOCKED=yes
+			say "Limine menu not changed: it is protected by a checksum, or could not be checked (add FreeBSD from Linux, see the end)"
+		elif ! grep -q 'EFI/freebsd/loader.efi' "$_esp/$LIMINE_CONF"; then
 			cp "$_esp/$LIMINE_CONF" "$_esp/$LIMINE_CONF.before-freebsd"
 			printf '\n/FreeBSD\n    comment: FreeBSD on ZFS (added by FreeBSD-setup)\n    protocol: efi\n    path: boot():/EFI/freebsd/loader.efi\n' >> "$_esp/$LIMINE_CONF"
 			say "added FreeBSD to the Limine menu ($LIMINE_CONF; backup: $LIMINE_CONF.before-freebsd)"
@@ -834,11 +1038,22 @@ boot_integrate() {
 	fi
 	if is_yes BOOT_INTEGRATION && [ "$HAS_SDBOOT" = yes ]; then
 		mkdir -p "$_esp/loader/entries"
-		printf 'title   FreeBSD\nefi     /EFI/freebsd/loader.efi\n' > "$_esp/loader/entries/freebsd.conf"
-		say "added FreeBSD to the systemd-boot menu"
+		# systemd-boot starts the first entry in its sort order unless told
+		# otherwise; entries without sort-key sort by file name, reversed.
+		# "A-freebsd.conf" sorts after every usual name (checked with bootctl
+		# list against arch, linux-cachyos, machine-id, Windows and Arch-LTS
+		# entries), so the user's current default stays the default.
+		_old_sd="$_esp/loader/entries/freebsd.conf"
+		[ "$(cat "$_old_sd" 2>/dev/null)" = "$(printf 'title   FreeBSD\nefi     /EFI/freebsd/loader.efi')" ] && rm -f "$_old_sd"
+		printf '# Written by FreeBSD-setup\ntitle   FreeBSD\nefi     /EFI/freebsd/loader.efi\n' > "$_esp/loader/entries/A-freebsd.conf"
+		say "added FreeBSD to the systemd-boot menu (at the end; your default is kept)"
 	fi
-	# FreeBSD's own menu: an entry to start the other system (key L).
-	if [ -n "$CHAIN_PATH" ]; then
+	chain_integrate
+}
+
+# FreeBSD's own menu: an entry to start the other system (key L).
+chain_integrate() {
+	if [ -n "${CHAIN_PATH:-}" ]; then
 		cat >> "$MNT/boot/loader.conf" <<EOF
 fbs_chain_path="$CHAIN_PATH"
 fbs_chain_name="${CHAIN_NAME:-other system}"
@@ -856,6 +1071,14 @@ do_setup() {
 	ln -sf "$FBS_SHARE/setup.sh" "$MNT/usr/local/sbin/freebsd-setup"
 	TARGET_USER=$USERNAME
 	save_config "$MNT$FBS_CONF"
+	# Wi-Fi firmware: the install media has it in /boot/firmware (that is why
+	# Wi-Fi works in the Live System), the base system does not (it comes as
+	# packages in the desktop setup). Copy what the new system lacks, so it
+	# has a network on the first start even if the desktop setup fails.
+	if [ -d /boot/firmware ]; then
+		mkdir -p "$MNT/boot/firmware"
+		cp -Rn /boot/firmware/. "$MNT/boot/firmware/" 2>> "$LOG" || true
+	fi
 	[ "$BASE_ONLY" = yes ] && return 0
 
 	step "Installing the desktop (the long part)"
@@ -868,8 +1091,20 @@ do_setup() {
 	chroot "$MNT" /usr/bin/env -u SSL_CA_CERT_FILE FBS_TARGET=chroot \
 		/bin/sh "$FBS_SHARE/setup.sh" --chroot --yes --user "$USERNAME" || _rc=$?
 	umount "$MNT/dev" 2>/dev/null || umount -f "$MNT/dev" 2>/dev/null || true
+	# The desktop setup's own warnings (e.g. "KDE could not be installed"):
+	# show them on the last screen too, not only in the scrolled-away output.
+	if [ -s "$MNT/var/log/freebsd-setup.warnings" ]; then
+		while IFS= read -r _w; do
+			WARNINGS="$WARNINGS
+  - $_w"
+		done < "$MNT/var/log/freebsd-setup.warnings"
+	fi
 	if [ "$_rc" -ne 0 ]; then
-		warn "the desktop setup stopped with an error. FreeBSD itself is installed and will boot; after logging in, run: doas freebsd-setup   (log: /var/log/freebsd-setup.log)"
+		# doas is installed early in the desktop setup; if it stopped before
+		# that, the way in is su with the administrator password.
+		if [ -x "$MNT/usr/local/bin/doas" ]; then _how="log in and run: doas freebsd-setup"
+		else _how="log in, type  su -  and the administrator password (your own, unless you chose another one for root), then type  freebsd-setup"; fi
+		warn "the desktop setup stopped with an error. FreeBSD itself is installed and will boot; to finish the desktop, check the internet connection, then $_how   (details: /var/log/freebsd-setup.log)"
 	fi
 }
 
@@ -897,6 +1132,7 @@ if [ "$UI_MODE" != auto ]; then
 
 You can still install FreeBSD (text console only, or to try things). Continue?" no; then exit 1; fi
 fi
+ask_keyboard
 ask_network
 ask_disk
 ask_mode
@@ -904,6 +1140,7 @@ ask_account
 ask_encrypt
 ask_region
 [ "$BASE_ONLY" = yes ] || ask_desktop
+bitlocker_note
 ask_boot
 resolve_config
 plan_sizes
@@ -923,10 +1160,42 @@ do_finish
 _done="FreeBSD is installed.
 
 Remove the USB stick and restart the computer."
-if [ "$INSTALL_MODE" = alongside ] && [ "$BOOT_DEFAULT" != freebsd ]; then
+if [ "$BOOT_DEFAULT" != freebsd ] && { [ "$INSTALL_MODE" = alongside ] || [ -n "${OTHER_SYSTEM:-}" ]; }; then
 	_done="$_done
 Start FreeBSD from:${BOOT_SUMMARY:-
   - the firmware boot menu}"
+fi
+if [ "$INSTALL_MODE" = alongside ] && [ "${HAS_GRUB:-no}" = yes ]; then
+	_done="$_done
+
+To add FreeBSD to your GRUB menu, start Linux, open a terminal and paste:
+
+sudo tee -a /etc/grub.d/40_custom >/dev/null <<'EOF'
+set timeout_style=menu
+if [ \"\${timeout}\" = 0 ]; then set timeout=10; fi
+menuentry \"FreeBSD\" {
+  insmod part_gpt
+  insmod fat
+  search --no-floppy --file --set=root /EFI/freebsd/loader.efi
+  chainloader /EFI/freebsd/loader.efi
+}
+EOF
+
+then:  sudo update-grub                               (Ubuntu, Debian, Mint)
+or:    sudo grub2-mkconfig -o /boot/grub2/grub.cfg    (Fedora, openSUSE)
+More: https://github.com/nimonht/FreeBSD-setup/blob/main/docs/DUAL-BOOT.md"
+fi
+if [ "$INSTALL_MODE" = alongside ] && [ "${LIMINE_LOCKED:-no}" = yes ]; then
+	_done="$_done
+
+Your Limine menu was not changed: it is protected by a checksum, or it could
+not be checked safely (a changed menu file can stop Limine from starting).
+To add FreeBSD to it, start Linux and run:
+  sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi --comment FreeBSD --overwrite
+It prints \"Updated: ...limine.conf\" when it worked. If it prints nothing, the
+EFI partition is not at /boot: findmnt -t vfat shows where it is; use that
+folder instead of /boot. (Without limine-entry-tool:
+https://github.com/nimonht/FreeBSD-setup/blob/main/docs/DUAL-BOOT.md)"
 fi
 if [ -n "$WARNINGS" ]; then
 	_done="$_done

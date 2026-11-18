@@ -31,6 +31,17 @@ say "bootstrapping pkg and updating the package catalogue"
 env ASSUME_ALWAYS_YES=yes pkg bootstrap -f >> "$LOG" 2>&1 ||
 	die "pkg bootstrap failed - is the network up? (try: ping pkg.freebsd.org)"
 pkg update -f >> "$LOG" 2>&1 || die "pkg update failed (details: $LOG)"
+# doas first, on its own: if anything later fails, the advice to run
+# "doas freebsd-setup" must work. "persist" remembers the password a while.
+pkg_get -q doas || warn "doas could not be installed yet (it is retried below)"
+if [ ! -f /usr/local/etc/doas.conf ]; then
+	cat > /usr/local/etc/doas.conf <<CONF
+permit persist :wheel
+permit nopass :wheel cmd /sbin/shutdown
+permit nopass :wheel cmd /usr/sbin/zzz
+CONF
+	chmod 600 /usr/local/etc/doas.conf
+fi
 say "upgrading installed packages"
 env ASSUME_ALWAYS_YES=yes pkg upgrade -y >> "$LOG" 2>&1 || warn "pkg upgrade reported a problem (details: $LOG)"
 
@@ -45,20 +56,22 @@ fi
 
 pkg_install doas sudo git curl bash nano htop rsync unzip zip 7-zip jq ca_root_nss \
 	pciutils usbutils dmidecode smartmontools fastfetch
+# fastfetch looks for os-release under /usr/local/etc and otherwise shows no
+# OS name ("Could not detect OS"); FreeBSD keeps it in /etc.
+[ -e /usr/local/etc/os-release ] || [ -L /usr/local/etc/os-release ] ||
+	ln -s /etc/os-release /usr/local/etc/os-release
 
-# doas for the wheel group; "persist" remembers the password for a while.
-if [ ! -f /usr/local/etc/doas.conf ]; then
-	cat > /usr/local/etc/doas.conf <<CONF
-permit persist :wheel
-permit nopass :wheel cmd /sbin/shutdown
-permit nopass :wheel cmd /usr/sbin/zzz
-CONF
-	chmod 600 /usr/local/etc/doas.conf
-fi
 # sudo as well: many scripts and desktop tools written for Linux call it.
+# sudo reads sudoers.d in name order and the last matching rule wins, so this
+# general rule must sort first: packages add password-free rules for single
+# tools (networkmgr's tray applet is started as "sudo networkmgr" at login,
+# with no terminal to ask for a password).
 mkdir -p /usr/local/etc/sudoers.d
-echo '%wheel ALL=(ALL:ALL) ALL' > /usr/local/etc/sudoers.d/wheel
-chmod 440 /usr/local/etc/sudoers.d/wheel
+printf '# Written by FreeBSD-setup.\n%%wheel ALL=(ALL:ALL) ALL\n' > /usr/local/etc/sudoers.d/00-freebsd-setup
+chmod 440 /usr/local/etc/sudoers.d/00-freebsd-setup
+# Earlier versions wrote the same rule as "wheel", which sorted last.
+[ "$(cat /usr/local/etc/sudoers.d/wheel 2>/dev/null)" = '%wheel ALL=(ALL:ALL) ALL' ] &&
+	rm -f /usr/local/etc/sudoers.d/wheel
 
 say "adding $TARGET_USER to the wheel, operator and video groups"
 for g in wheel operator video; do pw groupmod "$g" -m "$TARGET_USER"; done

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Installed by FreeBSD-setup: before the login screen starts, point X at the
+# graphics card that drives the screen right now (see gpu-xorg-config).
+
+# PROVIDE: freebsd_setup_gpu
+# REQUIRE: FILESYSTEMS kld
+# BEFORE: LOGIN
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name=freebsd_setup_gpu
+rcvar=freebsd_setup_gpu_enable
+start_cmd=/usr/local/bin/gpu-xorg-config
+stop_cmd=:
+
+load_rc_config $name
+: "${freebsd_setup_gpu_enable:=NO}"
+run_rc_command "$1"

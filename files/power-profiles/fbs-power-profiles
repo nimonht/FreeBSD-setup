@@ -1,0 +1,431 @@
+#!/usr/local/bin/python3
+# Written by FreeBSD-setup.
+#
+# fbs-power-profiles - the power-profiles-daemon D-Bus service for FreeBSD.
+#
+# KDE Plasma (battery applet, PowerDevil) and Quickshell/Caelestia show a
+# "power saver / balanced / performance" switch when a service answers on the
+# system bus as org.freedesktop.UPower.PowerProfiles. power-profiles-daemon
+# itself is Linux-only; this implements the same interface (taken from
+# power-profiles-daemon 0.30) on top of what FreeBSD offers:
+#
+#   epp     Intel Speed Shift (hwpstate_intel): the energy/performance
+#           preference sysctl dev.hwpstate_intel.N.epp (0 = fastest, 100 = most
+#           economical). "balanced" is the value the machine started with.
+#   powerd  CPUs with frequency steps and powerd(8) enabled: powerd is
+#           restarted with flags per profile. "balanced" is powerd_flags
+#           from rc.conf.
+#   fake    tests only: FBS_PP_FAKE=FILE records the profile in FILE.
+#
+# The backend is chosen at every start, because hardware can change. When the
+# machine has none, the service does not start at all: then the desktops hide
+# the switch instead of showing one that does nothing.
+#
+# Usage: fbs-power-profiles [--check]   (--check: print the backend and exit)
+# Environment: FBS_PP_STATE (state directory), FBS_PP_RUN (per-boot directory),
+# FBS_PP_FAKE, FBS_PP_BUS=session
+# (tests: use the session bus), FBS_PP_NO_POLKIT=1 (tests: allow every caller).
+
+import os
+import subprocess
+import sys
+
+import gi
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+VERSION = "0.30-freebsd-setup"
+NAME = "org.freedesktop.UPower.PowerProfiles"
+PATH = "/org/freedesktop/UPower/PowerProfiles"
+LEGACY_NAME = "net.hadess.PowerProfiles"
+LEGACY_PATH = "/net/hadess/PowerProfiles"
+PROFILES = ("power-saver", "balanced", "performance")
+STATE_DIR = os.environ.get("FBS_PP_STATE", "/var/db/fbs-power-profiles")
+# Emptied at every boot (rc.d/cleanvar), so what is here belongs to this boot.
+RUN_DIR = os.environ.get("FBS_PP_RUN", "/var/run/fbs-power-profiles")
+
+INTERFACE_XML = """
+<node>
+  <interface name="%s">
+    <method name="HoldProfile">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="reason" type="s" direction="in"/>
+      <arg name="application_id" type="s" direction="in"/>
+      <arg name="cookie" type="u" direction="out"/>
+    </method>
+    <method name="ReleaseProfile">
+      <arg name="cookie" type="u" direction="in"/>
+    </method>
+    %s
+    <signal name="ProfileReleased">
+      <arg name="cookie" type="u" direction="out"/>
+    </signal>
+    <property name="ActiveProfile" type="s" access="readwrite"/>
+    <property name="PerformanceInhibited" type="s" access="read"/>
+    <property name="PerformanceDegraded" type="s" access="read"/>
+    <property name="Profiles" type="aa{sv}" access="read"/>
+    <property name="Actions" type="as" access="read"/>
+    %s
+    <property name="ActiveProfileHolds" type="aa{sv}" access="read"/>
+    <property name="Version" type="s" access="read"/>
+    %s
+  </interface>
+</node>
+"""
+NEW_ONLY = (
+    '<method name="SetActionEnabled"><arg name="action" type="s" direction="in"/>'
+    '<arg name="enabled" type="b" direction="in"/></method>',
+    '<property name="ActionsInfo" type="aa{sv}" access="read"/>',
+    '<property name="BatteryAware" type="b" access="readwrite"/>',
+)
+
+
+def log(msg):
+    print("fbs-power-profiles: " + msg, file=sys.stderr, flush=True)
+
+
+def run(*cmd):
+    """Run a command, return its output (None when it fails)."""
+    try:
+        return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def read_state(name, directory=None):
+    try:
+        with open(os.path.join(directory or STATE_DIR, name)) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def write_state(name, value, directory=None):
+    directory = directory or STATE_DIR
+    try:
+        os.makedirs(directory, exist_ok=True)
+        tmp = os.path.join(directory, name + ".tmp")
+        with open(tmp, "w") as f:
+            f.write(value + "\n")
+        os.replace(tmp, os.path.join(directory, name))
+    except OSError as e:
+        log("cannot save %s: %s" % (name, e))
+
+
+# ------------------------------------------------------------------ backends --
+
+class FakeBackend:
+    name = "fake"
+
+    def __init__(self, path):
+        self.path = path
+
+    def apply(self, profile):
+        with open(self.path, "w") as f:
+            f.write(profile + "\n")
+        return True
+
+
+class EppBackend:
+    """Intel Speed Shift: dev.hwpstate_intel.N.epp, 0 (performance) .. 100."""
+    name = "intel_epp"
+
+    def __init__(self, nodes):
+        self.nodes = nodes
+        # The value the firmware/kernel chose at boot is "balanced". After a
+        # restart of this service in the same boot, the sysctl holds a value
+        # we set, so the one saved in RUN_DIR (emptied at every boot) is used.
+        # (kern.boottime is no boot ID: it moves when the clock is stepped.)
+        saved = read_state("epp-boot", RUN_DIR) or ""
+        if saved.isdigit():
+            self.balanced = int(saved)
+        else:
+            cur = run("sysctl", "-n", nodes[0])
+            self.balanced = int(cur) if cur and cur.strip().isdigit() else 50
+            write_state("epp-boot", "%d" % self.balanced, RUN_DIR)
+        self.values = {"performance": 0, "balanced": self.balanced, "power-saver": 100}
+
+    @classmethod
+    def detect(cls):
+        out = run("sysctl", "-N", "dev.hwpstate_intel")
+        if not out:
+            return None
+        nodes = sorted(n for n in out.split() if n.endswith(".epp"))
+        return cls(nodes) if nodes else None
+
+    def apply(self, profile):
+        ok = True
+        for n in self.nodes:
+            if run("sysctl", "%s=%d" % (n, self.values[profile])) is None:
+                ok = False
+        return ok
+
+
+class PowerdBackend:
+    """CPUs with frequency steps, powerd(8) enabled: restart it with new flags."""
+    name = "powerd"
+    FLAGS = {
+        "performance": "-a max -b hiadaptive -n max",
+        "power-saver": "-a adaptive -b adaptive -n adaptive",
+    }
+
+    def __init__(self, balanced_flags):
+        self.flags = dict(self.FLAGS, balanced=balanced_flags)
+
+    @classmethod
+    def detect(cls):
+        if (run("sysrc", "-n", "powerd_enable") or "").strip().upper() != "YES":
+            return None
+        if not run("sysctl", "-n", "dev.cpu.0.freq_levels"):
+            return None
+        flags = (run("sysrc", "-n", "powerd_flags") or "").strip()
+        return cls(flags or "-a hiadaptive -b adaptive -n adaptive")
+
+    def apply_at_start(self, profile):
+        # powerd already runs with the rc.conf flags, which are "balanced".
+        return True if profile == "balanced" else self.apply(profile)
+
+    def apply(self, profile):
+        run("service", "powerd", "onestop")
+        return run("/usr/sbin/powerd", *self.flags[profile].split()) is not None
+
+
+def detect_backend():
+    fake = os.environ.get("FBS_PP_FAKE")
+    if fake:
+        return FakeBackend(fake)
+    return EppBackend.detect() or PowerdBackend.detect()
+
+
+# ------------------------------------------------------------------- service --
+
+class Service:
+    def __init__(self, backend, loop):
+        self.backend = backend
+        self.loop = loop
+        self.conn = None
+        self.holds = {}         # cookie -> dict(profile, reason, app, sender, iface, watch)
+        self.next_cookie = 1
+        saved = read_state("profile")
+        self.selected = saved if saved in PROFILES else "balanced"
+        self.active = self.selected
+        start = getattr(self.backend, "apply_at_start", self.backend.apply)
+        if not start(self.active):
+            log("could not apply %s at start" % self.active)
+
+    # -- D-Bus plumbing --
+    def start(self):
+        bus = Gio.BusType.SESSION if os.environ.get("FBS_PP_BUS") == "session" else Gio.BusType.SYSTEM
+        self.conn = Gio.bus_get_sync(bus, None)
+        for path, iface in ((PATH, NAME), (LEGACY_PATH, LEGACY_NAME)):
+            extra = NEW_ONLY if iface == NAME else ("", "", "")
+            info = Gio.DBusNodeInfo.new_for_xml(INTERFACE_XML % ((iface,) + extra)).interfaces[0]
+            # get/set handlers are None: property calls arrive in method_call,
+            # which can then answer "access denied" properly.
+            self.conn.register_object(path, info, self.on_call, None, None)
+        for name in (NAME, LEGACY_NAME):
+            Gio.bus_own_name_on_connection(self.conn, name, Gio.BusNameOwnerFlags.NONE,
+                                           None, self.on_name_lost)
+
+    def on_name_lost(self, _conn, name):
+        log("could not own %s (already running?) - exiting" % name)
+        self.loop.quit()
+
+    def props(self, iface):
+        p = {
+            "ActiveProfile": GLib.Variant("s", self.active),
+            "PerformanceInhibited": GLib.Variant("s", ""),
+            "PerformanceDegraded": GLib.Variant("s", ""),
+            "Profiles": GLib.Variant("aa{sv}", [
+                {"Profile": GLib.Variant("s", p), "Driver": GLib.Variant("s", self.backend.name),
+                 "CpuDriver": GLib.Variant("s", self.backend.name)} for p in PROFILES]),
+            "Actions": GLib.Variant("as", []),
+            "ActiveProfileHolds": GLib.Variant("aa{sv}", [
+                {"ApplicationId": GLib.Variant("s", h["app"]), "Profile": GLib.Variant("s", h["profile"]),
+                 "Reason": GLib.Variant("s", h["reason"])} for h in self.holds.values()]),
+            "Version": GLib.Variant("s", VERSION),
+        }
+        if iface == NAME:
+            p["ActionsInfo"] = GLib.Variant("aa{sv}", [])
+            p["BatteryAware"] = GLib.Variant("b", False)
+        return p
+
+    def emit_changed(self, names):
+        for path, iface in ((PATH, NAME), (LEGACY_PATH, LEGACY_NAME)):
+            allp = self.props(iface)
+            changed = {n: allp[n] for n in names if n in allp}
+            self.conn.emit_signal(None, path, "org.freedesktop.DBus.Properties", "PropertiesChanged",
+                                  GLib.Variant("(sa{sv}as)", (iface, changed, [])))
+
+    # -- authorization (polkit, same action names as power-profiles-daemon) --
+    def authorize(self, sender, action, then, inv):
+        def denied(msg):
+            inv.return_dbus_error("org.freedesktop.DBus.Error.AccessDenied", "Not Authorized: " + msg)
+
+        if os.environ.get("FBS_PP_NO_POLKIT") == "1":
+            return then()
+        try:
+            uid = self.conn.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                                      "GetConnectionUnixUser", GLib.Variant("(s)", (sender,)),
+                                      GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
+        except GLib.Error:
+            uid = -1
+        if uid == 0:
+            return then()
+
+        def done(conn, res):
+            try:
+                ok = conn.call_finish(res).unpack()[0][0]
+            except GLib.Error as e:
+                return denied("%s (polkit: %s)" % (action, e.message))
+            return then() if ok else denied(action)
+
+        subject = ("system-bus-name", {"name": GLib.Variant("s", sender)})
+        self.conn.call("org.freedesktop.PolicyKit1", "/org/freedesktop/PolicyKit1/Authority",
+                       "org.freedesktop.PolicyKit1.Authority", "CheckAuthorization",
+                       GLib.Variant("((sa{sv})sa{ss}us)", (subject, action, {}, 0, "")),
+                       GLib.VariantType("((bba{ss}))"), Gio.DBusCallFlags.NONE, 10000, None, done)
+
+    # -- profile logic (follows power-profiles-daemon 0.30) --
+    def activate(self, profile):
+        if profile == self.active:
+            return True
+        if not self.backend.apply(profile):
+            log("could not switch to %s" % profile)
+            return False
+        self.active = profile
+        return True
+
+    def effective_hold(self):
+        held = [h["profile"] for h in self.holds.values()]
+        if "power-saver" in held:
+            return "power-saver"
+        return held[-1] if held else None
+
+    def set_active_profile(self, profile):
+        if profile == self.active:
+            return True
+        changed = ["ActiveProfile"]
+        if self.holds:
+            for cookie in list(self.holds):
+                self.drop_hold(cookie)
+            changed.append("ActiveProfileHolds")
+        if not self.activate(profile):
+            return False
+        self.selected = profile
+        write_state("profile", profile)
+        self.emit_changed(changed)
+        return True
+
+    def drop_hold(self, cookie):
+        h = self.holds.pop(cookie)
+        Gio.bus_unwatch_name(h["watch"])
+        path = PATH if h["iface"] == NAME else LEGACY_PATH
+        self.conn.emit_signal(h["sender"], path, h["iface"], "ProfileReleased", GLib.Variant("(u)", (cookie,)))
+
+    def release_hold(self, cookie):
+        if cookie not in self.holds:
+            return
+        self.drop_hold(cookie)
+        target = self.effective_hold() or self.selected
+        changed = ["ActiveProfileHolds"]
+        if target != self.active and self.activate(target):
+            changed.append("ActiveProfile")
+        self.emit_changed(changed)
+
+    def hold_profile(self, inv, sender, iface, profile, reason, app):
+        if profile not in ("performance", "power-saver"):
+            return inv.return_dbus_error("org.freedesktop.DBus.Error.InvalidArgs",
+                                         "Only profiles 'performance' and 'power-saver' can be a hold profile")
+        cookie = self.next_cookie
+        self.next_cookie += 1
+        watch = Gio.bus_watch_name_on_connection(self.conn, sender, Gio.BusNameWatcherFlags.NONE, None,
+                                                 lambda *_: self.holder_gone(sender))
+        self.holds[cookie] = dict(profile=profile, reason=reason, app=app, sender=sender, iface=iface, watch=watch)
+        inv.return_value(GLib.Variant("(u)", (cookie,)))
+        changed = ["ActiveProfileHolds"]
+        target = self.effective_hold()
+        if target and target != self.active and self.activate(target):
+            changed.append("ActiveProfile")
+        self.emit_changed(changed)
+
+    def holder_gone(self, sender):
+        for cookie in [c for c, h in self.holds.items() if h["sender"] == sender]:
+            self.release_hold(cookie)
+
+    # -- method dispatcher --
+    def on_call(self, _conn, sender, path, iface, method, params, inv):
+        own = NAME if path == PATH else LEGACY_NAME
+        if iface == "org.freedesktop.DBus.Properties":
+            args = params.unpack()
+            if args[0] not in (own, ""):
+                return inv.return_dbus_error("org.freedesktop.DBus.Error.UnknownInterface", args[0])
+            props = self.props(own)
+            if method == "GetAll":
+                return inv.return_value(GLib.Variant("(a{sv})", (props,)))
+            if method == "Get":
+                if args[1] not in props:
+                    return inv.return_dbus_error("org.freedesktop.DBus.Error.UnknownProperty", args[1])
+                return inv.return_value(GLib.Variant("(v)", (props[args[1]],)))
+            if method == "Set":
+                prop, value = args[1], args[2]
+                if prop == "ActiveProfile":
+                    if value not in PROFILES:
+                        return inv.return_dbus_error("org.freedesktop.DBus.Error.InvalidArgs",
+                                                     "Invalid profile name '%s'" % value)
+
+                    def do_set():
+                        if self.set_active_profile(value):
+                            inv.return_value(None)
+                        else:
+                            inv.return_dbus_error("org.freedesktop.DBus.Error.Failed",
+                                                  "Could not switch to '%s'" % value)
+                    return self.authorize(sender, NAME + ".switch-profile", do_set, inv)
+                if prop == "BatteryAware" and own == NAME:
+                    return inv.return_dbus_error("org.freedesktop.DBus.Error.NotSupported",
+                                                 "Battery-aware profiles are not supported on FreeBSD")
+                return inv.return_dbus_error("org.freedesktop.DBus.Error.PropertyReadOnly", prop)
+        elif method == "HoldProfile":
+            profile, reason, app = params.unpack()
+            return self.authorize(sender, NAME + ".hold-profile",
+                                  lambda: self.hold_profile(inv, sender, iface, profile, reason, app), inv)
+        elif method == "ReleaseProfile":
+            cookie = params.unpack()[0]
+            if cookie not in self.holds:
+                return inv.return_dbus_error("org.freedesktop.DBus.Error.InvalidArgs",
+                                             "No hold with cookie %d" % cookie)
+            self.release_hold(cookie)
+            return inv.return_value(None)
+        elif method == "SetActionEnabled":
+            return inv.return_dbus_error("org.freedesktop.DBus.Error.InvalidArgs",
+                                         "No action '%s'" % params.unpack()[0])
+        inv.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", method)
+
+
+def main():
+    backend = detect_backend()
+    if "--check" in sys.argv:
+        print(backend.name if backend else "none")
+        return 0 if backend else 1
+    if not backend:
+        log("this machine has no CPU power setting FreeBSD can change - not starting")
+        return 0
+    loop = GLib.MainLoop()
+    svc = Service(backend, loop)
+    svc.start()
+    log("running, backend %s, profile %s" % (backend.name, svc.active))
+    try:
+        gi.require_version("GLibUnix", "2.0")
+        from gi.repository import GLibUnix
+        add_signal = GLibUnix.signal_add
+    except (ImportError, ValueError):
+        add_signal = GLib.unix_signal_add
+    for sig in (15, 2):
+        add_signal(GLib.PRIORITY_DEFAULT, sig, loop.quit)
+    loop.run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

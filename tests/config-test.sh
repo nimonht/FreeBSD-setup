@@ -32,6 +32,27 @@ t none     yes "no no none quarterly no none"
 t auto     yes "yes no sddm quarterly yes kde"
 t auto     no  "no no none quarterly no none"
 
+# Terminal style: auto is fish with a desktop and none without; an explicit
+# choice is kept; anything else stops.
+ts() { # ts DESKTOP TERMINAL_STYLE expected
+	_got=$(
+		. "$FBS_LIB/defaults.conf"
+		DESKTOP=$1 TERMINAL_STYLE=$2 HW_DESKTOP=yes HW_ARCH=amd64 HW_RAM_MB=16384
+		HW_GPU_INTEL=x HW_GPU_AMD="" HW_GPU_NVIDIA="" HW_NVIDIA_BRANCH=""
+		resolve_config >/dev/null 2>&1
+		echo "$TERMINAL_STYLE"
+	) || _got=rejected
+	if [ "$_got" = "$3" ]; then pass=$((pass + 1)); echo "ok   DESKTOP=$1 TERMINAL_STYLE=$2 -> $3"
+	else fail=$((fail + 1)); echo "FAIL DESKTOP=$1 TERMINAL_STYLE=$2: got '$_got', want '$3'"; fi
+}
+ts kde      auto fish
+ts hyprland auto fish
+ts none     auto none
+ts kde      zsh  zsh
+ts both     bash bash
+ts kde      none none
+ts kde      tcsh rejected
+
 # An invalid choice must stop, not fall through to some default.
 if (. "$FBS_LIB/defaults.conf"; DESKTOP=gnome HW_DESKTOP=yes HW_ARCH=amd64 HW_RAM_MB=8192
 	HW_GPU_INTEL="" HW_GPU_AMD="" HW_GPU_NVIDIA="" HW_NVIDIA_BRANCH=""; resolve_config) >/dev/null 2>&1; then

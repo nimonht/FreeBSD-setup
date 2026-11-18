@@ -19,9 +19,17 @@ set_kv /etc/periodic.conf daily_trim_zfs_enable '"NO"'               # autotrim 
 
 if is_yes AUTO_SNAPSHOTS; then
 	pkg_install zfstools
-	say "automatic snapshots: 4x15min, 24 hourly, 7 daily, 4 weekly, 6 monthly"
+	# Deleted files keep using space until the last snapshot holding them is
+	# gone: two monthly snapshots keep that to about two months. A system
+	# that already keeps more (older FreeBSD-setup versions kept 6) keeps its
+	# number: lowering it would delete those older snapshots without asking.
+	_monthly=$(awk '$7 == "zfs-auto-snapshot" && $8 == "monthly" { print $9 }' \
+		/usr/local/etc/cron.d/zfs-auto-snapshot 2>/dev/null | head -1)
+	case "$_monthly" in ''|*[!0-9]*) _monthly=2 ;; esac
+	[ "$_monthly" -lt 2 ] && _monthly=2
+	say "automatic snapshots: 4x15min, 24 hourly, 7 daily, 4 weekly, $_monthly monthly"
 	mkdir -p /usr/local/etc/cron.d
-	cat > /usr/local/etc/cron.d/zfs-auto-snapshot <<'CRON'
+	cat > /usr/local/etc/cron.d/zfs-auto-snapshot <<CRON
 # Rolling ZFS snapshots (zfstools). Written by FreeBSD-setup.
 SHELL=/bin/sh
 PATH=/etc:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
@@ -29,7 +37,7 @@ PATH=/etc:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 0        * * * * root zfs-auto-snapshot hourly   24
 7        0 * * * root zfs-auto-snapshot daily     7
 14       0 * * 7 root zfs-auto-snapshot weekly    4
-28       0 1 * * root zfs-auto-snapshot monthly   6
+28       0 1 * * root zfs-auto-snapshot monthly   $_monthly
 CRON
 	# Snapshot everything on the pool, except data that is pointless to keep.
 	zfs set com.sun:auto-snapshot=true "$POOL"

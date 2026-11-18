@@ -41,14 +41,29 @@ if [ ! -s "$FONT_DIR/MaterialSymbolsRounded.ttf" ]; then
 	fc-cache -f >> "$LOG" 2>&1 || true
 fi
 
+# ---- lock screen password check ------------------------------------------------
+# The build points Caelestia's lock screen at this PAM service (see
+# caelestia/build.sh); without it the lock screen refuses every password.
+mkdir -p /usr/local/etc/pam.d
+sys_file "$REPO_DIR/files/caelestia/fbs-caelestia.pam" /usr/local/etc/pam.d/fbs-caelestia || true
+if ! grep -q 'config: "fbs-caelestia"' /usr/local/etc/xdg/quickshell/caelestia/modules/lock/Pam.qml 2>/dev/null ||
+	[ ! -f /usr/local/etc/pam.d/unix-selfauth ]; then
+	warn "the Caelestia lock screen may not accept your password (its FreeBSD password check is missing). Until this is fixed, lock with hyprlock instead; details: docs/TROUBLESHOOTING.md (Caelestia)"
+fi
+
 # ---- dotfiles ---------------------------------------------------------------
 DOTS=/var/tmp/caelestia-build/dots
 say "installing the Caelestia dotfiles for $TARGET_USER"
-if [ -d "$DOTS/.git" ]; then git -C "$DOTS" fetch -q origin; else rm -rf "$DOTS"; git clone -q https://github.com/caelestia-dots/caelestia.git "$DOTS"; fi
-git -C "$DOTS" checkout -q -f "$CAELESTIA_DOTS_REF" 2>/dev/null || git -C "$DOTS" checkout -q -f "origin/$CAELESTIA_DOTS_REF"
+if ! { if [ -d "$DOTS/.git" ]; then git -C "$DOTS" fetch -q origin; else rm -rf "$DOTS" && git clone -q https://github.com/caelestia-dots/caelestia.git "$DOTS"; fi &&
+	{ git -C "$DOTS" checkout -q -f "$CAELESTIA_DOTS_REF" 2>/dev/null || git -C "$DOTS" checkout -q -f "origin/$CAELESTIA_DOTS_REF"; }; }; then
+	warn "could not download the Caelestia settings (dotfiles); your current ones are unchanged. Try again later: doas freebsd-setup caelestia"
+	return 0
+fi
 git -C "$DOTS" reset -q --hard "origin/$CAELESTIA_DOTS_REF" 2>/dev/null || true
 
 CFG="$TARGET_HOME/.config"
+# First Caelestia install for this user? (Later runs keep the colour scheme.)
+_first=no; [ -f "$CFG/hypr/.caelestia-managed" ] || _first=yes
 mkdir -p "$CFG/caelestia"
 # name-in-repo : name-in-~/.config   (upstream manifest.toml, minus Linux-only bits)
 for pair in hypr:hypr fish:fish foot:foot fastfetch:fastfetch btop:btop micro:micro thunar:Thunar; do
@@ -63,11 +78,34 @@ for pair in hypr:hypr fish:fish foot:foot fastfetch:fastfetch btop:btop micro:mi
 	touch "$CFG/$dst/.caelestia-managed"
 done
 [ -f "$DOTS/starship.toml" ] && [ ! -f "$CFG/starship.toml" ] && cp "$DOTS/starship.toml" "$CFG/starship.toml"
+# Caelestia's system summary (fastfetch, shown in every new terminal) calls
+# Linux-only commands; switch those rows to ones that work on FreeBSD.
+_ffc="$CFG/fastfetch/config.jsonc"
+if [ -f "$_ffc" ] && command -v jq >/dev/null; then
+	if jq -f "$REPO_DIR/files/caelestia/fastfetch-freebsd.jq" "$_ffc" > "$_ffc.new"; then
+		mv "$_ffc.new" "$_ffc"
+	else
+		rm -f "$_ffc.new"; warn "could not adapt Caelestia's fastfetch settings for FreeBSD; some rows will be empty"
+	fi
+fi
+# The terminal (foot) starts the shell of the chosen terminal style.
+foot_set_shell "$CFG/foot/foot.ini"
 
 # FreeBSD-specific user config. These three files are never touched by
 # upstream updates, and existing copies of yours are never overwritten.
+# Copies still exactly as an earlier FreeBSD-setup shipped them (never
+# edited by the user) are updated: their sleep and launcher commands did
+# not work on FreeBSD.
+_shipped="3a5795ea26bf83c8f1cacce8857a56d7875ba9be7117a8599a9b6b2d2dd5b64a 152371a071739be8d29ab07833de987986cdace1336c53b715ffaea001aeb5e0"
 for f in hypr-vars.lua hypr-user.lua shell.json; do
-	[ -f "$CFG/caelestia/$f" ] || cp "$REPO_DIR/files/caelestia/$f" "$CFG/caelestia/$f"
+	if [ -f "$CFG/caelestia/$f" ]; then
+		case " $_shipped " in *" $(sha256 -q "$CFG/caelestia/$f") "*)
+			cp "$REPO_DIR/files/caelestia/$f" "$CFG/caelestia/$f"
+			say "updated ~/.config/caelestia/$f (it was unchanged since installation)" ;;
+		esac
+	else
+		cp "$REPO_DIR/files/caelestia/$f" "$CFG/caelestia/$f"
+	fi
 done
 touch "$CFG/caelestia/user-config.fish"
 mkdir -p "$TARGET_HOME/Pictures/Wallpapers"
@@ -75,7 +113,9 @@ chown -R "$TARGET_USER" "$CFG" "$TARGET_HOME/Pictures"
 
 # fish as the interactive shell inside foot only; the login shell stays sh so
 # a broken fish config can never lock you out.
-as_user 'caelestia scheme set -n caelestia' >> "$LOG" 2>&1 ||
-	say "colour scheme will be initialised on first login"
+if [ "$_first" = yes ]; then
+	as_user 'caelestia scheme set -n caelestia' >> "$LOG" 2>&1 ||
+		say "colour scheme will be initialised on first login"
+fi
 
 true   # (a stage must not end on a failed test: setup.sh runs under set -e)

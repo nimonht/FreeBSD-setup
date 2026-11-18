@@ -7,6 +7,16 @@ if is_yes FIREWALL; then
 		say "your previous /etc/pf.conf was saved as /etc/pf.conf.before-freebsd-setup"
 	fi
 	install_file "$REPO_DIR/files/pf.conf" /etc/pf.conf 600
+	# The user's own rules: created once, never replaced.
+	[ -f /etc/pf.local.conf ] || {
+		cat > /etc/pf.local.conf <<'PFL'
+# /etc/pf.local.conf - your own firewall rules, read after /etc/pf.conf.
+# FreeBSD-setup creates this file once and never changes it.
+# Example: open the ports KDE Connect uses, then run  doas service pf reload
+# pass in proto { tcp, udp } to port 1714:1764
+PFL
+		chmod 600 /etc/pf.local.conf
+	}
 	# pfctl needs the pf module even for a syntax check (-n)
 	is_live && { kldload -n pf 2>/dev/null || true; }
 	if is_chroot || pfctl -nf /etc/pf.conf >> "$LOG" 2>&1; then

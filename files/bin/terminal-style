@@ -1,0 +1,37 @@
+#!/bin/sh
+# Written by FreeBSD-setup.
+# terminal-style - turn the ready-made terminal setup off or on, for you only.
+#
+#   terminal-style status         what is on
+#   terminal-style off            plain shell: no suggestions, prompt or short commands
+#   terminal-style on             back to the ready-made setup
+#   terminal-style greeting-off   no system summary when a terminal opens
+#   terminal-style greeting-on    show it again
+#
+# Changes apply to new terminal windows. Nothing in your own files is edited:
+# this only adds or removes small marker files in ~/.config/freebsd-setup.
+# To change the style for everyone (fish, zsh, bash or none), set
+# TERMINAL_STYLE in /usr/local/etc/freebsd-setup.conf and run:
+#   doas freebsd-setup terminal
+set -eu
+D=${XDG_CONFIG_HOME:-$HOME/.config}/freebsd-setup
+style=$(sed -n 's/^TERMINAL_STYLE="\(.*\)"/\1/p' /usr/local/etc/freebsd-setup.conf 2>/dev/null || true)
+
+case "${1:-status}" in
+off)          mkdir -p "$D" && : > "$D/terminal-off" && echo "Ready-made terminal setup off. Open a new terminal window." ;;
+on)           rm -f "$D/terminal-off" && echo "Ready-made terminal setup on. Open a new terminal window." ;;
+greeting-off) mkdir -p "$D" && : > "$D/greeting-off" && echo "System summary off. Open a new terminal window." ;;
+greeting-on)  rm -f "$D/greeting-off" && echo "System summary on. Open a new terminal window." ;;
+status)
+	echo "Terminal style for this computer: ${style:-not set}"
+	if [ -e "$D/terminal-off" ]; then echo "For you: off (turn on: terminal-style on)"
+	else echo "For you: on (turn off: terminal-style off)"; fi
+	if [ -e "$D/greeting-off" ]; then echo "System summary: off (terminal-style greeting-on)"
+	elif [ -x /usr/local/libexec/fbs-terminal-greeting ]; then echo "System summary: on (terminal-style greeting-off)"
+	else echo "System summary: off for everyone"; fi
+	if [ -d "$HOME/.config/fish" ] && [ -e "$HOME/.config/fish/.caelestia-managed" ]; then
+		echo "Note: fish uses Caelestia's own setup (~/.config/fish); these switches do not change it."
+	fi ;;
+-h|--help|help) sed -n '3,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) echo "unknown choice '$1'. Try: terminal-style --help" >&2; exit 2 ;;
+esac

@@ -1,0 +1,30 @@
+#!/bin/sh
+# Installed by FreeBSD-setup: the power profile service (power saver /
+# balanced / performance) for KDE Plasma and Caelestia. It must run before
+# anyone logs in: the desktops only look for it when they start.
+
+# PROVIDE: fbs_power_profiles
+# REQUIRE: dbus
+# BEFORE: LOGIN
+# KEYWORD: nojail shutdown
+
+. /etc/rc.subr
+
+name=fbs_power_profiles
+rcvar=fbs_power_profiles_enable
+pidfile=/var/run/${name}.pid
+fbs_pp_bin=/usr/local/libexec/fbs-power-profiles
+command=/usr/sbin/daemon
+command_args="-f -r -R 10 -S -T fbs-power-profiles -P ${pidfile} ${fbs_pp_bin}"
+start_precmd=fbs_power_profiles_precmd
+
+# The service only runs on machines whose CPU power setting FreeBSD can
+# change; elsewhere it is skipped (quietly: that is normal, not an error) and
+# the desktops hide the switch.
+fbs_power_profiles_precmd() {
+	${fbs_pp_bin} --check >/dev/null 2>&1 || { echo "${name}: no CPU power setting to change - not started"; exit 0; }
+}
+
+load_rc_config $name
+: "${fbs_power_profiles_enable:=NO}"
+run_rc_command "$1"

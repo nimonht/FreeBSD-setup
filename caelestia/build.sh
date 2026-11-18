@@ -37,14 +37,15 @@ die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 # checkout URL DIR REF   clone/update a repository at the requested ref
 checkout() {
 	if [ -d "$2/.git" ]; then
-		git -C "$2" fetch -q --tags origin
+		git -C "$2" fetch -q --tags --force origin
 	else
 		rm -rf "$2"
 		git clone -q "$1" "$2"
 	fi
 	ref=$3
 	if [ "$ref" = latest-tag ]; then
-		ref=$(git -C "$2" tag --sort=-v:refname | grep -E '^v?[0-9]' | head -1)
+		# Release tags only (v1.2.3), never pre-releases such as v3.0.0-rc1.
+		ref=$(git -C "$2" tag --sort=-v:refname | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
 		[ -n "$ref" ] || ref=origin/HEAD
 	fi
 	git -C "$2" checkout -q -f "$ref" 2>/dev/null || git -C "$2" checkout -q -f "origin/$ref"
@@ -97,7 +98,8 @@ cmake -S "$WORK/m3shapes" -B "$WORK/m3shapes/build" -G Ninja \
 	-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
 	-DINSTALL_QMLDIR=lib/qt6/qml > "$WORK/m3shapes.log" 2>&1 || die "M3Shapes configure failed: $WORK/m3shapes.log"
 cmake --build "$WORK/m3shapes/build" -j "$JOBS" >> "$WORK/m3shapes.log" 2>&1 || die "M3Shapes build failed: $WORK/m3shapes.log"
-cmake --install "$WORK/m3shapes/build" >> "$WORK/m3shapes.log" 2>&1
+# Installed together with the shell below, so a failed shell build leaves the
+# previous Caelestia complete and unchanged.
 
 # ---- 4. Caelestia shell ------------------------------------------------------
 say "building the Caelestia shell (this is the long one)"
@@ -122,6 +124,17 @@ find "$S/plugin" "$S/extras" \( -name '*.cpp' -o -name '*.hpp' \) -print0 | xarg
 find "$S" -name '*.qml' -print0 | xargs -0 \
 	sed -i '' -e 's|"/usr/share/X11/xkb/|"/usr/local/share/X11/xkb/|g' \
 	          -e 's|"/usr/lib/caelestia"|"/usr/local/lib/caelestia"|g'
+# The lock screen checks the password through PAM service "passwd". On FreeBSD
+# that falls back to pam_unix, which cannot read password hashes when it runs
+# as the user, so every password would be refused and the user locked out.
+# Use our service (/usr/local/etc/pam.d/fbs-caelestia: unix-selfauth, as the
+# hyprlock port does). Quickshell also wants the file next to the QML.
+_pam="$S/modules/lock/Pam.qml"
+grep -q 'config: "passwd"' "$_pam" 2>/dev/null ||
+	die "the Caelestia lock screen code changed (no 'config: \"passwd\"' in modules/lock/Pam.qml): its password check must be adapted for FreeBSD before building, or the lock screen would refuse every password"
+sed -i '' 's|config: "passwd"|config: "fbs-caelestia"|' "$_pam"
+mkdir -p "$S/assets/pam.d"
+printf 'auth\t\tinclude\t\tunix-selfauth\n' > "$S/assets/pam.d/fbs-caelestia"
 # Local patches, if any (caelestia/patches/*.patch), applied in name order.
 for p in "$HERE"/patches/*.patch; do
 	[ -f "$p" ] || continue
@@ -146,6 +159,7 @@ cmake -S "$S" -B "$S/build" -G Ninja \
 	-DCMAKE_MODULE_LINKER_FLAGS="-L$PREFIX/lib -fexperimental-library" \
 	-DCMAKE_EXE_LINKER_FLAGS="-L$PREFIX/lib -fexperimental-library" > "$WORK/shell.log" 2>&1 || die "shell configure failed: $WORK/shell.log"
 cmake --build "$S/build" -j "$JOBS" >> "$WORK/shell.log" 2>&1 || die "shell build failed: $WORK/shell.log"
+cmake --install "$WORK/m3shapes/build" >> "$WORK/m3shapes.log" 2>&1 || die "M3Shapes install failed: $WORK/m3shapes.log"
 cmake --install "$S/build" >> "$WORK/shell.log" 2>&1 || die "shell install failed: $WORK/shell.log"
 
 # ---- 5. Caelestia CLI --------------------------------------------------------
@@ -165,5 +179,9 @@ if [ -f "$WORK/cli/completions/caelestia.fish" ]; then
 	mkdir -p "$PREFIX/share/fish/vendor_completions.d"
 	cp "$WORK/cli/completions/caelestia.fish" "$PREFIX/share/fish/vendor_completions.d/"
 fi
+
+# The packages this build was compiled against: sysup compares them after
+# "pkg upgrade" and says when Caelestia needs rebuilding.
+pkg query '%n %v' quickshell qt6-base qt6-declarative libqalculate pipewire aubio > "$VENV/built-against" 2>/dev/null || true
 
 say "Caelestia shell $VERSION and CLI installed under $PREFIX"

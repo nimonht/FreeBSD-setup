@@ -107,6 +107,18 @@ wiz_extras() {
 	done
 }
 
+wiz_terminal() {
+	_def=$TERMINAL_STYLE
+	[ "$_def" = auto ] && _def=fish
+	_a=$(ui_menu "Terminal" "How should the terminal behave and look?
+Your login shell is not changed; this applies inside the terminal app." "$_def" \
+		fish "Friendly: suggestions as you type, colours, git-aware prompt" \
+		zsh "Zsh: the same, and closer to bash for copy-pasted commands" \
+		bash "Bash with colours, history search and completion" \
+		none "Plain, as FreeBSD ships it") || return 1
+	TERMINAL_STYLE=$_a
+}
+
 wiz_input_methods() {
 	_cur=" $INPUT_METHODS "
 	if [ -z "$INPUT_METHODS" ]; then
@@ -149,6 +161,9 @@ wiz_language() {
 # --------------------------------------------------------- auto -> concrete ---
 
 resolve_config() {
+	# The answers as given (before "auto" is resolved), for save_config: a
+	# hardware choice saved as "auto" is decided again at every run.
+	: "${_SAVE_GPU_DRIVERS:=${GPU_DRIVERS:-auto}}" "${_SAVE_NVIDIA_BRANCH:=${NVIDIA_BRANCH:-auto}}" "${_SAVE_ARC_MAX_GB:=${ARC_MAX_GB:-auto}}"
 	[ "$DESKTOP" = auto ] && { [ "$HW_DESKTOP" = yes ] && DESKTOP=kde || DESKTOP=none; }
 	case "$DESKTOP" in kde|hyprland|both|none) ;; *) die "DESKTOP must be kde, hyprland, both, none or auto (got '$DESKTOP')" ;; esac
 	WANT_KDE=no WANT_HYPR=no
@@ -174,6 +189,10 @@ resolve_config() {
 		GPU_DRIVERS=$(echo $GPU_DRIVERS)
 	fi
 	[ "$NVIDIA_BRANCH" = auto ] && NVIDIA_BRANCH=${HW_NVIDIA_BRANCH:-none}
+	if [ "${TERMINAL_STYLE:-auto}" = auto ]; then
+		TERMINAL_STYLE=none; [ "$DESKTOP" != none ] && TERMINAL_STYLE=fish
+	fi
+	case "$TERMINAL_STYLE" in fish|zsh|bash|none) ;; *) die "TERMINAL_STYLE must be fish, zsh, bash, none or auto (got '$TERMINAL_STYLE')" ;; esac
 	if [ "$ARC_MAX_GB" = auto ]; then
 		ARC_MAX_GB=$(( HW_RAM_MB / 4096 ))
 		[ "$ARC_MAX_GB" -lt 1 ] && ARC_MAX_GB=1
@@ -191,12 +210,13 @@ save_config() {
 		for _k in TARGET_USER DESKTOP INSTALL_CAELESTIA CAELESTIA_SHELL_REF CAELESTIA_CLI_REF \
 			CAELESTIA_DOTS_REF PKG_BRANCH DISPLAY_MANAGER INSTALL_APPS INSTALL_PRINTING \
 			INSTALL_GAMING INSTALL_DEVTOOLS FIREWALL AUTO_SNAPSHOTS INPUT_METHODS \
-			KEYBOARD_LAYOUT LOCALE DESKTOP_LANGUAGE RUN_FREEBSD_UPDATE; do
+			KEYBOARD_LAYOUT LOCALE DESKTOP_LANGUAGE RUN_FREEBSD_UPDATE \
+			TERMINAL_STYLE TERMINAL_GREETING; do
 			eval "printf '%s=\"%s\"\n' $_k \"\${$_k:-}\""
 		done
-		echo 'GPU_DRIVERS="auto"'
-		echo 'NVIDIA_BRANCH="auto"'
-		echo 'ARC_MAX_GB="auto"'
+		printf 'GPU_DRIVERS="%s"\n' "${_SAVE_GPU_DRIVERS:-${GPU_DRIVERS:-auto}}"
+		printf 'NVIDIA_BRANCH="%s"\n' "${_SAVE_NVIDIA_BRANCH:-${NVIDIA_BRANCH:-auto}}"
+		printf 'ARC_MAX_GB="%s"\n' "${_SAVE_ARC_MAX_GB:-${ARC_MAX_GB:-auto}}"
 	} > "$1"
 }
 
@@ -213,6 +233,7 @@ Gaming:           $INSTALL_GAMING
 Developer tools:  $INSTALL_DEVTOOLS
 Firewall:         $FIREWALL
 Snapshots:        $AUTO_SNAPSHOTS
+Terminal style:   $TERMINAL_STYLE
 Input methods:    $_ims
 Keyboard layout:  ${KEYBOARD_LAYOUT:-unchanged}
 EOF

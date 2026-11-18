@@ -23,6 +23,9 @@
                     "returnAction": "dpms on"
                 }
             ]
+        },
+        "battery": {
+            "criticalLevel": -1
         }
     },
     "session": {
@@ -39,13 +42,150 @@
             ],
             "hibernate": [
                 "doas",
-                "zzz"
+                "-n",
+                "/usr/sbin/zzz"
             ],
             "reboot": [
                 "shutdown",
                 "-r",
                 "now"
             ]
+        },
+        "icons": {
+            "hibernate": "bedtime"
         }
+    },
+    "launcher": {
+        "actions": [
+            {
+                "name": "Calculator",
+                "icon": "calculate",
+                "description": "Do simple maths equations (powered by Qalc)",
+                "command": [
+                    "autocomplete",
+                    "calc"
+                ]
+            },
+            {
+                "name": "Scheme",
+                "icon": "palette",
+                "description": "Change the current colour scheme",
+                "command": [
+                    "autocomplete",
+                    "scheme"
+                ]
+            },
+            {
+                "name": "Wallpaper",
+                "icon": "image",
+                "description": "Change the current wallpaper",
+                "command": [
+                    "autocomplete",
+                    "wallpaper"
+                ]
+            },
+            {
+                "name": "Variant",
+                "icon": "colors",
+                "description": "Change the current scheme variant",
+                "command": [
+                    "autocomplete",
+                    "variant"
+                ]
+            },
+            {
+                "name": "Random",
+                "icon": "casino",
+                "description": "Switch to a random wallpaper",
+                "command": [
+                    "caelestia",
+                    "wallpaper",
+                    "-r"
+                ]
+            },
+            {
+                "name": "Light",
+                "icon": "light_mode",
+                "description": "Change the scheme to light mode",
+                "command": [
+                    "setMode",
+                    "light"
+                ]
+            },
+            {
+                "name": "Dark",
+                "icon": "dark_mode",
+                "description": "Change the scheme to dark mode",
+                "command": [
+                    "setMode",
+                    "dark"
+                ]
+            },
+            {
+                "name": "Shutdown",
+                "icon": "power_settings_new",
+                "description": "Shutdown the system",
+                "command": [
+                    "shutdown",
+                    "-p",
+                    "now"
+                ],
+                "dangerous": true
+            },
+            {
+                "name": "Reboot",
+                "icon": "cached",
+                "description": "Reboot the system",
+                "command": [
+                    "shutdown",
+                    "-r",
+                    "now"
+                ],
+                "dangerous": true
+            },
+            {
+                "name": "Logout",
+                "icon": "exit_to_app",
+                "description": "Log out of the current session",
+                "command": [
+                    "hyprctl",
+                    "dispatch",
+                    "exit"
+                ],
+                "dangerous": true
+            },
+            {
+                "name": "Lock",
+                "icon": "lock",
+                "description": "Lock the current session",
+                "command": [
+                    "caelestia",
+                    "shell",
+                    "lock",
+                    "lock"
+                ]
+            },
+            {
+                "name": "Sleep",
+                "icon": "bedtime",
+                "description": "Suspend (sleep)",
+                "command": [
+                    "doas",
+                    "-n",
+                    "/usr/sbin/zzz"
+                ]
+            },
+            {
+                "name": "Settings",
+                "icon": "settings",
+                "description": "Configure the shell",
+                "command": [
+                    "caelestia",
+                    "shell",
+                    "nexus",
+                    "open"
+                ]
+            }
+        ]
     }
 }

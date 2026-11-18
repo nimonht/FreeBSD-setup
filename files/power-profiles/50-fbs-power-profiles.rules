@@ -1,0 +1,12 @@
+// Written by FreeBSD-setup.
+// Switching the power profile is harmless: allow it for the person at the
+// computer. Members of "operator" (allowed to shut down; the desktop user is
+// one) are allowed even when the session is not seen as active, which
+// happens when the session was not registered with ConsoleKit.
+polkit.addRule(function(action, subject) {
+	if (action.id == "org.freedesktop.UPower.PowerProfiles.switch-profile" ||
+	    action.id == "org.freedesktop.UPower.PowerProfiles.hold-profile") {
+		if ((subject.local && subject.active) || subject.isInGroup("operator"))
+			return polkit.Result.YES;
+	}
+});
