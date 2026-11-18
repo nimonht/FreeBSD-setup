@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Written by FreeBSD-setup: the actions of the timedate1 service
+     (fbs-timedate), with the names KDE's Date & Time page checks. -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>FreeBSD-setup</vendor>
+  <action id="org.freedesktop.timedate1.set-time">
+    <description>Set the system clock</description>
+    <message>Authentication is required to set the system clock.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+  <action id="org.freedesktop.timedate1.set-timezone">
+    <description>Set the time zone</description>
+    <message>Authentication is required to set the time zone.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+  <action id="org.freedesktop.timedate1.set-local-rtc">
+    <description>Set the hardware clock to local time or UTC</description>
+    <message>Authentication is required to change how the hardware clock is kept.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+  <action id="org.freedesktop.timedate1.set-ntp">
+    <description>Turn automatic time synchronization on or off</description>
+    <message>Authentication is required to change automatic time synchronization.</message>
+    <defaults><allow_any>auth_admin</allow_any><allow_inactive>auth_admin</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+</policyconfig>

@@ -46,6 +46,23 @@ mkdir -p /usr/local/etc/xdg
 # kinfocenter package already.)
 sys_file "$REPO_DIR/files/kde/kdeglobals" /usr/local/etc/xdg/kdeglobals || true
 sys_file "$REPO_DIR/files/kde/arkrc" /etc/xdg/arkrc || true
+# System Settings > Date & Time changes the time zone and clock through the
+# org.freedesktop.timedate1 service (systemd-timedated on Linux): ours,
+# started on demand. It needs Python's GObject package (system stage).
+if [ -x /usr/local/bin/python3 ] && /usr/local/bin/python3 -c 'import gi' 2>/dev/null; then
+	_td="$REPO_DIR/files/timedate"
+	mkdir -p /usr/local/libexec /usr/local/share/dbus-1/system.d /usr/local/share/dbus-1/system-services \
+		/usr/local/share/polkit-1/actions /usr/local/etc/polkit-1/rules.d
+	install_file "$_td/fbs-timedate" /usr/local/libexec/fbs-timedate 755
+	install_file "$_td/fbs-timedate.conf" /usr/local/share/dbus-1/system.d/fbs-timedate.conf
+	install_file "$_td/org.freedesktop.timedate1.service" /usr/local/share/dbus-1/system-services/org.freedesktop.timedate1.service
+	install_file "$_td/org.freedesktop.timedate1.policy" /usr/local/share/polkit-1/actions/org.freedesktop.timedate1.policy
+	install_file "$_td/50-fbs-timedate.rules" /usr/local/etc/polkit-1/rules.d/50-fbs-timedate.rules
+	is_live && { dbus-send --system --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ReloadConfig >> "$LOG" 2>&1 || true; }
+else
+	warn "KDE's Date & Time page cannot change the time zone (Python's GObject package is missing); use: doas tzsetup"
+fi
+
 # Open the KDE wallet with the login password, so programs do not ask for a
 # wallet password (only after Plasma installed: it brings the PAM module).
 [ "$DISPLAY_MANAGER" = sddm ] && sddm_pam_enable pam_kwallet5
