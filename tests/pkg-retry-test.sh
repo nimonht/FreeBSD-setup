@@ -34,5 +34,18 @@ t "quiet mode retries too"                 2 ok   "$F" 2 pkg_get -q foo
 t "pkg_try retries"                        2 ok   "$F" 2 pkg_try bar
 t "missing package: no retry"              1 fail "No packages available to install matching 'foo'" 9 pkg_get foo
 
+# fetch_retry: a broken download continues (fetch -r) up to 3 times.
+cat > "$T/fetch" <<'EOF'
+#!/bin/sh
+n=$(cat "$CNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$CNT"
+case " $* " in *" -r "*) echo resumed >> "$CNT.how" ;; esac
+[ "$n" -ge "$OK_AT" ]
+EOF
+chmod +x "$T/fetch"
+t "download fine on the 2nd try"      2 ok   "" 2 fetch_retry "$T/f" http://x/f
+t "download broken every time"        3 fail "" 9 fetch_retry "$T/f" http://x/f
+if [ "$(cat "$T"/c.*.how 2>/dev/null | wc -l | tr -d ' ')" = 3 ]; then pass=$((pass + 1)); echo "ok   retries continue the partial file"
+else fail=$((fail + 1)); echo "FAIL retries did not use fetch -r"; fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
