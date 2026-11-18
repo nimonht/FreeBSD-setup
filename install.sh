@@ -245,11 +245,12 @@ efi_systems() {
 	return 0
 }
 
-# bitlocker_found   is a Windows partition on any disk BitLocker-encrypted?
-# (BitLocker volumes carry "-FVE-FS-" at byte 3, as util-linux's
-# libblkid/src/superblocks/bitlocker.c checks.)
+# bitlocker_found [SKIP-DISK]   is a Windows partition on any disk (except
+# SKIP-DISK) BitLocker-encrypted? (BitLocker volumes carry "-FVE-FS-" at
+# byte 3, as util-linux's libblkid/src/superblocks/bitlocker.c checks.)
 bitlocker_found() {
 	for _bd in $(sysctl -n kern.disks); do
+		[ "$_bd" = "${1:-}" ] && continue
 		for _bp in $(gpart show -p "$_bd" 2>/dev/null | awk '$4 == "ms-basic-data" { print $3 }'); do
 			dd if="/dev/$_bp" bs=512 count=1 2>/dev/null | dd bs=1 skip=3 count=8 2>/dev/null |
 				LC_ALL=C grep -aq -- '-FVE-FS-' && return 0
@@ -702,7 +703,9 @@ EOF
 # (key L) it may ask every time. Say so before anything is written.
 bitlocker_note() {
 	HAS_BITLOCKER=no
-	bitlocker_found || return 0
+	# A Windows on the disk being erased does not matter: it is about to go.
+	_skip=""; [ "$INSTALL_MODE" = erase ] && _skip=$INSTALL_DISK
+	bitlocker_found "$_skip" || return 0
 	HAS_BITLOCKER=yes
 	[ "$UI_MODE" = auto ] && { say "note: Windows is BitLocker-encrypted; have its recovery key ready"; return 0; }
 	ui_yesno "Windows is encrypted (BitLocker)" "Windows on this computer is encrypted with BitLocker.
