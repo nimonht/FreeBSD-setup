@@ -125,12 +125,16 @@ vmware)
 esac
 
 # ---- webcam -------------------------------------------------------------------------
-if [ -n "$HW_WEBCAM" ]; then
-	say "webcam: webcamd"
-	pkg_install webcamd
-	loader_set cuse_load YES
-	svc webcamd
-	pw groupmod webcamd -m "$TARGET_USER" 2>/dev/null || true
+# On every desktop, not only when a camera is plugged in now: a USB camera
+# plugged in later is then started by webcamd's devd rules.
+if [ -n "$HW_WEBCAM" ] || [ "$DESKTOP" != none ]; then
+	say "webcams: webcamd${HW_WEBCAM:+ ($HW_WEBCAM)}"
+	pkg_try webcamd
+	if pkg info -e webcamd 2>/dev/null; then
+		loader_set cuse_load YES
+		svc webcamd
+		pw groupmod webcamd -m "$TARGET_USER" 2>/dev/null || true
+	fi
 fi
 
 true   # (a stage must not end on a failed test: setup.sh runs under set -e)

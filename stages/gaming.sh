@@ -3,6 +3,9 @@
 is_yes INSTALL_GAMING || { say "gaming not selected - skipped"; return 0; }
 [ "$HW_ARCH" = amd64 ] || { warn "Steam and Wine need an amd64 machine - gaming skipped"; return 0; }
 
+# Game controllers: the kernel gives their input devices to group games.
+pw groupmod games -m "$TARGET_USER" 2>/dev/null || true
+
 say "Linux compatibility layer with the Rocky Linux 9 userland"
 kld_add linux linux64
 kldload -n linux64 2>/dev/null || true   # the packages check the running kernel
