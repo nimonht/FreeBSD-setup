@@ -54,6 +54,14 @@ If a partition was left behind anyway (power cut), delete it with
 
 ## Starting the computer
 
+**FreeBSD stopped starting** ("Secure Boot violation", "image verification
+failed", or the firmware skips FreeBSD) after a firmware update, a reset of
+the firmware settings, or after Secure Boot was switched on for Windows 11:
+FreeBSD's boot loader is not signed for Secure Boot. Switch Secure Boot off
+again in the firmware setup (often under Boot or Security). If Windows uses
+BitLocker it will ask for its recovery key once; see
+[DUAL-BOOT.md](DUAL-BOOT.md#windows).
+
 **Limine stops with "CHECKSUM MISMATCH FOR CONFIG FILE"** (installed with an
 older FreeBSD-setup, next to CachyOS or another Linux whose Limine checks its
 menu file against an enrolled checksum): the installer added FreeBSD to
