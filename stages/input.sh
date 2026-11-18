@@ -29,6 +29,9 @@ cat > /usr/local/etc/profile.d/fcitx5.sh <<'ENV'
 # Written by FreeBSD-setup: input methods for X11/Wayland programs.
 export XMODIFIERS=@im=fcitx
 export QT_IM_MODULE=fcitx
+# Qt 6 prefers the Wayland input-method protocol (KDE warns at every login
+# otherwise), and falls back to fcitx; Qt 5 programs use QT_IM_MODULE.
+export QT_IM_MODULES="wayland;fcitx"
 export SDL_IM_MODULE=fcitx
 ENV
 
