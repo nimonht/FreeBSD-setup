@@ -46,6 +46,9 @@ mkdir -p /usr/local/etc/xdg
 # kinfocenter package already.)
 sys_file "$REPO_DIR/files/kde/kdeglobals" /usr/local/etc/xdg/kdeglobals || true
 sys_file "$REPO_DIR/files/kde/arkrc" /etc/xdg/arkrc || true
+# Open the KDE wallet with the login password, so programs do not ask for a
+# wallet password (only after Plasma installed: it brings the PAM module).
+[ "$DISPLAY_MANAGER" = sddm ] && sddm_pam_enable pam_kwallet5
 say "KDE Plasma installed - choose 'Plasma (Wayland)' at the login screen"
 
 true   # (a stage must not end on a failed test: setup.sh runs under set -e)
