@@ -42,6 +42,11 @@ else
 	warn "the power profile switch is not available: Python's GObject package could not be installed (rerun: freebsd-setup system)"
 fi
 
+# Lock the desktop before every suspend (lid, sleep key, menus, zzz): the
+# desktops only lock when they start the suspend themselves.
+install_file "$REPO_DIR/files/rc.d/fbs_lock_on_suspend" /usr/local/etc/rc.d/fbs_lock_on_suspend 755
+sysrc fbs_lock_on_suspend_enable=YES >/dev/null
+
 if [ "$HW_LAPTOP" = yes ]; then
 	say "laptop: deeper idle states, unused devices powered down"
 	sysrc performance_cx_lowest=Cmax economy_cx_lowest=Cmax >/dev/null
