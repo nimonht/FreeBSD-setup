@@ -13,6 +13,8 @@ if is_yes INSTALL_APPS; then
 	case "${DESKTOP_LANGUAGE:-}" in
 	""|en) ;;
 	pt-br) _ffl=pt-BR ;; zh-cn) _ffl=zh-CN ;; zh-tw) _ffl=zh-TW ;; ja) _ffl=ja ;;
+	# Firefox has no plain es, pt or sv locale or language pack.
+	es) _ffl=es-ES ;; pt) _ffl=pt-PT ;; sv) _ffl=sv-SE ;;
 	*) _ffl=$DESKTOP_LANGUAGE ;;
 	esac
 	_ffp=$(mktemp)
