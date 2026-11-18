@@ -1,0 +1,96 @@
+# Written by FreeBSD-setup: the ready-made zsh setup (terminal style).
+# zsh reads this file for every interactive shell, before your ~/.zshrc.
+# Turn it off for yourself:  terminal-style off
+# Inspired by the CachyOS, Manjaro and GhostBSD setups; written for FreeBSD.
+
+[[ -o interactive ]] || return 0
+[[ -e ${XDG_CONFIG_HOME:-$HOME/.config}/freebsd-setup/terminal-off ]] && return 0
+
+# History: shared between windows, no duplicates, a leading space hides a command.
+HISTFILE=${HISTFILE:-$HOME/.zsh_history}
+HISTSIZE=10000
+SAVEHIST=10000
+setopt SHARE_HISTORY HIST_IGNORE_ALL_DUPS HIST_IGNORE_SPACE HIST_REDUCE_BLANKS
+setopt AUTO_CD INTERACTIVE_COMMENTS NO_BEEP
+
+# Completion: menu with arrow keys, upper/lower case does not matter.
+autoload -Uz compinit && compinit -i
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+zstyle ':completion:*' list-colors ''
+
+# Up/Down search the history for lines starting with what you typed.
+autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
+zle -N up-line-or-beginning-search
+zle -N down-line-or-beginning-search
+bindkey -e
+bindkey '^[[A' up-line-or-beginning-search
+bindkey '^[[B' down-line-or-beginning-search
+bindkey '^[OA' up-line-or-beginning-search
+bindkey '^[OB' down-line-or-beginning-search
+bindkey '^[[H' beginning-of-line
+bindkey '^[[F' end-of-line
+bindkey '^[[3~' delete-char
+bindkey '^[[1;5C' forward-word
+bindkey '^[[1;5D' backward-word
+
+export CLICOLOR=1
+path=($HOME/.local/bin $path)
+
+# Caelestia's colours for the terminal, when it is installed.
+[[ -r $HOME/.local/state/caelestia/sequences.txt ]] && cat $HOME/.local/state/caelestia/sequences.txt
+
+# Prompt: starship, except on the text console, which cannot show its icons.
+[[ -e ${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml ]] || export STARSHIP_CONFIG=/usr/local/etc/starship.toml
+if [[ $TTY != /dev/ttyv* ]] && (( $+commands[starship] )); then
+	eval "$(starship init zsh)"
+else
+	PROMPT='%F{green}%n@%m%f:%F{blue}%~%f%# '
+fi
+
+# z DIR jumps to a directory you used before; Ctrl+R searches history,
+# Ctrl+T finds files, Alt+C changes into a folder.
+(( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
+(( $+commands[fzf] )) && eval "$(fzf --zsh)"
+
+# Short commands. Nothing replaces a standard command (ls, cat, grep, cd):
+# guides and scripts keep working as written.
+_fbs_icons=auto
+[[ $TTY == /dev/ttyv* ]] && _fbs_icons=never    # text console
+if (( $+commands[eza] )); then
+	alias ll="eza -l --group-directories-first --icons=$_fbs_icons --git"
+	alias la="eza -la --group-directories-first --icons=$_fbs_icons --git"
+	alias lt="eza --tree --level=2 --icons=$_fbs_icons"
+else
+	alias ll='ls -lh' la='ls -lah'
+fi
+alias ..='cd ..' ...='cd ../..' ....='cd ../../..'
+(( $+commands[sysup] )) && alias update=sysup
+alias cleanup='doas pkg autoremove && doas pkg clean'
+alias please=sudo
+alias untar='tar -xvf' tarnow='tar -acf'
+alias psmem='ps aux -m | head -20'
+alias big="pkg query '%sb %n' | sort -n | tail -40"
+alias rip="pkg query '%t %n-%v' | sort -n | tail -100"
+alias jctl='doas dmesg -a | less'
+backup() { cp -- "$1" "$1.bak"; }
+apt() {
+	print "FreeBSD uses pkg, not apt:"
+	print "  pkg search NAME          find software"
+	print "  doas pkg install NAME    install it"
+	print "  sysup                    update everything"
+}
+apt-get() { apt; }
+pacman() { apt; }
+dnf() { apt; }
+
+# Suggestions as you type (accept with the Right arrow), then colours for
+# commands as you type them (this one must come last).
+[[ -r /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] &&
+	source /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+[[ -r /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] &&
+	source /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# The system summary when the shell starts (terminal-style greeting-off).
+[[ -x /usr/local/libexec/fbs-terminal-greeting ]] && /usr/local/libexec/fbs-terminal-greeting
+true

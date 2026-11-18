@@ -26,6 +26,8 @@ ok()   { printf "${_c_ok}  ok${_c_off} %s\n" "$*"; _log "  ok $*"; }
 warn() {
 	printf "${_c_warn}WARNING:${_c_off} %s\n" "$*" >&2
 	_log "WARNING: $*"
+	# Also kept in a file, so the installer can show them on its last screen.
+	[ -n "${FBS_WARNFILE:-}" ] && printf '%s\n' "$*" >> "$FBS_WARNFILE" 2>/dev/null || true
 	WARNINGS="${WARNINGS}
   - $*"
 }
@@ -58,13 +60,48 @@ run_shown() {
 	return "${_r:-1}"
 }
 
+# pkg_get [-q] name...   pkg install, showing its progress lines (-q: only
+# in the log). A broken download (a mirror or network hiccup: "An error
+# occurred while fetching package") is tried again, up to 3 times; pkg keeps
+# the packages it already has, so a retry only fetches the rest.
+pkg_get() {
+	local _n _q
+	_n=1 _q=no
+	[ "$1" = -q ] && { _q=yes; shift; }
+	while :; do
+		if [ "$_q" = yes ]; then
+			env ASSUME_ALWAYS_YES=yes pkg install -y "$@" >> "$LOG" 2>&1 && return 0
+		else
+			run_shown '^\[[0-9]+/[0-9]+\] (Fetching|Installing|Upgrading)' \
+				env ASSUME_ALWAYS_YES=yes pkg install -y "$@" && return 0
+		fi
+		[ "$_n" -lt 3 ] && tail -5 "$LOG" 2>/dev/null | grep -q 'error occurred while fetching' || return 1
+		_n=$((_n + 1))
+		say "a download was interrupted - trying again ($_n of 3)"
+		sleep "${FBS_RETRY_DELAY:-10}"
+	done
+}
+
+# fetch_retry FILE URL   download, trying 3 times; a retry continues the
+# partial file (fetch -r) instead of starting over
+fetch_retry() {
+	local _n
+	_n=1
+	while :; do
+		if [ "$_n" -eq 1 ]; then fetch -o "$1" "$2" && return 0
+		else fetch -r -o "$1" "$2" && return 0; fi
+		[ "$_n" -lt 3 ] || return 1
+		_n=$((_n + 1))
+		say "the download was interrupted - trying again ($_n of 3)"
+		sleep "${FBS_RETRY_DELAY:-10}"
+	done
+}
+
 # pkg_install name...   install packages, one progress line per package;
 # fail the script if any is missing
 pkg_install() {
 	say "pkg install $*"
-	run_shown '^\[[0-9]+/[0-9]+\] (Fetching|Installing|Upgrading)' \
-		env ASSUME_ALWAYS_YES=yes pkg install -y "$@" ||
-		die "could not install: $*  (details: $LOG)"
+	pkg_get "$@" || die "could not install: $*  (details: $LOG)"
 }
 
 # pkg_try name...   install each package that is available; missing or
@@ -73,7 +110,7 @@ pkg_try() {
 	local _p
 	for _p in "$@"; do
 		pkg info -e "$_p" 2>/dev/null && continue
-		if env ASSUME_ALWAYS_YES=yes pkg install -y "$_p" >> "$LOG" 2>&1; then
+		if pkg_get -q "$_p"; then
 			say "installed $_p"
 		else
 			warn "package '$_p' is not available right now - skipped"
@@ -139,6 +176,122 @@ svc() {
 
 # install_file src dst [mode]   copy a file from the repository
 install_file() { install -m "${3:-644}" "$1" "$2"; }
+
+# sys_file src dst [mode]   a system-wide config file of ours: written only
+# where there is none yet, where the one there is ours (has the marker), or
+# where it is still the package's untouched default (a copy of dst.sample).
+# Someone else's file is kept, and the call returns 1.
+sys_file() {
+	if [ -e "$2" ] && ! grep -q 'Written by FreeBSD-setup' "$2" 2>/dev/null &&
+		! { [ -f "$2.sample" ] && cmp -s "$2" "$2.sample"; }; then
+		say "kept your own $2"
+		return 1
+	fi
+	mkdir -p "$(dirname "$2")"
+	install -m "${3:-644}" "$1" "$2"
+}
+# sys_file_rm dst   remove a file, only when it is ours (the package's
+# default comes back when it has one)
+sys_file_rm() {
+	[ -f "$1" ] && grep -q 'Written by FreeBSD-setup' "$1" 2>/dev/null || return 0
+	rm -f "$1"
+	[ -f "$1.sample" ] && cp "$1.sample" "$1"
+	return 0
+}
+
+# efi_entries   read "efibootmgr -v" on stdin, print one line per boot entry:
+# NUMBER|NAME|DEVICE-PATH. FreeBSD 15 prints the device path on the entry's
+# own line, later versions on the lines below it ("dp: ..."); both are read.
+efi_entries() {
+	awk '
+	function flush() { if (num != "") print num "|" name "|" path; num = "" }
+	/^[ +]?Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {
+		flush()
+		l = $0; sub(/^[ +]?Boot/, "", l)
+		num = toupper(substr(l, 1, 4)); l = substr(l, 6); sub(/^ +/, "", l)
+		# The name ends where the device path starts: " Word(" (HD(, File(...).
+		if (match(l, / [A-Za-z][A-Za-z0-9]*\(/)) { name = substr(l, 1, RSTART - 1); path = substr(l, RSTART + 1) }
+		else { name = l; path = "" }
+		sub(/ +$/, "", name)
+		next
+	}
+	/^[ \t]*$/ || /^[A-Z][A-Za-z ]*:/ || /^Unreferenced/ { flush(); next }
+	num != "" { l = $0; sub(/^[ \t]+/, "", l); sub(/^dp: */, "", l); path = path (path == "" ? "" : " ") l }
+	END { flush() }'
+}
+
+# efi_first   read "efibootmgr -v" on stdin, print the first BootOrder entry
+efi_first() {
+	awk -F': *' '/^BootOrder/ { split($2, a, ","); gsub(/ /, "", a[1]); print toupper(a[1]); exit }'
+}
+
+# efi_file PATH   the file a device path starts (File(\EFI\x\y.efi) ->
+# /EFI/x/y.efi), or nothing
+efi_file() {
+	printf '%s\n' "$1" | sed -n -e 's/.*[/]File(\([^)]*\)).*/\1/p' -e 's/^File(\([^)]*\)).*/\1/p' | head -1 | tr '\\' '/'
+}
+
+# efi_part_uuid PATH   the GPT partition UUID a device path names
+# (HD(1,GPT,<uuid>,...)), in lower case, or nothing
+efi_part_uuid() {
+	printf '%s\n' "$1" | sed -n 's/.*HD([0-9]*,GPT,\([0-9A-Fa-f-]\{36\}\),.*/\1/p' | head -1 | tr 'A-F' 'a-f'
+}
+
+# sddm_pam_enable MODULE   unlock a wallet/keyring with the login password:
+# turn on the MODULE lines the sddm package ships commented out in its PAM
+# file. Only while that file is the package's own (or ours), and only when the
+# module exists: a missing module would stop every login.
+sddm_pam_enable() {
+	local _sp _so
+	_sp=/usr/local/etc/pam.d/sddm
+	[ -f "$_sp.default" ] || return 0
+	for _so in "/usr/local/lib/security/$1.so" "/usr/local/lib/$1.so" "/usr/lib/$1.so"; do
+		[ -f "$_so" ] && break
+	done
+	[ -f "$_so" ] || return 0
+	if [ -f "$_sp" ] && ! cmp -s "$_sp" "$_sp.default" && ! grep -q 'Written by FreeBSD-setup' "$_sp"; then
+		say "kept your own $_sp (the wallet is not unlocked at login automatically)"
+		return 0
+	fi
+	{ printf '# Written by FreeBSD-setup: unlocks the wallet with the login password (%s).\n' "$1"
+	  sed -E "s|^#[[:space:]]*(.*[[:space:]]$1[.]so.*)|\\1|" "$_sp.default"; } > "$_sp.new" &&
+		mv "$_sp.new" "$_sp"
+}
+
+# limine_locked ESP_DIR   true when limine.conf on this EFI partition must
+# not be changed: a Limine binary there carries an enrolled checksum of it
+# (CachyOS enrolls one by default), and Limine refuses to start ("CHECKSUM
+# MISMATCH FOR CONFIG FILE") once the file differs by a single byte. Also
+# true when no Limine binary could be checked at all: when in doubt, leave
+# the other system's boot menu alone.
+limine_locked() {
+	local _sums
+	_sums=$(find "$1" -type f -iname '*.efi' -exec \
+		env LC_ALL=C grep -a -h -o -E '\+\+CONFIG_B2SUM_SIGNATURE\+\+[0-9A-Za-z]{128}' {} + 2>/dev/null) || true
+	[ -n "$_sums" ] || return 0
+	printf '%s\n' "$_sums" | sed 's/^++CONFIG_B2SUM_SIGNATURE++//' | grep -q '[^0]'
+}
+
+# foot_set_shell FILE   start the terminal style's shell in this foot.ini,
+# only when it is Caelestia's copy (marked .caelestia-managed, ours to
+# change), never the user's own; with no style, Caelestia's choice (fish).
+foot_set_shell() {
+	local _s
+	_s=$(terminal_shell)
+	[ -n "$_s" ] && [ -x "$_s" ] || _s=/usr/local/bin/fish
+	[ -e "$(dirname "$1")/.caelestia-managed" ] && [ -f "$1" ] && grep -q '^shell=' "$1" || return 0
+	sed -i '' "s|^shell=.*|shell=$_s|" "$1"
+}
+
+# terminal_shell   the shell the chosen terminal style runs (empty for none;
+# bash, which base installs, when the chosen shell could not be installed)
+terminal_shell() {
+	case "${TERMINAL_STYLE:-none}" in
+	fish|zsh|bash)
+		if [ -x "/usr/local/bin/$TERMINAL_STYLE" ]; then echo "/usr/local/bin/$TERMINAL_STYLE"
+		else echo /usr/local/bin/bash; fi ;;
+	esac
+}
 
 # --------------------------------------------------------------- the user ---
 

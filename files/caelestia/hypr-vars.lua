@@ -14,5 +14,5 @@ return {
   cursorSize      = 24,
 
   -- systemd is Linux-only: suspend through ACPI instead
-  sleepGestureCmd = "doas zzz",
+  sleepGestureCmd = "doas -n /usr/sbin/zzz",
 }

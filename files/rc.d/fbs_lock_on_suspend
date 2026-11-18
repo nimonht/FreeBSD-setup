@@ -1,0 +1,66 @@
+#!/bin/sh
+# Written by FreeBSD-setup: lock every desktop session before the computer
+# suspends (lid closed, sleep key, Sleep in a menu, zzz), so whoever opens it
+# next needs the password. Nothing else on FreeBSD does this: the desktops
+# only lock when they are asked to suspend through their own menus.
+#
+# PROVIDE: fbs_lock_on_suspend
+# REQUIRE: DAEMON
+# KEYWORD: suspend nojail
+
+. /etc/rc.subr
+
+# rc.suspend runs this with a minimal PATH; dbus-send and hyprctl live in
+# /usr/local/bin.
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+export PATH
+
+name=fbs_lock_on_suspend
+rcvar=fbs_lock_on_suspend_enable
+start_cmd=":"
+stop_cmd=":"
+suspend_cmd="${name}_suspend"
+extra_commands="suspend"
+
+# KDE and other ConsoleKit2 sessions: ConsoleKit asks the session to lock.
+lock_consolekit() {
+	command -v dbus-send >/dev/null || return 0
+	dbus-send --system --print-reply --dest=org.freedesktop.ConsoleKit \
+		/org/freedesktop/ConsoleKit/Manager org.freedesktop.ConsoleKit.Manager.GetSessions 2>/dev/null |
+		sed -n 's|.*object path "/org/freedesktop/ConsoleKit/\([^"]*\)".*|\1|p' |
+		while read -r _s; do
+			timeout 3 dbus-send --system --print-reply --dest=org.freedesktop.ConsoleKit \
+				/org/freedesktop/ConsoleKit/Manager org.freedesktop.ConsoleKit.Manager.LockSession \
+				"string:$_s" >/dev/null 2>&1 || true
+		done
+}
+
+# Hyprland sessions: run the lock as the session's user, inside the session.
+# The runtime folder is read from the running Hyprland's environment.
+lock_hyprland() {
+	for _pid in $(pgrep -x Hyprland 2>/dev/null); do
+		_user=$(ps -o user= -p "$_pid" | tr -d ' ')
+		[ -n "$_user" ] || continue
+		_rt=$(procstat -e "$_pid" 2>/dev/null | tr ' ' '\n' | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)
+		[ -n "$_rt" ] && [ -d "$_rt/hypr" ] || continue
+		# Caelestia's own lock screen when its shell runs, otherwise hyprlock.
+		if pgrep -u "$_user" -f 'quickshell|qs -c caelestia' >/dev/null 2>&1; then
+			_cmd='hyprctl -i 0 dispatch global caelestia:lock'
+		else
+			_cmd='hyprctl -i 0 dispatch exec hyprlock'
+		fi
+		timeout 3 su -m "$_user" -c "env XDG_RUNTIME_DIR='$_rt' $_cmd" >/dev/null 2>&1 || true
+	done
+}
+
+fbs_lock_on_suspend_suspend() {
+	lock_consolekit
+	lock_hyprland
+	# Give the lock screens a moment to cover the screen before it sleeps.
+	sleep 1
+	return 0
+}
+
+load_rc_config $name
+: "${fbs_lock_on_suspend_enable:=NO}"
+run_rc_command "$1"

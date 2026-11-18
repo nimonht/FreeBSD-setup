@@ -194,26 +194,14 @@ _hw_cpu_vendor() {
 
 # ------------------------------------------------------------------ detect ---
 
-hw_detect() {
-	HW_ARCH=$(uname -m 2>/dev/null)
-	[ -n "${HW_FIXTURES:-}" ] && HW_ARCH=$(_hw_sysctl hw.machine)
-	HW_OSREL=$(_hw_sysctl kern.osrelease)
-	HW_BOOT=$(_hw_sysctl machdep.bootmethod)
-	HW_VENDOR=$(_hw_kenv smbios.system.maker)
-	HW_MODEL=$(_hw_kenv smbios.system.product)
+# hw_detect_gpu -> only the graphics part of hw_detect (fast; used at boot)
+hw_detect_gpu() {
 	HW_VM=$(hw_vm)
-	HW_CPU=$(_hw_sysctl hw.model)
-	HW_CPU_VENDOR=$(_hw_cpu_vendor)
-	HW_NCPU=$(_hw_sysctl hw.ncpu)
-	_mem=$(_hw_sysctl hw.physmem)
-	HW_RAM_MB=$(( ${_mem:-0} / 1048576 ))
-	HW_LAPTOP=no; [ "$HW_VM" = none ] && _hw_is_laptop && HW_LAPTOP=yes
-	HW_ACPI_KMOD=""; [ "$HW_VM" = none ] && HW_ACPI_KMOD=$(hw_acpi_kmod)
-	HW_ROOTFS=$(_hw_mount | awk '$2 == "/" { print $3; exit }')
-	HW_SLEEP=$(_hw_sysctl hw.acpi.supported_sleep_state)
 	HW_PCI=$(hw_pci_records)
-	HW_USB=$(hw_usb_records)
+	_hw_detect_gpu
+}
 
+_hw_detect_gpu() {
 	# ---- graphics -------------------------------------------------------
 	# One line per GPU: kind US device-id US name US driver-plan US note
 	HW_GPUS=""; HW_GPU_INTEL=""; HW_GPU_AMD=""; HW_GPU_NVIDIA=""; HW_GPU_VM=""
@@ -258,7 +246,7 @@ EOF
 	_n=$(printf '%s' "$HW_GPUS" | grep -cE "^(intel|amd|nvidia)$US" || true)
 	[ "$_n" -ge 2 ] && HW_GPU_HYBRID=yes
 
-	# Can a Wayland desktop (KDE Plasma 6.8+, Hyprland) run? It needs a DRM/KMS
+	# Can a Wayland desktop (KDE Plasma 6, Hyprland) run? It needs a DRM/KMS
 	# driver for the GPU that drives the screen.
 	HW_DESKTOP=yes; HW_DESKTOP_WHY=""
 	case "$HW_GPU_PRIMARY" in
@@ -267,11 +255,34 @@ EOF
 	amd)	;;
 	nvidia)	case "$HW_NVIDIA_BRANCH" in
 		current|580) ;;
-		*) HW_DESKTOP=no; HW_DESKTOP_WHY="this NVIDIA GPU only has an X11 driver on FreeBSD; KDE Plasma 6.8 and Hyprland need Wayland" ;;
+		*) HW_DESKTOP=no; HW_DESKTOP_WHY="this NVIDIA GPU only has an X11 driver on FreeBSD; KDE Plasma 6 and Hyprland need Wayland" ;;
 		esac ;;
-	vm)	HW_DESKTOP=no; HW_DESKTOP_WHY="virtual machines ($HW_VM) have no 3D/KMS graphics driver on FreeBSD; KDE Plasma 6.8 and Hyprland need one. Install on real hardware, or use PCI passthrough of a real GPU" ;;
+	vm)	HW_DESKTOP=no; HW_DESKTOP_WHY="virtual machines ($HW_VM) have no 3D/KMS graphics driver on FreeBSD; KDE Plasma 6 and Hyprland need one. Install on real hardware, or use PCI passthrough of a real GPU" ;;
 	*)	HW_DESKTOP=no; HW_DESKTOP_WHY="no supported graphics card found" ;;
 	esac
+}
+
+hw_detect() {
+	HW_ARCH=$(uname -m 2>/dev/null)
+	[ -n "${HW_FIXTURES:-}" ] && HW_ARCH=$(_hw_sysctl hw.machine)
+	HW_OSREL=$(_hw_sysctl kern.osrelease)
+	HW_BOOT=$(_hw_sysctl machdep.bootmethod)
+	HW_VENDOR=$(_hw_kenv smbios.system.maker)
+	HW_MODEL=$(_hw_kenv smbios.system.product)
+	HW_VM=$(hw_vm)
+	HW_CPU=$(_hw_sysctl hw.model)
+	HW_CPU_VENDOR=$(_hw_cpu_vendor)
+	HW_NCPU=$(_hw_sysctl hw.ncpu)
+	_mem=$(_hw_sysctl hw.physmem)
+	HW_RAM_MB=$(( ${_mem:-0} / 1048576 ))
+	HW_LAPTOP=no; [ "$HW_VM" = none ] && _hw_is_laptop && HW_LAPTOP=yes
+	HW_ACPI_KMOD=""; [ "$HW_VM" = none ] && HW_ACPI_KMOD=$(hw_acpi_kmod)
+	HW_ROOTFS=$(_hw_mount | awk '$2 == "/" { print $3; exit }')
+	HW_SLEEP=$(_hw_sysctl hw.acpi.supported_sleep_state)
+	HW_PCI=$(hw_pci_records)
+	HW_USB=$(hw_usb_records)
+
+	_hw_detect_gpu
 
 	# ---- networking -----------------------------------------------------
 	# One line per device: unit US vendor US device US name US status

@@ -1,0 +1,50 @@
+# Written by FreeBSD-setup: the terminal prompt (starship).
+# Make your own: copy this file to ~/.config/starship.toml and edit it; yours
+# is used instead. Options: https://starship.rs/config/
+"$schema" = 'https://starship.rs/config-schema.json'
+
+add_newline = false
+format = """$username$hostname$directory$git_branch$git_state$git_status$python$cmd_duration$jobs$character"""
+
+[username]
+format = '[$user]($style)@'
+style_user = 'bold green'
+style_root = 'bold red'
+
+[hostname]
+ssh_only = true
+format = '[$hostname]($style) '
+style = 'bold green'
+
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+style = 'bold cyan'
+read_only = ' 󰌾'
+
+[git_branch]
+symbol = ' '
+format = '[$symbol$branch]($style) '
+style = 'bold purple'
+
+[git_status]
+format = '([$all_status$ahead_behind]($style) )'
+style = 'yellow'
+
+[python]
+format = '[$symbol$virtualenv]($style) '
+symbol = ' '
+detect_extensions = []
+detect_files = []
+
+[cmd_duration]
+min_time = 2000
+format = '[ $duration]($style) '
+style = 'dimmed white'
+
+[jobs]
+symbol = '✦ '
+
+[character]
+success_symbol = '[❯](bold green)'
+error_symbol = '[❯](bold red)'

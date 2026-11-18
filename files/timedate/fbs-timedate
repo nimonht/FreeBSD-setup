@@ -1,0 +1,330 @@
+#!/usr/local/bin/python3
+# Written by FreeBSD-setup.
+#
+# fbs-timedate - the org.freedesktop.timedate1 D-Bus service for FreeBSD.
+#
+# KDE System Settings > Date & Time changes the time zone, the clock and
+# automatic time (NTP) only through this service (systemd-timedated on Linux,
+# absent on FreeBSD), so its Apply button did nothing. This implements the
+# parts KDE uses, the FreeBSD way:
+#   time zone   /etc/localtime (a copy, as tzsetup makes it) + /var/db/zoneinfo
+#   NTP         ntpd (rc.conf ntpd_enable, started or stopped at once)
+#   clock       date(1)
+#   local RTC   /etc/wall_cmos_clock (hardware clock in local time)
+# Started on demand by D-Bus; exits after a minute without calls.
+#
+# Environment (tests only): FBS_TD_ROOT=DIR (files under DIR instead of /,
+# no commands run), FBS_TD_BUS=session, FBS_TD_NO_POLKIT=1.
+import os
+import shutil
+import subprocess
+import sys
+import time
+import gi
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+# D-Bus starts this with an almost empty environment.
+os.environ["PATH"] = "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+
+NAME = "org.freedesktop.timedate1"
+PATH = "/org/freedesktop/timedate1"
+ROOT = os.environ.get("FBS_TD_ROOT", "")
+ZONEINFO = "/usr/share/zoneinfo"
+IDLE_EXIT_S = 60
+
+INTERFACE_XML = """
+<node>
+  <interface name="org.freedesktop.timedate1">
+    <property name="Timezone" type="s" access="read"/>
+    <property name="LocalRTC" type="b" access="read"/>
+    <property name="CanNTP" type="b" access="read"/>
+    <property name="NTP" type="b" access="read"/>
+    <property name="NTPSynchronized" type="b" access="read"/>
+    <property name="TimeUSec" type="t" access="read"/>
+    <property name="RTCTimeUSec" type="t" access="read"/>
+    <method name="SetTime">
+      <arg name="usec_utc" type="x" direction="in"/>
+      <arg name="relative" type="b" direction="in"/>
+      <arg name="interactive" type="b" direction="in"/>
+    </method>
+    <method name="SetTimezone">
+      <arg name="timezone" type="s" direction="in"/>
+      <arg name="interactive" type="b" direction="in"/>
+    </method>
+    <method name="SetLocalRTC">
+      <arg name="local_rtc" type="b" direction="in"/>
+      <arg name="fix_system" type="b" direction="in"/>
+      <arg name="interactive" type="b" direction="in"/>
+    </method>
+    <method name="SetNTP">
+      <arg name="use_ntp" type="b" direction="in"/>
+      <arg name="interactive" type="b" direction="in"/>
+    </method>
+    <method name="ListTimezones">
+      <arg name="timezones" type="as" direction="out"/>
+    </method>
+  </interface>
+</node>
+"""
+
+
+def log(msg):
+    print("fbs-timedate: " + msg, file=sys.stderr, flush=True)
+
+
+def path(p):
+    return ROOT + p
+
+
+def run(*cmd):
+    """Run a command; in test mode only record it."""
+    if ROOT:
+        with open(path("/commands"), "a") as f:
+            f.write(" ".join(cmd) + "\n")
+        return True
+    try:
+        return subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def read(p, default=""):
+    try:
+        with open(path(p)) as f:
+            return f.read().strip()
+    except OSError:
+        return default
+
+
+def timezone():
+    return read("/var/db/zoneinfo") or "UTC"
+
+
+def ntp_enabled():
+    if ROOT:
+        return read("/ntp") == "yes"
+    out = subprocess.run(["sysrc", "-n", "ntpd_enable"], capture_output=True, text=True).stdout.strip()
+    return out.upper() in ("YES", "TRUE", "ON", "1")
+
+
+def ntp_running():
+    if ROOT:
+        return ntp_enabled()
+    return subprocess.run(["service", "ntpd", "onestatus"], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL).returncode == 0
+
+
+def zones():
+    out = []
+    for d, _dirs, files in os.walk(ZONEINFO):
+        for f in files:
+            full = os.path.join(d, f)
+            rel = os.path.relpath(full, ZONEINFO)
+            if rel[0].isupper() and "." not in rel and not rel.startswith(("SystemV", "Etc/GMT+", "posix", "right")):
+                out.append(rel)
+    return sorted(out)
+
+
+def valid_zone(z):
+    if not z or z.startswith("/") or ".." in z.split("/"):
+        return False
+    return os.path.isfile(os.path.join(ZONEINFO, z))
+
+
+class Service:
+    def __init__(self, loop):
+        self.loop = loop
+        self.conn = None
+        self.idle = None
+        self.pending = 0      # authorizations still waiting for polkit
+
+    def start(self):
+        bus = Gio.BusType.SESSION if os.environ.get("FBS_TD_BUS") == "session" else Gio.BusType.SYSTEM
+        self.conn = Gio.bus_get_sync(bus, None)
+        info = Gio.DBusNodeInfo.new_for_xml(INTERFACE_XML).interfaces[0]
+        self.conn.register_object(PATH, info, self.on_call, None, None)
+        Gio.bus_own_name_on_connection(self.conn, NAME, Gio.BusNameOwnerFlags.NONE, None, self.on_name_lost)
+        self.touch()
+
+    def on_name_lost(self, _conn, name):
+        log("could not own %s (already running?) - exiting" % name)
+        self.loop.quit()
+
+    def touch(self):
+        """Exit after a minute without calls (D-Bus starts it again)."""
+        if self.idle:
+            GLib.source_remove(self.idle)
+        self.idle = GLib.timeout_add_seconds(IDLE_EXIT_S, self.idle_exit)
+
+    def idle_exit(self):
+        # Never while a password dialog is open: the change would be lost.
+        if self.pending:
+            return True       # look again in a minute
+        self.idle = None
+        self.loop.quit()
+        return False
+
+    def props(self):
+        now = int(time.time() * 1000000)
+        return {
+            "Timezone": GLib.Variant("s", timezone()),
+            "LocalRTC": GLib.Variant("b", os.path.exists(path("/etc/wall_cmos_clock"))),
+            "CanNTP": GLib.Variant("b", True),
+            "NTP": GLib.Variant("b", ntp_enabled()),
+            "NTPSynchronized": GLib.Variant("b", ntp_running()),
+            "TimeUSec": GLib.Variant("t", now),
+            "RTCTimeUSec": GLib.Variant("t", now),
+        }
+
+    def changed(self, names):
+        allp = self.props()
+        self.conn.emit_signal(None, PATH, "org.freedesktop.DBus.Properties", "PropertiesChanged",
+                              GLib.Variant("(sa{sv}as)", (NAME, {n: allp[n] for n in names}, [])))
+
+    def authorize(self, sender, action, interactive, then, inv):
+        def denied(msg):
+            inv.return_dbus_error("org.freedesktop.DBus.Error.AccessDenied", "Not Authorized: " + msg)
+
+        if os.environ.get("FBS_TD_NO_POLKIT") == "1":
+            return then()
+        try:
+            uid = self.conn.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                                      "GetConnectionUnixUser", GLib.Variant("(s)", (sender,)),
+                                      GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
+        except GLib.Error:
+            uid = -1
+        if uid == 0:
+            return then()
+
+        def done(conn, res):
+            self.pending -= 1
+            self.touch()
+            try:
+                ok = conn.call_finish(res).unpack()[0][0]
+            except GLib.Error as e:
+                return denied("%s (polkit: %s)" % (action, e.message))
+            return then() if ok else denied(action)
+
+        subject = ("system-bus-name", {"name": GLib.Variant("s", sender)})
+        flags = 1 if interactive else 0      # 1: may ask for a password
+        self.pending += 1
+        self.conn.call("org.freedesktop.PolicyKit1", "/org/freedesktop/PolicyKit1/Authority",
+                       "org.freedesktop.PolicyKit1.Authority", "CheckAuthorization",
+                       GLib.Variant("((sa{sv})sa{ss}us)", (subject, action, {}, flags, "")),
+                       GLib.VariantType("((bba{ss}))"), Gio.DBusCallFlags.NONE, 120000, None, done)
+
+    # -- the actions --
+    def set_timezone(self, tz, inv):
+        if not valid_zone(tz):
+            return inv.return_dbus_error("org.freedesktop.DBus.Error.InvalidArgs", "Unknown time zone: " + tz)
+        try:
+            tmp = path("/etc/localtime.fbs-new")
+            shutil.copyfile(os.path.join(ZONEINFO, tz), tmp)
+            os.chmod(tmp, 0o444)
+            os.replace(tmp, path("/etc/localtime"))
+            with open(path("/var/db/zoneinfo"), "w") as f:
+                f.write(tz + "\n")
+        except OSError as e:
+            return inv.return_dbus_error("org.freedesktop.DBus.Error.Failed", "Could not set the time zone: %s" % e)
+        log("time zone set to " + tz)
+        self.changed(["Timezone"])
+        inv.return_value(None)
+
+    def set_ntp(self, on, inv):
+        if ROOT:
+            with open(path("/ntp"), "w") as f:
+                f.write("yes" if on else "no")
+        ok = run("sysrc", "ntpd_enable=%s" % ("YES" if on else "NO"))
+        ok = run("service", "ntpd", "onerestart" if on else "onestop") and ok
+        if on:
+            run("service", "ntpdate", "onestart")
+        self.changed(["NTP", "NTPSynchronized"])
+        if not ok and on:
+            return inv.return_dbus_error("org.freedesktop.DBus.Error.Failed", "Could not start time synchronization (ntpd)")
+        inv.return_value(None)
+
+    def set_time(self, usec, relative, inv):
+        if ntp_enabled():
+            return inv.return_dbus_error("org.freedesktop.timedate1.AutomaticTimeSyncEnabled",
+                                         "Automatic time synchronization is enabled")
+        target = (time.time() * 1000000 + usec) if relative else usec
+        secs = int(target // 1000000)
+        if not run("date", "-u", "-f", "%s", str(secs)):
+            return inv.return_dbus_error("org.freedesktop.DBus.Error.Failed", "Could not set the clock")
+        log("clock set")
+        self.changed(["TimeUSec", "RTCTimeUSec"])
+        inv.return_value(None)
+
+    def set_local_rtc(self, local, inv):
+        p = path("/etc/wall_cmos_clock")
+        try:
+            if local:
+                open(p, "a").close()
+            elif os.path.exists(p):
+                os.remove(p)
+        except OSError as e:
+            return inv.return_dbus_error("org.freedesktop.DBus.Error.Failed", str(e))
+        run("adjkerntz", "-i")
+        self.changed(["LocalRTC"])
+        inv.return_value(None)
+
+    def on_call(self, conn, sender, path_, iface, method, params, inv):
+        # Any unexpected error becomes an error reply: without a reply the
+        # caller (KDE's page) would wait for D-Bus's 25 s timeout.
+        try:
+            return self.dispatch(conn, sender, path_, iface, method, params, inv)
+        except Exception as e:  # noqa: BLE001
+            log("%s failed: %s" % (method, e))
+            inv.return_dbus_error("org.freedesktop.DBus.Error.Failed", "%s failed: %s" % (method, e))
+
+    def dispatch(self, _conn, sender, _path, iface, method, params, inv):
+        self.touch()
+        if iface == "org.freedesktop.DBus.Properties":
+            allp = self.props()
+            if method == "Get":
+                _i, name = params.unpack()
+                if name not in allp:
+                    return inv.return_dbus_error("org.freedesktop.DBus.Error.UnknownProperty", name)
+                return inv.return_value(GLib.Variant("(v)", (allp[name],)))
+            if method == "GetAll":
+                return inv.return_value(GLib.Variant("(a{sv})", (allp,)))
+            if method == "Set":
+                return inv.return_dbus_error("org.freedesktop.DBus.Error.PropertyReadOnly", "read-only")
+        a = params.unpack() if params is not None else ()
+        if method == "SetTimezone":
+            return self.authorize(sender, "org.freedesktop.timedate1.set-timezone", a[1],
+                                  lambda: self.set_timezone(a[0], inv), inv)
+        if method == "SetNTP":
+            return self.authorize(sender, "org.freedesktop.timedate1.set-ntp", a[1],
+                                  lambda: self.set_ntp(a[0], inv), inv)
+        if method == "SetTime":
+            return self.authorize(sender, "org.freedesktop.timedate1.set-time", a[2],
+                                  lambda: self.set_time(a[0], a[1], inv), inv)
+        if method == "SetLocalRTC":
+            return self.authorize(sender, "org.freedesktop.timedate1.set-local-rtc", a[2],
+                                  lambda: self.set_local_rtc(a[0], inv), inv)
+        if method == "ListTimezones":
+            return inv.return_value(GLib.Variant("(as)", (zones(),)))
+        inv.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", method)
+
+
+def main():
+    loop = GLib.MainLoop()
+    svc = Service(loop)
+    svc.start()
+    log("running")
+    try:
+        gi.require_version("GLibUnix", "2.0")
+        from gi.repository import GLibUnix
+        add_signal = GLibUnix.signal_add
+    except (ImportError, ValueError):
+        add_signal = GLib.unix_signal_add
+    for sig in (15, 2):
+        add_signal(GLib.PRIORITY_DEFAULT, sig, loop.quit)
+    loop.run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

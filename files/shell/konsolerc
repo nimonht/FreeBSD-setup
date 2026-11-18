@@ -1,0 +1,4 @@
+# Written by FreeBSD-setup: Konsole starts with the FreeBSD profile.
+# Your own ~/.config/konsolerc (made when you pick another default) wins.
+[Desktop Entry]
+DefaultProfile=FreeBSD.profile

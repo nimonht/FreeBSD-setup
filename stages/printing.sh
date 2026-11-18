@@ -5,6 +5,9 @@ is_yes INSTALL_PRINTING || { say "printing not selected - skipped"; return 0; }
 
 say "CUPS printing system and drivers"
 pkg_install cups cups-filters gutenprint avahi-app nss_mdns sane-backends sane-airscan
+# Drivers for printers that do not print driverless: HP, Brother lasers,
+# Samsung/Xerox lasers, Epson inkjets. Optional: a missing one is skipped.
+pkg_try hplip brlaser splix epson-inkjet-printer-escpr
 svc avahi_daemon avahi-daemon
 svc cupsd
 pw groupmod cups -m "$TARGET_USER" 2>/dev/null || true
