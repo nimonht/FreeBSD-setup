@@ -20,7 +20,8 @@ fi
 case "$DESKTOP" in
 kde)      _login="choose \"Plasma (Wayland)\" at the login screen" ;;
 hyprland) _login="log in at the login screen (Hyprland starts)" ;;
-both)     _login="pick \"Plasma (Wayland)\" or \"Hyprland\" at the login screen" ;;
+both)     _hn="Hyprland (FreeBSD)"; is_yes INSTALL_CAELESTIA && _hn="Hyprland (Caelestia)"
+          _login="pick \"Plasma (Wayland)\" or \"$_hn\" at the login screen" ;;
 *)        _login="log in on the console" ;;
 esac
 is_live && cat <<EOF

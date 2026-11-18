@@ -88,8 +88,19 @@ foot_set_shell "$CFG/foot/foot.ini"
 
 # FreeBSD-specific user config. These three files are never touched by
 # upstream updates, and existing copies of yours are never overwritten.
+# Copies still exactly as an earlier FreeBSD-setup shipped them (never
+# edited by the user) are updated: their sleep and launcher commands did
+# not work on FreeBSD.
+_shipped="3a5795ea26bf83c8f1cacce8857a56d7875ba9be7117a8599a9b6b2d2dd5b64a 152371a071739be8d29ab07833de987986cdace1336c53b715ffaea001aeb5e0"
 for f in hypr-vars.lua hypr-user.lua shell.json; do
-	[ -f "$CFG/caelestia/$f" ] || cp "$REPO_DIR/files/caelestia/$f" "$CFG/caelestia/$f"
+	if [ -f "$CFG/caelestia/$f" ]; then
+		case " $_shipped " in *" $(sha256 -q "$CFG/caelestia/$f") "*)
+			cp "$REPO_DIR/files/caelestia/$f" "$CFG/caelestia/$f"
+			say "updated ~/.config/caelestia/$f (it was unchanged since installation)" ;;
+		esac
+	else
+		cp "$REPO_DIR/files/caelestia/$f" "$CFG/caelestia/$f"
+	fi
 done
 touch "$CFG/caelestia/user-config.fish"
 mkdir -p "$TARGET_HOME/Pictures/Wallpapers"

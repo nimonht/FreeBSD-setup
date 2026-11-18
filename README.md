@@ -149,7 +149,9 @@ When it says *FreeBSD is installed*, remove the stick and restart.
   Windows (or whatever started the computer before). GRUB users: see
   [docs/DUAL-BOOT.md](docs/DUAL-BOOT.md).
 
-At the login screen pick **Plasma (Wayland)** or **Hyprland** and log in.
+At the login screen pick **Plasma (Wayland)** or **Hyprland (Caelestia)** and log in
+(not the plain "Hyprland" entry a package update may add: it lacks the settings
+FreeBSD needs).
 
 ## Already have FreeBSD 15?
 
