@@ -354,15 +354,22 @@ ask_encrypt() {
 
 Recommended for laptops: if the computer is lost or stolen, nobody can read your files without the passphrase. You type it every time the computer starts; at that moment the keyboard always uses the US layout." $_d; then
 		ENCRYPT=yes
-		if ui_yesno "Encryption" "Use your account password as the disk passphrase?" yes; then
+		# The boot loader reads the passphrase with the US layout. With another
+		# layout the same keys give other characters, so the account password
+		# cannot simply be reused, and the passphrase is typed in US layout.
+		if [ "${KEYBOARD_LAYOUT:-us}" = us ] &&
+			ui_yesno "Encryption" "Use your account password as the disk passphrase?" yes; then
 			ENCRYPT_PASSPHRASE=$USER_PASSWORD
 		else
+			[ "${KEYBOARD_LAYOUT:-us}" = us ] || ui_msg "Encryption" "Choose a disk passphrase now. The keyboard switches to the US layout while you type it, because that is the layout at startup: type it here exactly as you will then (some keys may give other characters than printed on them)."
+			kbd_load us.kbd
 			while :; do
-				_p1=$(ui_password "Encryption" "Disk passphrase:") || exit 1
-				_p2=$(ui_password "Encryption" "Type it again:") || exit 1
+				_p1=$(ui_password "Encryption" "Disk passphrase (US keyboard layout):") || { kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"; exit 1; }
+				_p2=$(ui_password "Encryption" "Type it again:") || { kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"; exit 1; }
 				[ "$_p1" = "$_p2" ] && [ -n "$_p1" ] && { ENCRYPT_PASSPHRASE=$_p1; break; }
 				ui_msg "Encryption" "The passphrases are empty or do not match. Try again."
 			done
+			kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"
 		fi
 	else
 		ENCRYPT=no
@@ -391,9 +398,23 @@ ask_timezone() {
 	IFS=$_old
 }
 
-ask_region() {
+# kbd_load MAP   use this keymap on the text console now (only on a real
+# console: over SSH or a serial line the other end decides the layout).
+kbd_load() {
+	[ "$UI_MODE" != auto ] || return 0
+	case "$(tty < /dev/tty 2>/dev/null)" in /dev/ttyv*) ;; *) return 0 ;; esac
+	kbdcontrol -l "$1" < /dev/tty >> "$LOG" 2>&1 || true
+}
+
+# Language and keyboard first, before anything is typed: passwords must be
+# typed with the layout the installed system will use at the login screen.
+ask_keyboard() {
 	wiz_language || exit 1
 	wiz_keyboard || exit 1
+	kbd_load "$(wiz_layout_keymap "${KEYBOARD_LAYOUT:-us}")"
+}
+
+ask_region() {
 	if [ "$UI_MODE" != auto ] || [ -z "$TIMEZONE" ]; then ask_timezone; fi
 	[ -f "/usr/share/zoneinfo/$TIMEZONE" ] || die "unknown time zone '$TIMEZONE'"
 	if [ "$RTC_LOCAL" = auto ]; then
@@ -908,6 +929,7 @@ if [ "$UI_MODE" != auto ]; then
 
 You can still install FreeBSD (text console only, or to try things). Continue?" no; then exit 1; fi
 fi
+ask_keyboard
 ask_network
 ask_disk
 ask_mode
