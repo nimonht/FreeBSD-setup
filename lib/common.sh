@@ -231,6 +231,12 @@ efi_file() {
 	printf '%s\n' "$1" | sed -n -e 's/.*[/]File(\([^)]*\)).*/\1/p' -e 's/^File(\([^)]*\)).*/\1/p' | head -1 | tr '\\' '/'
 }
 
+# efi_part_uuid PATH   the GPT partition UUID a device path names
+# (HD(1,GPT,<uuid>,...)), in lower case, or nothing
+efi_part_uuid() {
+	printf '%s\n' "$1" | sed -n 's/.*HD([0-9]*,GPT,\([0-9A-Fa-f-]\{36\}\),.*/\1/p' | head -1 | tr 'A-F' 'a-f'
+}
+
 # sddm_pam_enable MODULE   unlock a wallet/keyring with the login password:
 # turn on the MODULE lines the sddm package ships commented out in its PAM
 # file. Only while that file is the package's own (or ours), and only when the

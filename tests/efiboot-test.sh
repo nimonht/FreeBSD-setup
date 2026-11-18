@@ -32,5 +32,10 @@ check "dp lines: our old entries by EFI partition" "000A" \
 	"$(efi_entries < "$f" | awk -F'|' -v u="21541FD2-F358-42EB-970D-3923F3385672" '$2 == "FreeBSD" && index(tolower($3), tolower(u)) { print $1 }')"
 check "dp lines: all entries read" "4" "$(efi_entries < "$f" | wc -l | tr -d ' ')"
 
+# The partition an entry starts from (entries for removed disks are ignored).
+check "15.1: partition UUID" "cc3949ac-e18d-11f1-9a08-dbd088e46b75" "$(efi_part_uuid "$(entry "$F/freebsd-15.1-qemu.txt" 000A | cut -d'|' -f3-)")"
+check "dp lines: partition UUID (lower case)" "21541fd2-f358-42eb-970d-3923f3385672" "$(efi_part_uuid "$(entry "$f" 000A | cut -d'|' -f3-)")"
+check "no partition in a firmware entry" "" "$(efi_part_uuid "$(entry "$F/freebsd-15.1-qemu.txt" 0005 | cut -d'|' -f3-)")"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

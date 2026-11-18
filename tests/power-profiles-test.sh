@@ -20,7 +20,7 @@ if [ -z "${FBS_PP_IN_BUS:-}" ]; then
 fi
 
 T=$(mktemp -d); trap 'kill $PID 2>/dev/null; rm -rf "$T"' EXIT
-export FBS_PP_BUS=session FBS_PP_NO_POLKIT=1 FBS_PP_STATE="$T/state" FBS_PP_FAKE="$T/hw"
+export FBS_PP_BUS=session FBS_PP_NO_POLKIT=1 FBS_PP_STATE="$T/state" FBS_PP_RUN="$T/run" FBS_PP_FAKE="$T/hw"
 pass=0 fail=0
 check() { # check NAME EXPECTED ACTUAL
 	if [ "$2" = "$3" ]; then pass=$((pass + 1)); echo "ok   $1"
