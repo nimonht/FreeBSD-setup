@@ -231,6 +231,27 @@ efi_file() {
 	printf '%s\n' "$1" | sed -n -e 's/.*[/]File(\([^)]*\)).*/\1/p' -e 's/^File(\([^)]*\)).*/\1/p' | head -1 | tr '\\' '/'
 }
 
+# sddm_pam_enable MODULE   unlock a wallet/keyring with the login password:
+# turn on the MODULE lines the sddm package ships commented out in its PAM
+# file. Only while that file is the package's own (or ours), and only when the
+# module exists: a missing module would stop every login.
+sddm_pam_enable() {
+	local _sp _so
+	_sp=/usr/local/etc/pam.d/sddm
+	[ -f "$_sp.default" ] || return 0
+	for _so in "/usr/local/lib/security/$1.so" "/usr/local/lib/$1.so" "/usr/lib/$1.so"; do
+		[ -f "$_so" ] && break
+	done
+	[ -f "$_so" ] || return 0
+	if [ -f "$_sp" ] && ! cmp -s "$_sp" "$_sp.default" && ! grep -q 'Written by FreeBSD-setup' "$_sp"; then
+		say "kept your own $_sp (the wallet is not unlocked at login automatically)"
+		return 0
+	fi
+	{ printf '# Written by FreeBSD-setup: unlocks the wallet with the login password (%s).\n' "$1"
+	  sed -E "s|^#[[:space:]]*(.*[[:space:]]$1[.]so.*)|\\1|" "$_sp.default"; } > "$_sp.new" &&
+		mv "$_sp.new" "$_sp"
+}
+
 # limine_locked ESP_DIR   true when limine.conf on this EFI partition must
 # not be changed: a Limine binary there carries an enrolled checksum of it
 # (CachyOS enrolls one by default), and Limine refuses to start ("CHECKSUM

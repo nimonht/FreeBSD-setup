@@ -20,6 +20,9 @@ pkg_try rubik
 say "shell tools"
 pkg_install fish starship eza zoxide direnv btop micro bat ripgrep lazygit py312-trash-cli
 
+# With SDDM and no KDE, unlock gnome-keyring with the login password.
+if [ "$DISPLAY_MANAGER" = sddm ] && [ "$WANT_KDE" != yes ]; then sddm_pam_enable pam_gnome_keyring; fi
+
 install_file "$REPO_DIR/files/bin/hypr-session" /usr/local/bin/hypr-session 755
 # Our session entry, named differently from the package's own "Hyprland"
 # entry: that one starts Hyprland without the environment FreeBSD needs,
