@@ -54,11 +54,16 @@ fi
 # ---- dotfiles ---------------------------------------------------------------
 DOTS=/var/tmp/caelestia-build/dots
 say "installing the Caelestia dotfiles for $TARGET_USER"
-if [ -d "$DOTS/.git" ]; then git -C "$DOTS" fetch -q origin; else rm -rf "$DOTS"; git clone -q https://github.com/caelestia-dots/caelestia.git "$DOTS"; fi
-git -C "$DOTS" checkout -q -f "$CAELESTIA_DOTS_REF" 2>/dev/null || git -C "$DOTS" checkout -q -f "origin/$CAELESTIA_DOTS_REF"
+if ! { if [ -d "$DOTS/.git" ]; then git -C "$DOTS" fetch -q origin; else rm -rf "$DOTS" && git clone -q https://github.com/caelestia-dots/caelestia.git "$DOTS"; fi &&
+	{ git -C "$DOTS" checkout -q -f "$CAELESTIA_DOTS_REF" 2>/dev/null || git -C "$DOTS" checkout -q -f "origin/$CAELESTIA_DOTS_REF"; }; }; then
+	warn "could not download the Caelestia settings (dotfiles); your current ones are unchanged. Try again later: doas freebsd-setup caelestia"
+	return 0
+fi
 git -C "$DOTS" reset -q --hard "origin/$CAELESTIA_DOTS_REF" 2>/dev/null || true
 
 CFG="$TARGET_HOME/.config"
+# First Caelestia install for this user? (Later runs keep the colour scheme.)
+_first=no; [ -f "$CFG/hypr/.caelestia-managed" ] || _first=yes
 mkdir -p "$CFG/caelestia"
 # name-in-repo : name-in-~/.config   (upstream manifest.toml, minus Linux-only bits)
 for pair in hypr:hypr fish:fish foot:foot fastfetch:fastfetch btop:btop micro:micro thunar:Thunar; do
@@ -108,7 +113,9 @@ chown -R "$TARGET_USER" "$CFG" "$TARGET_HOME/Pictures"
 
 # fish as the interactive shell inside foot only; the login shell stays sh so
 # a broken fish config can never lock you out.
-as_user 'caelestia scheme set -n caelestia' >> "$LOG" 2>&1 ||
-	say "colour scheme will be initialised on first login"
+if [ "$_first" = yes ]; then
+	as_user 'caelestia scheme set -n caelestia' >> "$LOG" 2>&1 ||
+		say "colour scheme will be initialised on first login"
+fi
 
 true   # (a stage must not end on a failed test: setup.sh runs under set -e)

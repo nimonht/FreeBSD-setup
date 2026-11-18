@@ -38,5 +38,13 @@ while read -r old; do
 done
 
 echo
+# Caelestia (Hyprland) is built from source, so pkg does not update it, and a
+# new Qt, Quickshell or library can stop the old build from loading.
+_built=/usr/local/share/caelestia-cli/built-against
+if [ -f "$_built" ] && ! pkg query '%n %v' quickshell qt6-base qt6-declarative libqalculate pipewire aubio 2>/dev/null | cmp -s - "$_built"; then
+	echo "Caelestia was built against older packages. Rebuild it (10 to 30 minutes):"
+	echo "  doas freebsd-setup caelestia"
+	echo
+fi
 echo "Done. Reboot if the kernel, drivers (drm/nvidia) or the base system changed."
 echo "Roll back with: bectl activate $BE && reboot"

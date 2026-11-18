@@ -1185,8 +1185,10 @@ if [ "$INSTALL_MODE" = alongside ] && [ "${LIMINE_LOCKED:-no}" = yes ]; then
 Your Limine menu was not changed: it is protected by a checksum, or it could
 not be checked safely (a changed menu file can stop Limine from starting).
 To add FreeBSD to it, start Linux and run:
-  sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi
-(/boot is where CachyOS mounts the EFI partition. Without limine-entry-tool:
+  sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi --comment FreeBSD --overwrite
+It prints \"Updated: ...limine.conf\" when it worked. If it prints nothing, the
+EFI partition is not at /boot: findmnt -t vfat shows where it is; use that
+folder instead of /boot. (Without limine-entry-tool:
 https://github.com/nimonht/FreeBSD-setup/blob/main/docs/DUAL-BOOT.md)"
 fi
 if [ -n "$WARNINGS" ]; then

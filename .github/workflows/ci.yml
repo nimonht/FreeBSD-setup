@@ -15,9 +15,15 @@ jobs:
           shellcheck --version
           shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
             setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* \
-            caelestia/build.sh files/rc.d/* tests/gpu-config-test.sh tests/run.sh tests/config-test.sh tests/collect-fixture.sh tests/vm/run-iso-test.sh \
-            tests/power-profiles-test.sh tests/limine-test.sh tests/pkg-retry-test.sh tests/efiboot-test.sh tests/timedate-test.sh tests/desktop-probe.sh tests/vm/dev-vm.sh files/shell/fbs-terminal-greeting
+            caelestia/build.sh files/rc.d/* tests/*.sh tests/vm/*.sh files/shell/fbs-terminal-greeting
           shellcheck -s bash -S warning files/shell/bash.bashrc
+
+      - name: fish and zsh syntax
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends fish zsh
+          for f in files/shell/*.fish; do fish -n "$f"; done
+          zsh -n files/shell/zshrc files/shell/dot.zshrc
 
       - name: Hardware detection tests (POSIX sh)
         run: sh tests/run.sh

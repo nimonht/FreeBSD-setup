@@ -37,14 +37,15 @@ die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 # checkout URL DIR REF   clone/update a repository at the requested ref
 checkout() {
 	if [ -d "$2/.git" ]; then
-		git -C "$2" fetch -q --tags origin
+		git -C "$2" fetch -q --tags --force origin
 	else
 		rm -rf "$2"
 		git clone -q "$1" "$2"
 	fi
 	ref=$3
 	if [ "$ref" = latest-tag ]; then
-		ref=$(git -C "$2" tag --sort=-v:refname | grep -E '^v?[0-9]' | head -1)
+		# Release tags only (v1.2.3), never pre-releases such as v3.0.0-rc1.
+		ref=$(git -C "$2" tag --sort=-v:refname | grep -E '^v?[0-9]+(\.[0-9]+)*$' | head -1)
 		[ -n "$ref" ] || ref=origin/HEAD
 	fi
 	git -C "$2" checkout -q -f "$ref" 2>/dev/null || git -C "$2" checkout -q -f "origin/$ref"
@@ -97,7 +98,8 @@ cmake -S "$WORK/m3shapes" -B "$WORK/m3shapes/build" -G Ninja \
 	-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
 	-DINSTALL_QMLDIR=lib/qt6/qml > "$WORK/m3shapes.log" 2>&1 || die "M3Shapes configure failed: $WORK/m3shapes.log"
 cmake --build "$WORK/m3shapes/build" -j "$JOBS" >> "$WORK/m3shapes.log" 2>&1 || die "M3Shapes build failed: $WORK/m3shapes.log"
-cmake --install "$WORK/m3shapes/build" >> "$WORK/m3shapes.log" 2>&1
+# Installed together with the shell below, so a failed shell build leaves the
+# previous Caelestia complete and unchanged.
 
 # ---- 4. Caelestia shell ------------------------------------------------------
 say "building the Caelestia shell (this is the long one)"
@@ -157,6 +159,7 @@ cmake -S "$S" -B "$S/build" -G Ninja \
 	-DCMAKE_MODULE_LINKER_FLAGS="-L$PREFIX/lib -fexperimental-library" \
 	-DCMAKE_EXE_LINKER_FLAGS="-L$PREFIX/lib -fexperimental-library" > "$WORK/shell.log" 2>&1 || die "shell configure failed: $WORK/shell.log"
 cmake --build "$S/build" -j "$JOBS" >> "$WORK/shell.log" 2>&1 || die "shell build failed: $WORK/shell.log"
+cmake --install "$WORK/m3shapes/build" >> "$WORK/m3shapes.log" 2>&1 || die "M3Shapes install failed: $WORK/m3shapes.log"
 cmake --install "$S/build" >> "$WORK/shell.log" 2>&1 || die "shell install failed: $WORK/shell.log"
 
 # ---- 5. Caelestia CLI --------------------------------------------------------
@@ -176,5 +179,9 @@ if [ -f "$WORK/cli/completions/caelestia.fish" ]; then
 	mkdir -p "$PREFIX/share/fish/vendor_completions.d"
 	cp "$WORK/cli/completions/caelestia.fish" "$PREFIX/share/fish/vendor_completions.d/"
 fi
+
+# The packages this build was compiled against: sysup compares them after
+# "pkg upgrade" and says when Caelestia needs rebuilding.
+pkg query '%n %v' quickshell qt6-base qt6-declarative libqalculate pipewire aubio > "$VENV/built-against" 2>/dev/null || true
 
 say "Caelestia shell $VERSION and CLI installed under $PREFIX"

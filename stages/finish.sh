@@ -44,7 +44,7 @@ Next steps
   2. Then $_login as $TARGET_USER.
   3. Change your choices any time:  doas freebsd-setup
   4. Updates:   sysup     (makes a boot environment first, so you can go back)
-  5. Snapshots: snap      (list) - every folder has old versions in .zfs/snapshot
+  5. Snapshots: snap      (list); snap files FILE shows where its old versions are
 EOF
 [ "$INSTALL_GAMING" = yes ] && is_live && echo "  6. Steam:     steam-setup (once), then: steam"
 is_live && echo "  Problems? docs/TROUBLESHOOTING.md in $FBS_SHARE"

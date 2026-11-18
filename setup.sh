@@ -110,6 +110,9 @@ fi
 id "$TARGET_USER" >/dev/null 2>&1 || die "user '$TARGET_USER' does not exist"
 TARGET_HOME=$(pw usershow "$TARGET_USER" | cut -d: -f9)
 export TARGET_USER TARGET_HOME REPO_DIR FBS_LIB FBS_TARGET
+# git must never stop at a hidden login prompt (a repository that was removed
+# or made private) or open a password window inside a desktop session.
+export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/usr/bin/true
 
 mkdir -p "$(dirname "$LOG")"
 : >> "$LOG"

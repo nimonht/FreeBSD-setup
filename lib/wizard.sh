@@ -161,6 +161,9 @@ wiz_language() {
 # --------------------------------------------------------- auto -> concrete ---
 
 resolve_config() {
+	# The answers as given (before "auto" is resolved), for save_config: a
+	# hardware choice saved as "auto" is decided again at every run.
+	: "${_SAVE_GPU_DRIVERS:=${GPU_DRIVERS:-auto}}" "${_SAVE_NVIDIA_BRANCH:=${NVIDIA_BRANCH:-auto}}" "${_SAVE_ARC_MAX_GB:=${ARC_MAX_GB:-auto}}"
 	[ "$DESKTOP" = auto ] && { [ "$HW_DESKTOP" = yes ] && DESKTOP=kde || DESKTOP=none; }
 	case "$DESKTOP" in kde|hyprland|both|none) ;; *) die "DESKTOP must be kde, hyprland, both, none or auto (got '$DESKTOP')" ;; esac
 	WANT_KDE=no WANT_HYPR=no
@@ -211,9 +214,9 @@ save_config() {
 			TERMINAL_STYLE TERMINAL_GREETING; do
 			eval "printf '%s=\"%s\"\n' $_k \"\${$_k:-}\""
 		done
-		echo 'GPU_DRIVERS="auto"'
-		echo 'NVIDIA_BRANCH="auto"'
-		echo 'ARC_MAX_GB="auto"'
+		printf 'GPU_DRIVERS="%s"\n' "${_SAVE_GPU_DRIVERS:-${GPU_DRIVERS:-auto}}"
+		printf 'NVIDIA_BRANCH="%s"\n' "${_SAVE_NVIDIA_BRANCH:-${NVIDIA_BRANCH:-auto}}"
+		printf 'ARC_MAX_GB="%s"\n' "${_SAVE_ARC_MAX_GB:-${ARC_MAX_GB:-auto}}"
 	} > "$1"
 }
 
