@@ -26,6 +26,8 @@ ok()   { printf "${_c_ok}  ok${_c_off} %s\n" "$*"; _log "  ok $*"; }
 warn() {
 	printf "${_c_warn}WARNING:${_c_off} %s\n" "$*" >&2
 	_log "WARNING: $*"
+	# Also kept in a file, so the installer can show them on its last screen.
+	[ -n "${FBS_WARNFILE:-}" ] && printf '%s\n' "$*" >> "$FBS_WARNFILE" 2>/dev/null || true
 	WARNINGS="${WARNINGS}
   - $*"
 }

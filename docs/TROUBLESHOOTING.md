@@ -17,6 +17,11 @@ Start here:
 
 ## Installer
 
+**"doas: not found" after the first start**: the desktop setup stopped
+before it could install doas (usually the internet connection dropped). Log
+in, type `su -` and the administrator password (your own password, unless you
+chose another one for root), check the connection, then type `freebsd-setup`.
+
 **"No internet"**: run
 `env BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig` from the Live System
 shell, or choose *Connect* in the installer. (Plain `bsdinstall netconfig`
