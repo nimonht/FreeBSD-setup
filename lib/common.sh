@@ -80,6 +80,21 @@ pkg_get() {
 	done
 }
 
+# fetch_retry FILE URL   download, trying 3 times; a retry continues the
+# partial file (fetch -r) instead of starting over
+fetch_retry() {
+	local _n
+	_n=1
+	while :; do
+		if [ "$_n" -eq 1 ]; then fetch -o "$1" "$2" && return 0
+		else fetch -r -o "$1" "$2" && return 0; fi
+		[ "$_n" -lt 3 ] || return 1
+		_n=$((_n + 1))
+		say "the download was interrupted - trying again ($_n of 3)"
+		sleep "${FBS_RETRY_DELAY:-10}"
+	done
+}
+
 # pkg_install name...   install packages, one progress line per package;
 # fail the script if any is missing
 pkg_install() {

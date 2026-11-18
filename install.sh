@@ -853,9 +853,15 @@ do_base() {
 			cp "/usr/freebsd-dist/$_s.txz" "$_dist/"
 		else
 			say "downloading $_s.txz"
-			fetch -o "$_dist/$_s.txz" "$DIST_URL/$_s.txz" || die "download of $_s.txz failed"
+			fetch_retry "$_dist/$_s.txz" "$DIST_URL/$_s.txz" ||
+				die "download of $_s.txz failed (network or mirror trouble); check the connection and start the installer again"
 		fi
 		_want=$(awk -v f="$_s.txz" '$1 == f { print $2 }' "$_dist/MANIFEST")
+		if [ "$(sha256 -q "$_dist/$_s.txz")" != "$_want" ] && [ ! -f "/usr/freebsd-dist/$_s.txz" ]; then
+			say "$_s.txz arrived damaged - downloading it again"
+			rm -f "$_dist/$_s.txz"
+			fetch_retry "$_dist/$_s.txz" "$DIST_URL/$_s.txz" || die "download of $_s.txz failed"
+		fi
 		[ "$(sha256 -q "$_dist/$_s.txz")" = "$_want" ] || die "checksum mismatch for $_s.txz - the download is damaged, try again"
 		say "unpacking $_s.txz"
 		tar -xpf "$_dist/$_s.txz" -C "$MNT" || die "unpacking $_s.txz failed"
