@@ -102,7 +102,11 @@ and write it to the stick (this erases the stick):
    **F8**, **F11** or **Esc** right after power-on; on Macs hold **Option**).
    Pick the USB stick (UEFI).
 2. At the blue *Welcome* screen choose **Live System**, then log in as `root`
-   (no password).
+   (no password). Not a US keyboard? Run `kbdmap` and pick your layout first,
+   so the keys type what is printed on them (the Wi-Fi password below, and
+   the commands). The installer asks for the layout again and uses it for
+   your passwords; only the disk-encryption passphrase is typed with the US
+   layout, because that is the layout when the computer starts.
 3. Connect to the internet:
 
    ```sh
