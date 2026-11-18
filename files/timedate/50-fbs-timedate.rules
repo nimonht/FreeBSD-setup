@@ -1,0 +1,10 @@
+// Written by FreeBSD-setup.
+// The person at the computer who administers it (group wheel, as the
+// desktop user is) may change the time zone, clock and automatic time
+// without typing the password again; everyone else is asked for it.
+polkit.addRule(function(action, subject) {
+	if (action.id.indexOf("org.freedesktop.timedate1.") == 0 &&
+	    subject.isInGroup("wheel") && subject.local && subject.active) {
+		return polkit.Result.YES;
+	}
+});
