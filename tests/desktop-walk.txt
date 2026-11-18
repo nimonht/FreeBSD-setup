@@ -73,6 +73,9 @@
 ## KDE Plasma: power
 ? Sleep from the menu: suspends, screen locked when you come back        |
 ? Close the lid: what happens                                            |
+? After lid close / sleep key: screen is LOCKED when it wakes up          |
+? Date & Time: change the time zone, Apply works, then change it back     |
+? First app that stores a password: no "KDE Wallet" setup/unlock prompt  |
 ? Hibernate entry: shown? what does it do                                |
 ? Restart and Shut Down from the menu                                    |
 
@@ -89,6 +92,9 @@
 ? Launcher: open apps                                                    |
 ? Session menu: lock / sleep / hibernate / log out / restart / shut down |
 ? Lock screen: locks, accepts your password                              |
+? Launcher (type >): Lock, Sleep, Log out work                           |
+? Sleep key or gesture: suspends, locked when it wakes up                |
+? Login screen: one "Hyprland (Caelestia)" entry; plain "Hyprland"?      |
 ? Screenshots and screen recording                                       |
 ? Wallpaper and colour scheme change                                     |
 ? Notifications                                                          |
