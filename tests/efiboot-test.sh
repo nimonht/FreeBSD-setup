@@ -10,7 +10,7 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 LOG=/dev/null
 . "$HERE/../lib/common.sh"
-F=$HERE/fixtures/efibootmgr
+F=$HERE/efibootmgr
 pass=0 fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass + 1)); echo "ok   $1"; else fail=$((fail + 1)); printf 'FAIL %s\n     want: %s\n     got:  %s\n' "$1" "$2" "$3"; fi; }
 entry() { efi_entries < "$1" | awk -F'|' -v n="$2" '$1 == n { print; exit }'; }
