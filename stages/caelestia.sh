@@ -41,6 +41,16 @@ if [ ! -s "$FONT_DIR/MaterialSymbolsRounded.ttf" ]; then
 	fc-cache -f >> "$LOG" 2>&1 || true
 fi
 
+# ---- lock screen password check ------------------------------------------------
+# The build points Caelestia's lock screen at this PAM service (see
+# caelestia/build.sh); without it the lock screen refuses every password.
+mkdir -p /usr/local/etc/pam.d
+sys_file "$REPO_DIR/files/caelestia/fbs-caelestia.pam" /usr/local/etc/pam.d/fbs-caelestia || true
+if ! grep -q 'config: "fbs-caelestia"' /usr/local/etc/xdg/quickshell/caelestia/modules/lock/Pam.qml 2>/dev/null ||
+	[ ! -f /usr/local/etc/pam.d/unix-selfauth ]; then
+	warn "the Caelestia lock screen may not accept your password (its FreeBSD password check is missing). Until this is fixed, lock with hyprlock instead; details: docs/TROUBLESHOOTING.md (Caelestia)"
+fi
+
 # ---- dotfiles ---------------------------------------------------------------
 DOTS=/var/tmp/caelestia-build/dots
 say "installing the Caelestia dotfiles for $TARGET_USER"

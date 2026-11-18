@@ -195,6 +195,12 @@ the `webcamd` group (log out and in after the setup).
 
 ## Hyprland + Caelestia
 
+- **The lock screen refuses your password** (installed before 2026-11-18):
+  the lock screen checked passwords in a way that cannot work on FreeBSD.
+  To get back in without restarting: press Ctrl+Alt+F2, log in, run
+  `pkill -f quickshell`, then go back with Ctrl+Alt+F9 (or F8/F10) and use
+  `hyprlock` if the screen is still locked. Then fix it for good:
+  `doas freebsd-setup hyprland caelestia`.
 - **Updating Caelestia**: it is built from source here, so `pkg upgrade` and
   `sysup` do not update it. Run `doas freebsd-setup caelestia`: it fetches the
   newest release of the shell and CLI, rebuilds them and refreshes the

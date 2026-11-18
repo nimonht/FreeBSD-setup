@@ -122,6 +122,17 @@ find "$S/plugin" "$S/extras" \( -name '*.cpp' -o -name '*.hpp' \) -print0 | xarg
 find "$S" -name '*.qml' -print0 | xargs -0 \
 	sed -i '' -e 's|"/usr/share/X11/xkb/|"/usr/local/share/X11/xkb/|g' \
 	          -e 's|"/usr/lib/caelestia"|"/usr/local/lib/caelestia"|g'
+# The lock screen checks the password through PAM service "passwd". On FreeBSD
+# that falls back to pam_unix, which cannot read password hashes when it runs
+# as the user, so every password would be refused and the user locked out.
+# Use our service (/usr/local/etc/pam.d/fbs-caelestia: unix-selfauth, as the
+# hyprlock port does). Quickshell also wants the file next to the QML.
+_pam="$S/modules/lock/Pam.qml"
+grep -q 'config: "passwd"' "$_pam" 2>/dev/null ||
+	die "the Caelestia lock screen code changed (no 'config: \"passwd\"' in modules/lock/Pam.qml): its password check must be adapted for FreeBSD before building, or the lock screen would refuse every password"
+sed -i '' 's|config: "passwd"|config: "fbs-caelestia"|' "$_pam"
+mkdir -p "$S/assets/pam.d"
+printf 'auth\t\tinclude\t\tunix-selfauth\n' > "$S/assets/pam.d/fbs-caelestia"
 # Local patches, if any (caelestia/patches/*.patch), applied in name order.
 for p in "$HERE"/patches/*.patch; do
 	[ -f "$p" ] || continue

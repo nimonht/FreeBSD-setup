@@ -1,0 +1,4 @@
+# Written by FreeBSD-setup: the Caelestia lock screen checks your password.
+# It runs as you, and pam_unix(8) can only check passwords as root, so this
+# uses the same helper as hyprlock (security/unix-selfauth-helper).
+auth		include		unix-selfauth
