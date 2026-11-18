@@ -15,7 +15,7 @@ EFI partition and then, depending on what it finds there:
 |---|---|
 | anything | adds a firmware boot entry **FreeBSD** (at the end of the boot order unless you chose FreeBSD as default) |
 | Limine (`limine.conf`) | appends a `/FreeBSD` entry (backup: `limine.conf.before-freebsd`), unless Limine checks that file against an enrolled checksum: then nothing (see below) |
-| systemd-boot (`loader/entries/`) | adds `loader/entries/freebsd.conf` |
+| systemd-boot (`loader/entries/`) | adds `loader/entries/A-freebsd.conf` |
 | rEFInd | nothing: rEFInd finds `EFI/freebsd/loader.efi` by itself |
 | GRUB | nothing (GRUB's menu is generated from Linux; see below) |
 | Windows Boot Manager or another default loader | FreeBSD's own menu gets **Start ... (L)** to go back to it |
@@ -28,9 +28,14 @@ Before you restart, you choose which system starts by default: the current one
 - Switch off **Fast Startup** in Windows (Control Panel → Power Options →
   *Choose what the power buttons do*). With it on, Windows never really shuts
   down and leaves its disk half-mounted.
-- **BitLocker** / device encryption: suspend it before changing partitions, or
-  keep the recovery key at hand. A changed boot order can trigger the recovery
-  screen once.
+- **BitLocker** / device encryption: FreeBSD needs Secure Boot off, and
+  Windows then asks once for its 48-digit recovery key. Save the key first
+  (<https://aka.ms/myrecoverykey>). To avoid the prompt, suspend BitLocker for
+  a few restarts right before switching Secure Boot off, in an administrator
+  prompt: `manage-bde -protectors -disable C: -RebootCount 3`. Starting
+  Windows from FreeBSD's menu (key L) may ask for the key every time: keep
+  Windows as the default, or start it from the firmware boot menu. The
+  installer detects BitLocker and asks whether you have the key.
 - **Clock**: Windows keeps the hardware clock in local time. The installer asks
   and sets FreeBSD to match (`/etc/wall_cmos_clock`).
 - **Starting FreeBSD**: with Windows as the default, use the firmware boot menu
@@ -80,10 +85,14 @@ sudo limine enroll-config /boot/EFI/BOOT/BOOTX64.EFI "$(b2sum /boot/limine.conf 
 
 ## Linux with GRUB (Ubuntu, Fedora, Debian, Mint, openSUSE...)
 
-GRUB's menu is generated on Linux, so add FreeBSD from there. Create
-`/etc/grub.d/40_custom` (or append to it):
+GRUB's menu is generated on Linux, so add FreeBSD from there. Add this to
+`/etc/grub.d/40_custom` (append to it; keep its first two lines, `#!/bin/sh` and
+`exec tail -n +3 $0`). The first two lines below show the GRUB menu even when
+your distribution hides it because only one system was installed:
 
 ```
+set timeout_style=menu
+if [ "${timeout}" = 0 ]; then set timeout=10; fi
 menuentry "FreeBSD" {
     insmod part_gpt
     insmod fat
@@ -100,7 +109,7 @@ Then regenerate the menu:
 
 ## Linux with systemd-boot
 
-The installer adds `loader/entries/freebsd.conf`:
+The installer adds `loader/entries/A-freebsd.conf`:
 
 ```
 title   FreeBSD
@@ -130,7 +139,7 @@ From the other system:
    Management, or GParted), then grow a neighbouring partition into the space.
 2. Delete the folder `EFI/freebsd` from the EFI partition.
 3. Remove the FreeBSD entry: the `/FreeBSD` block in `limine.conf`,
-   `loader/entries/freebsd.conf`, or your GRUB `40_custom` entry.
+   `loader/entries/A-freebsd.conf`, or your GRUB `40_custom` entry.
 4. Remove the firmware entry: `sudo efibootmgr` lists them,
    `sudo efibootmgr -b <number> -B` deletes one (Linux), or use the firmware
    setup.

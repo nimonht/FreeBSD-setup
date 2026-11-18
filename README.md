@@ -75,7 +75,9 @@ written before the very last confirmation, so you can safely look and quit.
 
 Back up everything you cannot lose. If you keep Windows: switch off **Fast
 Startup** (Control Panel → Power Options → "Choose what the power buttons do")
-and suspend **BitLocker**/device encryption, or at least save its recovery key.
+and **save the BitLocker recovery key** (<https://aka.ms/myrecoverykey>):
+Windows asks for it once after Secure Boot is switched off. See
+[docs/DUAL-BOOT.md](docs/DUAL-BOOT.md#windows) for how to avoid the prompt.
 
 ### 2. Make room (only when keeping another system)
 
@@ -253,7 +255,7 @@ log is `/var/log/freebsd-setup.log`; your answers are saved in
 **Removing FreeBSD (dual boot):** delete the `fbsd-zfs` and `fbsd-swap`
 partitions (the names end in a number, e.g. `fbsd-zfs1`, when another disk in
 the computer already used them) from the other system, remove `EFI/freebsd` from the EFI partition,
-the FreeBSD block from `limine.conf` (or `loader/entries/freebsd.conf`), and the
+the FreeBSD block from `limine.conf` (or `loader/entries/A-freebsd.conf`), and the
 firmware entry (`efibootmgr` on Linux).
 
 ## Advanced
