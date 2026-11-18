@@ -6,6 +6,19 @@ if [ -n "$POOL" ]; then
 	zfs snapshot -r "$POOL@$_snap" && say "snapshot $POOL@$_snap taken"
 fi
 
+# Accounts added later (adduser) get the groups the desktop needs: video
+# (graphics, brightness), webcamd (cameras), games (game controllers). Only
+# when /etc/adduser.conf is missing or ours, and only groups that exist.
+if [ "$DESKTOP" != none ] && { [ ! -f /etc/adduser.conf ] || grep -q 'Written by FreeBSD-setup' /etc/adduser.conf; }; then
+	_dg=""
+	for _g in video webcamd games; do pw groupshow "$_g" >/dev/null 2>&1 && _dg="$_dg $_g"; done
+	printf '# Written by FreeBSD-setup: groups for new accounts (see adduser.conf(5)).\ndefaultgroups="%s"\n' "${_dg# }" > /etc/adduser.conf
+fi
+
+# The downloaded packages (several GB after a desktop install) are not needed
+# any more; removed now, before long-lived snapshots keep them for months.
+env ASSUME_ALWAYS_YES=yes pkg clean -a -y >> "$LOG" 2>&1 || true
+
 # Make "freebsd-setup" available as a command for later changes.
 if [ "$REPO_DIR" != "$FBS_SHARE" ]; then
 	mkdir -p "$FBS_SHARE"

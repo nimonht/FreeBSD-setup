@@ -198,6 +198,12 @@ settings. USB printers: unplug and plug in again after the setup.
 **Webcam**: `webcamd` must run (`service webcamd status`) and you must be in
 the `webcamd` group (log out and in after the setup).
 
+**Another account cannot start Hyprland, change brightness or use the
+webcam**: accounts made with `adduser` after the setup get the right groups
+automatically; for an older one, run
+`doas pw groupmod video -m NAME; doas pw groupmod webcamd -m NAME; doas pw groupmod games -m NAME`
+and log out and in. (Mounting USB drives needs no group.)
+
 ## Hyprland + Caelestia
 
 - **The lock screen refuses your password** (installed before 2026-11-18):
@@ -239,9 +245,15 @@ the `webcamd` group (log out and in after the setup).
 
 ## Disk space and snapshots
 
+**Deleting files does not free space**: automatic snapshots still hold the
+deleted files (up to about two months for the monthly ones). The USEDSNAP
+column shows how much they hold; `zfs destroy -nv` shows what removing a range
+of snapshots would free, without removing anything:
+
 ```sh
-zfs list -o space                      # where the space went
+zfs list -o space                      # where the space went (USEDSNAP: held by snapshots)
 zfs list -t snapshot -o name,used -s used | tail
+doas zfs destroy -nv zroot/home@first%last   # how much a range would free (dry run)
 doas zfs destroy zroot/home@<snapshot> # remove one snapshot
 bectl list                             # old boot environments hold space too
 doas bectl destroy -o pre-upgrade-...
