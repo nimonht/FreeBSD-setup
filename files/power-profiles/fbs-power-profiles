@@ -22,7 +22,8 @@
 # the switch instead of showing one that does nothing.
 #
 # Usage: fbs-power-profiles [--check]   (--check: print the backend and exit)
-# Environment: FBS_PP_STATE (state directory), FBS_PP_FAKE, FBS_PP_BUS=session
+# Environment: FBS_PP_STATE (state directory), FBS_PP_RUN (per-boot directory),
+# FBS_PP_FAKE, FBS_PP_BUS=session
 # (tests: use the session bus), FBS_PP_NO_POLKIT=1 (tests: allow every caller).
 
 import os
@@ -41,6 +42,8 @@ LEGACY_NAME = "net.hadess.PowerProfiles"
 LEGACY_PATH = "/net/hadess/PowerProfiles"
 PROFILES = ("power-saver", "balanced", "performance")
 STATE_DIR = os.environ.get("FBS_PP_STATE", "/var/db/fbs-power-profiles")
+# Emptied at every boot (rc.d/cleanvar), so what is here belongs to this boot.
+RUN_DIR = os.environ.get("FBS_PP_RUN", "/var/run/fbs-power-profiles")
 
 INTERFACE_XML = """
 <node>
@@ -90,28 +93,24 @@ def run(*cmd):
         return None
 
 
-def read_state(name):
+def read_state(name, directory=None):
     try:
-        with open(os.path.join(STATE_DIR, name)) as f:
+        with open(os.path.join(directory or STATE_DIR, name)) as f:
             return f.read().strip()
     except OSError:
         return None
 
 
-def write_state(name, value):
+def write_state(name, value, directory=None):
+    directory = directory or STATE_DIR
     try:
-        os.makedirs(STATE_DIR, exist_ok=True)
-        tmp = os.path.join(STATE_DIR, name + ".tmp")
+        os.makedirs(directory, exist_ok=True)
+        tmp = os.path.join(directory, name + ".tmp")
         with open(tmp, "w") as f:
             f.write(value + "\n")
-        os.replace(tmp, os.path.join(STATE_DIR, name))
+        os.replace(tmp, os.path.join(directory, name))
     except OSError as e:
         log("cannot save %s: %s" % (name, e))
-
-
-def boot_id():
-    out = run("sysctl", "-n", "kern.boottime")
-    return out.split("}")[0].strip() if out else ""
 
 
 # ------------------------------------------------------------------ backends --
@@ -136,14 +135,15 @@ class EppBackend:
         self.nodes = nodes
         # The value the firmware/kernel chose at boot is "balanced". After a
         # restart of this service in the same boot, the sysctl holds a value
-        # we set, so the saved one is used instead.
-        saved = (read_state("epp-boot") or "").split("|")
-        if len(saved) == 2 and saved[0] == boot_id() and saved[1].isdigit():
-            self.balanced = int(saved[1])
+        # we set, so the one saved in RUN_DIR (emptied at every boot) is used.
+        # (kern.boottime is no boot ID: it moves when the clock is stepped.)
+        saved = read_state("epp-boot", RUN_DIR) or ""
+        if saved.isdigit():
+            self.balanced = int(saved)
         else:
             cur = run("sysctl", "-n", nodes[0])
             self.balanced = int(cur) if cur and cur.strip().isdigit() else 50
-            write_state("epp-boot", "%s|%d" % (boot_id(), self.balanced))
+            write_state("epp-boot", "%d" % self.balanced, RUN_DIR)
         self.values = {"performance": 0, "balanced": self.balanced, "power-saver": 100}
 
     @classmethod

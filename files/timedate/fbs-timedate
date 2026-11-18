@@ -137,6 +137,7 @@ class Service:
         self.loop = loop
         self.conn = None
         self.idle = None
+        self.pending = 0      # authorizations still waiting for polkit
 
     def start(self):
         bus = Gio.BusType.SESSION if os.environ.get("FBS_TD_BUS") == "session" else Gio.BusType.SYSTEM
@@ -154,7 +155,15 @@ class Service:
         """Exit after a minute without calls (D-Bus starts it again)."""
         if self.idle:
             GLib.source_remove(self.idle)
-        self.idle = GLib.timeout_add_seconds(IDLE_EXIT_S, self.loop.quit)
+        self.idle = GLib.timeout_add_seconds(IDLE_EXIT_S, self.idle_exit)
+
+    def idle_exit(self):
+        # Never while a password dialog is open: the change would be lost.
+        if self.pending:
+            return True       # look again in a minute
+        self.idle = None
+        self.loop.quit()
+        return False
 
     def props(self):
         now = int(time.time() * 1000000)
@@ -189,6 +198,8 @@ class Service:
             return then()
 
         def done(conn, res):
+            self.pending -= 1
+            self.touch()
             try:
                 ok = conn.call_finish(res).unpack()[0][0]
             except GLib.Error as e:
@@ -197,6 +208,7 @@ class Service:
 
         subject = ("system-bus-name", {"name": GLib.Variant("s", sender)})
         flags = 1 if interactive else 0      # 1: may ask for a password
+        self.pending += 1
         self.conn.call("org.freedesktop.PolicyKit1", "/org/freedesktop/PolicyKit1/Authority",
                        "org.freedesktop.PolicyKit1.Authority", "CheckAuthorization",
                        GLib.Variant("((sa{sv})sa{ss}us)", (subject, action, {}, flags, "")),

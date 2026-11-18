@@ -231,13 +231,17 @@ disk_efi_systems() {
 
 # efi_systems DISK here|elsewhere   firmware boot entries (not FreeBSD's)
 # that start a file from DISK's EFI partition (here) or from another
-# partition (elsewhere): NUMBER|NAME|/EFI/path, in boot order
+# partition (elsewhere): NUMBER|NAME|/EFI/path, in boot order. Entries left
+# behind by a disk that is no longer in the computer are not systems.
 efi_systems() {
 	[ "$HW_BOOT" = UEFI ] || return 0
 	_su=$(esp_uuid "$1")
+	_attached=$(gpart list 2>/dev/null | awk '$1 == "rawuuid:" { print tolower($2) }')
 	efibootmgr -v 2>/dev/null | efi_entries | while IFS='|' read -r _sn _sname _sp; do
 		_sf=$(efi_file "$_sp"); [ -n "$_sf" ] || continue
 		[ "$_sname" = FreeBSD ] && continue
+		_pu=$(efi_part_uuid "$_sp")
+		[ -n "$_pu" ] && ! printf '%s\n' "$_attached" | grep -qx "$_pu" && continue
 		_sh=elsewhere
 		[ -n "$_su" ] && printf '%s' "$_sp" | grep -qi "$_su" && _sh=here
 		[ "$_sh" = "$2" ] && printf '%s|%s|%s\n' "$_sn" "$_sname" "$_sf"
@@ -993,8 +997,7 @@ efi_ours() {
 }
 
 efi_entry() {
-	ESP_UUID=$(gpart list "$INSTALL_DISK" 2>/dev/null | awk -v n="$ESP_DEV" '
-		$2 == "Name:" { f = ($3 == n) } f && $1 == "rawuuid:" { print $2; exit }')
+	ESP_UUID=$(esp_uuid "$INSTALL_DISK")
 	# Remove our own entries left by an earlier attempt, then add a new one.
 	for _b in $(efi_ours); do
 		efibootmgr -B -b "$_b" >/dev/null 2>&1 || true
