@@ -113,6 +113,9 @@ export TARGET_USER TARGET_HOME REPO_DIR FBS_LIB FBS_TARGET
 
 mkdir -p "$(dirname "$LOG")"
 : >> "$LOG"
+# This run's warnings, one per line (install.sh shows them when it finishes).
+FBS_WARNFILE=/var/log/freebsd-setup.warnings
+: > "$FBS_WARNFILE"
 
 # ------------------------------------------------------------------ wizard ---
 trap ui_restore_tty EXIT

@@ -31,6 +31,17 @@ say "bootstrapping pkg and updating the package catalogue"
 env ASSUME_ALWAYS_YES=yes pkg bootstrap -f >> "$LOG" 2>&1 ||
 	die "pkg bootstrap failed - is the network up? (try: ping pkg.freebsd.org)"
 pkg update -f >> "$LOG" 2>&1 || die "pkg update failed (details: $LOG)"
+# doas first, on its own: if anything later fails, the advice to run
+# "doas freebsd-setup" must work. "persist" remembers the password a while.
+pkg_get -q doas || warn "doas could not be installed yet (it is retried below)"
+if [ ! -f /usr/local/etc/doas.conf ]; then
+	cat > /usr/local/etc/doas.conf <<CONF
+permit persist :wheel
+permit nopass :wheel cmd /sbin/shutdown
+permit nopass :wheel cmd /usr/sbin/zzz
+CONF
+	chmod 600 /usr/local/etc/doas.conf
+fi
 say "upgrading installed packages"
 env ASSUME_ALWAYS_YES=yes pkg upgrade -y >> "$LOG" 2>&1 || warn "pkg upgrade reported a problem (details: $LOG)"
 
@@ -50,15 +61,6 @@ pkg_install doas sudo git curl bash nano htop rsync unzip zip 7-zip jq ca_root_n
 [ -e /usr/local/etc/os-release ] || [ -L /usr/local/etc/os-release ] ||
 	ln -s /etc/os-release /usr/local/etc/os-release
 
-# doas for the wheel group; "persist" remembers the password for a while.
-if [ ! -f /usr/local/etc/doas.conf ]; then
-	cat > /usr/local/etc/doas.conf <<CONF
-permit persist :wheel
-permit nopass :wheel cmd /sbin/shutdown
-permit nopass :wheel cmd /usr/sbin/zzz
-CONF
-	chmod 600 /usr/local/etc/doas.conf
-fi
 # sudo as well: many scripts and desktop tools written for Linux call it.
 # sudo reads sudoers.d in name order and the last matching rule wins, so this
 # general rule must sort first: packages add password-free rules for single

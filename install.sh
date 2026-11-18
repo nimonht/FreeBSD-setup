@@ -1065,6 +1065,14 @@ do_setup() {
 	ln -sf "$FBS_SHARE/setup.sh" "$MNT/usr/local/sbin/freebsd-setup"
 	TARGET_USER=$USERNAME
 	save_config "$MNT$FBS_CONF"
+	# Wi-Fi firmware: the install media has it in /boot/firmware (that is why
+	# Wi-Fi works in the Live System), the base system does not (it comes as
+	# packages in the desktop setup). Copy what the new system lacks, so it
+	# has a network on the first start even if the desktop setup fails.
+	if [ -d /boot/firmware ]; then
+		mkdir -p "$MNT/boot/firmware"
+		cp -Rn /boot/firmware/. "$MNT/boot/firmware/" 2>> "$LOG" || true
+	fi
 	[ "$BASE_ONLY" = yes ] && return 0
 
 	step "Installing the desktop (the long part)"
@@ -1077,8 +1085,20 @@ do_setup() {
 	chroot "$MNT" /usr/bin/env -u SSL_CA_CERT_FILE FBS_TARGET=chroot \
 		/bin/sh "$FBS_SHARE/setup.sh" --chroot --yes --user "$USERNAME" || _rc=$?
 	umount "$MNT/dev" 2>/dev/null || umount -f "$MNT/dev" 2>/dev/null || true
+	# The desktop setup's own warnings (e.g. "KDE could not be installed"):
+	# show them on the last screen too, not only in the scrolled-away output.
+	if [ -s "$MNT/var/log/freebsd-setup.warnings" ]; then
+		while IFS= read -r _w; do
+			WARNINGS="$WARNINGS
+  - $_w"
+		done < "$MNT/var/log/freebsd-setup.warnings"
+	fi
 	if [ "$_rc" -ne 0 ]; then
-		warn "the desktop setup stopped with an error. FreeBSD itself is installed and will boot; after logging in, run: doas freebsd-setup   (log: /var/log/freebsd-setup.log)"
+		# doas is installed early in the desktop setup; if it stopped before
+		# that, the way in is su with the administrator password.
+		if [ -x "$MNT/usr/local/bin/doas" ]; then _how="log in and run: doas freebsd-setup"
+		else _how="log in, type  su -  and the administrator password (your own, unless you chose another one for root), then type  freebsd-setup"; fi
+		warn "the desktop setup stopped with an error. FreeBSD itself is installed and will boot; to finish the desktop, check the internet connection, then $_how   (details: /var/log/freebsd-setup.log)"
 	fi
 }
 
