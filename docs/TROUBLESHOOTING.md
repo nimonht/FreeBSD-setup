@@ -3,16 +3,24 @@
 Start here:
 
 - **The log**: `/var/log/freebsd-setup.log` (setup) and
-  `/var/log/freebsd-install.log` (installer).
+  `/var/log/freebsd-install.log` (installer). While the installer runs, or
+  if it stopped part-way, its log is `/tmp/freebsd-install.log` in the USB
+  stick's Live System; it is lost when that restarts.
 - **The hardware report**: `freebsd-setup --report` says what was detected and
   what is known not to work.
-- **A text console** is always available with `Ctrl+Alt+F3` (or F2, F4...).
+- **A text console** is always available with `Ctrl+Alt+F3` (or F4, F5...).
   The SDDM login screen and desktop come back with `Ctrl+Alt+F9`; with the
   `ly` login screen it is `Ctrl+Alt+F2`.
-- **Undo**: in FreeBSD's boot menu press **8** (*Boot Environments*) and pick
-  `pre-setup-...` or the newest `pre-upgrade-...`, or run
-  `doas bectl activate <name>` and restart. That rolls the whole system back;
-  your files in `/home` are not affected.
+- **Undo**: `sysup` makes a boot environment named `pre-upgrade-...` before
+  every update. In FreeBSD's boot menu press **8** (*Boot Environments*) and
+  pick the newest one, or run `doas bectl activate <name>` and restart. That
+  rolls the whole system back; your files in `/home` are not affected. If you
+  ran `freebsd-setup` on a FreeBSD you installed yourself, `pre-setup-...` is
+  the state before its first run. A system made with the FreeBSD-setup
+  installer has no `pre-setup-...`; the state right after the install is the
+  snapshot `zroot/ROOT/default@installed`
+  (`doas bectl create -e default@installed after-install` makes a boot
+  environment from it).
 - **Re-run** a part: `doas freebsd-setup <stage>` (`freebsd-setup --list`).
 
 ## Installer
@@ -29,6 +37,13 @@ fails there with *"Wireless cannot be configured without making changes to the
 local system!"*: it only saves settings unless told to apply them now.) Wired networks need only DHCP. If the Wi-Fi
 card is not listed, use Ethernet, a USB Ethernet adapter, or USB tethering from
 a phone (`kldload if_urndis; dhclient ue0` for Android).
+
+If the network works and the installer still says "No internet", check the
+computer's clock in the firmware setup (a wrong date breaks secure downloads;
+in the Live System `date YYYYMMDDhhmm`, for example `date 202611181200`, sets
+it). Also make sure the install stick is a current FreeBSD release: old
+releases are removed from the download server. Get the newest from
+<https://www.freebsd.org/where/>.
 
 **The disk I want is not in the list**: the USB stick and disks that are in use
 are hidden. NVMe drives are called `nda0`, SATA drives `ada0`, USB drives `da0`.
@@ -54,6 +69,11 @@ If a partition was left behind anyway (power cut), delete it with
 
 ## Starting the computer
 
+The commands below use the usual names `zroot` (the pool) and `fbsd-zfs` (the
+partition). If another FreeBSD was on this computer they may be `zroot1` and
+`fbsd-zfs1`: `zpool list` and `gpart show -l` show yours, and at the loader
+prompt `lsdev` lists them.
+
 **FreeBSD stopped starting** ("Secure Boot violation", "image verification
 failed", or the firmware skips FreeBSD) after a firmware update, a reset of
 the firmware settings, or after Secure Boot was switched on for Windows 11:
@@ -76,19 +96,27 @@ needed:
    (if your `limine.conf` is in a sub-folder such as `EFI/limine/`, use that
    folder in both paths).
 3. Restart: Limine starts again. To get FreeBSD into its menu, run this in
-   CachyOS: `sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi`
+   CachyOS:
+   `sudo limine-entry-tool --add-efi FreeBSD /boot/EFI/freebsd/loader.efi --comment FreeBSD --overwrite`.
+   It prints `Updated: ...limine.conf` when it worked. If it prints nothing,
+   your EFI partition is not at `/boot`: `findmnt -t vfat` shows where it is;
+   use that folder instead of `/boot`.
 
 **FreeBSD does not appear in Limine / systemd-boot**: check the EFI partition
 from the other system: `EFI/freebsd/loader.efi` must exist, and the entry must
-be in the configuration file the boot manager actually reads (Limine:
-`limine.conf`; the installer backed up the previous one as
-`limine.conf.before-freebsd`). You can always start FreeBSD from the firmware
+be in the configuration file the boot manager actually reads. Limine: if the
+installer said your Limine menu was not changed because it is protected by a
+checksum, add FreeBSD from Linux with the `limine-entry-tool` command above;
+otherwise the installer added it to `limine.conf` and kept the previous file as
+`limine.conf.before-freebsd`. If your EFI partition has more than one
+`limine.conf`, make sure the entry is in the one Limine reads (the one next to
+the Limine program comes first). You can always start FreeBSD from the firmware
 boot menu (F12/F8/F11/Esc at power-on), entry "FreeBSD".
 
 **Windows or Linux no longer starts by default**: the firmware boot order
 changed (some Windows updates do this too). Pick the system once in the firmware
 boot menu and fix the order there, or from FreeBSD:
-`efibootmgr` lists the entries, `doas efibootmgr -o 0001,0000,...` sets the order.
+`doas efibootmgr` lists the entries, `doas efibootmgr -o 0001,0000,...` sets the order.
 
 **"Start ..." (key L) in FreeBSD's menu does nothing**: the loader looks for
 the other system's boot file on disks 0-3. At the loader prompt (`3` in the
@@ -136,8 +164,8 @@ cat /var/log/Xorg.0.log | tail  # SDDM's login screen runs on X11
 cat $XDG_RUNTIME_DIR/hypr-session.log   # Hyprland
 ```
 
-- **No `/dev/dri`**: the graphics driver did not load. `dmesg | tail -40` shows
-  why. Missing firmware: `doas fwget`. Then `doas freebsd-setup drivers`.
+- **No `/dev/dri`**: the graphics driver did not load. `doas dmesg | tail -40`
+  shows why. Missing firmware: `doas fwget`. Then `doas freebsd-setup drivers`.
 - **In a virtual machine**: expected. KDE Plasma 6 and Hyprland need a 3D
   graphics driver that FreeBSD does not have for VirtualBox, VMware or QEMU.
 - **NVIDIA desktop, black screen**: check that `nvidia-driver*`,
@@ -149,9 +177,10 @@ cat $XDG_RUNTIME_DIR/hypr-session.log   # Hyprland
   `gpu-xorg-config` rewrites at every start; run `doas gpu-xorg-config` and
   `doas service sddm restart` if it is missing.
   For Hyprland, force it in `~/.config/hypr-session.env`:
-  `export AQ_DRM_DEVICES=/dev/dri/card0`. To leave the NVIDIA card switched off
-  entirely, set `GPU_DRIVERS="intel"` (or `amd`) in
-  `/usr/local/etc/freebsd-setup.conf` and run `doas freebsd-setup drivers`.
+  `export AQ_DRM_DEVICES=/dev/dri/card0`. To leave the NVIDIA card without a
+  driver, set `GPU_DRIVERS="intel"` (or `amd`) in
+  `/usr/local/etc/freebsd-setup.conf`, run
+  `doas sysrc kld_list-="nvidia-modeset nvidia-drm"`, and restart.
 - **Black screen after switching the laptop between hybrid and discrete
   graphics in the firmware setup, or after replacing the graphics card**: the
   login screen's configuration follows the hardware by itself at every start,
@@ -162,17 +191,38 @@ cat $XDG_RUNTIME_DIR/hypr-session.log   # Hyprland
 - **Back at the login screen right after logging in**: the session crashed.
   KDE: `cat ~/.local/share/sddm/wayland-session.log`.
   Hyprland: `cat $XDG_RUNTIME_DIR/hypr-session.log`.
-- **KDE could not be installed**: the setup says so when the package branch
-  is being rebuilt by FreeBSD. Wait a few days and run `doas freebsd-setup kde`.
+- **KDE could not be installed**: the installer's last screen (and
+  `/var/log/freebsd-setup.warnings`) says why. If it says *"could not be
+  downloaded completely"*, the connection or a download server failed: check
+  the internet connection and run `doas freebsd-setup kde` now. If it says
+  *"cannot be installed from the '...' package branch right now"*, FreeBSD is
+  rebuilding its packages: run `doas freebsd-setup kde` again in a few days.
+  Until then the login screen offers no Plasma session; log in on a text
+  console with `Ctrl+Alt+F3`.
+- **The setup said it could not switch ttyv1 to ly**: your `/etc/ttys` was
+  changed. Open it with `doas nano /etc/ttys`, change the `ttyv1` line to
+  `ttyv1 "/usr/libexec/getty Ly" xterm on secure`, then restart. The ly login
+  screen appears on `Ctrl+Alt+F2`.
 
 ## Hardware
 
 **Wi-Fi**: `sysctl net.wlan.devices` lists working cards. Empty? The report
 says whether the card needs firmware (`doas fwget` installs it) or is not
 supported. Unsupported cards (Broadcom, some new chips) can work through
-[wifibox](https://github.com/pgj/freebsd-wifibox) (`pkg install wifibox`),
-which runs the Linux driver in a tiny virtual machine. Connect with the
-NetworkMgr tray icon (KDE) or `doas bsdinstall wlanconfig`.
+[wifibox](https://github.com/pgj/freebsd-wifibox) (`doas pkg install wifibox`),
+which runs the Linux driver in a tiny virtual machine.
+
+To connect: in KDE, use the NetworkMgr tray icon. Without it (Hyprland), add a
+network to `/etc/wpa_supplicant.conf` and restart the network:
+
+```sh
+wpa_passphrase "NetworkName" "password" | doas tee -a /etc/wpa_supplicant.conf
+doas service netif restart
+```
+
+If the card was never set up (no `wlans_` line in `/etc/rc.conf`), first run
+`doas sysrc wlans_iwlwifi0=wlan0 ifconfig_wlan0="WPA SYNCDHCP"`, using the
+card name from `sysctl net.wlan.devices`.
 
 **Ethernet (Realtek) drops or is missing**: `doas pkg install realtek-re-kmod`
 and follow its message.
@@ -183,7 +233,7 @@ Try another: `doas sysctl hw.snd.default_unit=1`, make it permanent in
 start it with `start-pipewire`. Laptops with Intel "Smart Sound"/SOF audio have
 no FreeBSD driver: use HDMI, USB or a USB headset.
 
-**Touchpad does not work, or no tap/scroll**: `dmesg | grep -iE 'hmt|hms|psm|iichid'`.
+**Touchpad does not work, or no tap/scroll**: `doas dmesg | grep -iE 'hmt|hms|psm|iichid'`.
 I2C touchpads need `ig4_load="YES"` and `iichid_load="YES"` in
 `/boot/loader.conf` (the setup adds them on laptops) and a restart.
 
@@ -191,9 +241,13 @@ I2C touchpads need `ig4_load="YES"` and `iichid_load="YES"` in
 device, add `acpi_video_load="YES"` to `/boot/loader.conf` and restart.
 
 **Suspend does not resume**: common with NVIDIA drivers and on laptops without
-S3. The setup only makes the lid suspend where S3 exists and no NVIDIA driver is
-loaded. Turn it off again: `doas sysctl hw.acpi.lid_switch_state=NONE` (and
-remove it from `/etc/sysctl.conf`).
+S3. The setup makes the lid suspend only on laptops whose firmware offers S3
+and that have no NVIDIA driver installed, and sets the screen to lock before every
+suspend. To turn lid suspend off: `doas sysctl hw.acpi.lid_switch_state=NONE`,
+and to keep it off,
+`echo hw.acpi.lid_switch_state=NONE | doas tee -a /etc/sysctl.conf.local`
+(running `freebsd-setup` again sets it back in `/etc/sysctl.conf`, but
+`sysctl.conf.local` is applied after that file at every start).
 
 **Bluetooth mouse/keyboard**: `doas bluetooth-config scan` and follow it.
 Bluetooth audio is not supported.
@@ -208,29 +262,51 @@ the `webcamd` group (log out and in after the setup).
 
 **Another account cannot start Hyprland, change brightness or use the
 webcam**: accounts made with `adduser` after the setup get the right groups
-automatically; for an older one, run
+automatically (unless you already had your own `/etc/adduser.conf`); for an
+older one, run
 `doas pw groupmod video -m NAME; doas pw groupmod webcamd -m NAME; doas pw groupmod games -m NAME`
 and log out and in. (Mounting USB drives needs no group.)
 
 ## Hyprland + Caelestia
 
+Fixes to FreeBSD-setup reach an installed system only through the install
+one-liner: `doas freebsd-setup` runs the copy that was installed with it. Where
+an entry below says "update FreeBSD-setup", run (as your user, in a terminal):
+`fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh -s -- hyprland caelestia finish`
+
 - **The lock screen refuses your password** (installed before 2026-11-18):
   the lock screen checked passwords in a way that cannot work on FreeBSD.
-  To get back in without restarting: press Ctrl+Alt+F2, log in, run
-  `pkill -f quickshell`, then go back with Ctrl+Alt+F9 (or F8/F10) and use
-  `hyprlock` if the screen is still locked. Then fix it for good:
-  `doas freebsd-setup hyprland caelestia`.
+  To get back in without restarting: press Ctrl+Alt+F3, log in, run
+  `pkill -f quickshell` and then `hyprctl -i 0 dispatch exec hyprlock`. Go
+  back to the desktop (Ctrl+Alt+F2 with the text login screen; Ctrl+Alt+F9,
+  or F8/F10, with SDDM) and unlock with hyprlock. If `hyprctl` says it cannot
+  find Hyprland, run `pkill -x Hyprland` on the console instead (unsaved work
+  in that session is lost) and log in again. Then update FreeBSD-setup
+  (above).
+- **Sleep from the launcher, the session menu or the sleep gesture does
+  nothing** (installed before 2026-11-18): update FreeBSD-setup (above). That
+  fixes `~/.config/caelestia/shell.json` and `hypr-vars.lua` only if you never
+  changed them (changing a setting in Caelestia's own settings also rewrites
+  `shell.json`). Otherwise, in `shell.json` replace `"doas","zzz"` with
+  `"doas","-n","/usr/sbin/zzz"`, and in `hypr-vars.lua` set
+  `sleepGestureCmd = "doas -n /usr/sbin/zzz"`.
 - **Updating Caelestia**: it is built from source here, so `pkg upgrade` and
-  `sysup` do not update it. Run `doas freebsd-setup caelestia`: it fetches the
-  newest release of the shell and CLI, rebuilds them and refreshes the
-  dotfiles. Your own settings in `~/.config/caelestia/` (`hypr-user.lua`,
-  `hypr-vars.lua`, `shell.json`) are kept; edits made directly inside the
-  managed folders (`~/.config/hypr`, `fish`, `foot`...) are overwritten.
-  Run it again after a big `pkg upgrade` too (a new Qt or Quickshell needs a
-  rebuild).
-- **The Caelestia build failed**: logs are in `/var/tmp/caelestia-build/*.log`.
-  A new Caelestia release may need a newer Quickshell than FreeBSD has yet:
-  pin the last release that worked in `/usr/local/etc/freebsd-setup.conf`
+  `sysup` do not update it. `doas freebsd-setup caelestia` (10 to 30 minutes)
+  fetches the newest release of the shell and CLI, rebuilds them, and
+  refreshes the settings files (dotfiles) from Caelestia's main branch. Your
+  own settings in `~/.config/caelestia/` (`hypr-user.lua`, `hypr-vars.lua`,
+  `shell.json`) and your colour scheme are kept; edits made directly inside
+  the managed folders (`~/.config/hypr`, `fish`, `foot`, `fastfetch`, `btop`,
+  `micro`, `Thunar`) are overwritten. When a package update changes Qt,
+  Quickshell or a library Caelestia was built against, `sysup` says so: run
+  the same command then, or the bar may not start. If the rebuild fails, the
+  previous Caelestia stays installed.
+- **The Caelestia build failed**: the reason is at the end of
+  `/var/log/freebsd-setup.log`; build details are in
+  `/var/tmp/caelestia-build/*.log`. A new Caelestia release may need a newer
+  Quickshell than FreeBSD has yet, or may have changed its lock screen (the
+  build then stops on purpose, so you are never locked out). Pin the last
+  release that worked in `/usr/local/etc/freebsd-setup.conf`
   (`CAELESTIA_SHELL_REF="v2.5.0"`) and run `doas freebsd-setup caelestia`.
 - **No bar after login**: run `caelestia shell` in a terminal (`Super+T`) to
   see the error.
@@ -267,7 +343,18 @@ bectl list                             # old boot environments hold space too
 doas bectl destroy -o pre-upgrade-...
 ```
 
+Two kinds of snapshots are never removed automatically: `@installed` (the
+system as the installer left it) and one `@setup-<date>` for every run of
+`freebsd-setup`. Both include `/home`. Once you no longer need them as a way
+back, remove them: `zfs list -t snapshot | grep -E '@(installed|setup-)'` lists
+them, and `doas zfs destroy -r zroot@installed` (or `zroot@setup-<date>`)
+removes one.
+
 ## Reporting a problem
 
-Open an issue with: what you did, what happened, `freebsd-setup --report`,
-and the end of `/var/log/freebsd-setup.log`.
+Open an issue at <https://github.com/nimonht/FreeBSD-setup/issues> with: what
+you did, what happened, `freebsd-setup --report`, and the end of
+`/var/log/freebsd-setup.log`. For a desktop problem, also run
+`sh /usr/local/share/freebsd-setup/tests/desktop-probe.sh` in a terminal inside
+the desktop and attach the file it writes (addresses and serial numbers are
+removed).
