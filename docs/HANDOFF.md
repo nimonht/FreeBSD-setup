@@ -127,9 +127,17 @@ hardware, or in FreeBSD's package catalogue on 2026-11-15), or *to verify*
   suspend (#52, ConsoleKit part tested in the VM); base download retries.
   The owner's laptop had its old FreeBSD removed (Limine entry via
   limine-remove-entry, partitions wiped); the owner will reinstall once the
-  safety fixes are pushed. Still open from the audit: first-use groups
-  (first boot, Hyprland controls, KDE everyday, devices and users) and the
-  remaining lower-priority findings.
+  safety fixes are pushed. Then the first-use groups the owner chose:
+  first start (#34 Wi-Fi firmware from the install media, #35 setup
+  warnings on the last screen, #36 doas early / su advice); Hyprland
+  (#53 sleep via doas -n /usr/sbin/zzz, #54 launcher actions, #55 distinct
+  session name); KDE (#59 no PulseAudio autospawn, #64 QT_IM_MODULES, #63
+  Firefox language, #61 wallet unlocked by SDDM's PAM, #56 timedate1
+  service for Date & Time); devices (#60 webcamd always, #65 games group,
+  #57 adduser.conf groups, #62 2 monthly snapshots + pkg cache cleaned).
+  Most were checked in the dev VM (pamtester, doas -C, about:policies,
+  adduser, the timedate1 service on the system bus); none on screen yet.
+  Still open: the lower-priority audit findings not listed above.
 
 ## 1. What the owner wants
 
