@@ -1,0 +1,15 @@
+Boot to FW : false
+BootCurrent: 0003
+Timeout    : 1 seconds
+BootOrder  : 0003, 0000, 000A, 0001
++Boot0003* Limine
+       dp: HD(1,GPT,21541fd2-f358-42eb-970d-3923f3385672,0x1000,0x830000)/File(\EFI\limine\limine_x64.efi)
+ Boot0000* Windows Boot Manager
+       dp: HD(1,GPT,21541fd2-f358-42eb-970d-3923f3385672,0x1000,0x830000)/File(\EFI\Microsoft\Boot\bootmgfw.efi)
+ Boot000A* FreeBSD
+       dp: HD(1,GPT,21541fd2-f358-42eb-970d-3923f3385672,0x1000,0x830000)/File(\EFI\freebsd\loader.efi)
+ Boot0001* UEFI PXEv4 (MAC:107B4438D207)
+       dp: PciRoot(0x0)/Pci(0x1c,0x5)/Pci(0x0,0x0)/MAC(107b4438d207,0x0)/IPv4(0.0.0.0,0x0,DHCP,0.0.0.0,0.0.0.0,0.0.0.0)
+
+
+Unreferenced Variables:

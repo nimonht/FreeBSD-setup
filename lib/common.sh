@@ -182,6 +182,38 @@ sys_file_rm() {
 	return 0
 }
 
+# efi_entries   read "efibootmgr -v" on stdin, print one line per boot entry:
+# NUMBER|NAME|DEVICE-PATH. FreeBSD 15 prints the device path on the entry's
+# own line, later versions on the lines below it ("dp: ..."); both are read.
+efi_entries() {
+	awk '
+	function flush() { if (num != "") print num "|" name "|" path; num = "" }
+	/^[ +]?Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {
+		flush()
+		l = $0; sub(/^[ +]?Boot/, "", l)
+		num = toupper(substr(l, 1, 4)); l = substr(l, 6); sub(/^ +/, "", l)
+		# The name ends where the device path starts: " Word(" (HD(, File(...).
+		if (match(l, / [A-Za-z][A-Za-z0-9]*\(/)) { name = substr(l, 1, RSTART - 1); path = substr(l, RSTART + 1) }
+		else { name = l; path = "" }
+		sub(/ +$/, "", name)
+		next
+	}
+	/^[ \t]*$/ || /^[A-Z][A-Za-z ]*:/ || /^Unreferenced/ { flush(); next }
+	num != "" { l = $0; sub(/^[ \t]+/, "", l); sub(/^dp: */, "", l); path = path (path == "" ? "" : " ") l }
+	END { flush() }'
+}
+
+# efi_first   read "efibootmgr -v" on stdin, print the first BootOrder entry
+efi_first() {
+	awk -F': *' '/^BootOrder/ { split($2, a, ","); gsub(/ /, "", a[1]); print toupper(a[1]); exit }'
+}
+
+# efi_file PATH   the file a device path starts (File(\EFI\x\y.efi) ->
+# /EFI/x/y.efi), or nothing
+efi_file() {
+	printf '%s\n' "$1" | sed -n -e 's/.*[/]File(\([^)]*\)).*/\1/p' -e 's/^File(\([^)]*\)).*/\1/p' | head -1 | tr '\\' '/'
+}
+
 # limine_locked ESP_DIR   true when limine.conf on this EFI partition must
 # not be changed: a Limine binary there carries an enrolled checksum of it
 # (CachyOS enrolls one by default), and Limine refuses to start ("CHECKSUM
