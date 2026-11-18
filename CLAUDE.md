@@ -61,12 +61,13 @@ sh tests/gpu-config-test.sh     # X11 graphics config per machine
 sh tests/power-profiles-test.sh # power-profiles D-Bus service (needs python3-gobject, dbus)
 sh tests/limine-test.sh         # never edit a checksum-protected limine.conf
 sh tests/pkg-retry-test.sh      # broken package downloads are retried
+sh tests/efiboot-test.sh        # reading efibootmgr -v (FreeBSD 15 and later layouts)
 shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
   setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* files/rc.d/*
 sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-erase-kde.conf
 ```
 
-The first seven run on Linux. The last one installs FreeBSD in QEMU through the
+The first eight run on Linux. The last one installs FreeBSD in QEMU through the
 serial console (slow: mostly package downloads); it proves the installer and stages
 finish, not that the desktop works: a plain QEMU guest has no KMS graphics.
 

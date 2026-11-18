@@ -456,10 +456,11 @@ detect_boot() {
 
 	# The loader the firmware starts today: offer it in FreeBSD's menu too.
 	if [ "$HW_BOOT" = UEFI ]; then
-		_first=$(efibootmgr 2>/dev/null | awk -F': *' '/^BootOrder/ { split($2, a, ","); gsub(/ /, "", a[1]); print a[1] }')
-		_line=$(efibootmgr -v 2>/dev/null | grep -E "^[ +]*Boot${_first}\*?" | head -1)
-		CHAIN_PATH=$(echo "$_line" | sed -n 's/.*File(\([^)]*\)).*/\1/p' | tr '\\' '/')
-		CHAIN_NAME=$(echo "$_line" | sed -E 's/^[ +]*Boot[0-9A-Fa-f]{4}\*? //; s/ (HD|PciRoot|Fv)\(.*//')
+		_ebm=$(efibootmgr -v 2>/dev/null) || _ebm=""
+		_first=$(printf '%s\n' "$_ebm" | efi_first)
+		_line=$(printf '%s\n' "$_ebm" | efi_entries | awk -F'|' -v n="$_first" '$1 == n { print; exit }')
+		CHAIN_NAME=$(printf '%s\n' "$_line" | cut -d'|' -f2)
+		CHAIN_PATH=$(efi_file "$(printf '%s\n' "$_line" | cut -d'|' -f3-)")
 		case "$CHAIN_PATH" in /EFI/*|/efi/*) ;; *) CHAIN_PATH="" ;; esac
 		case "$CHAIN_PATH" in */freebsd/*) CHAIN_PATH="" ;; esac
 	fi
@@ -818,9 +819,8 @@ do_boot() {
 # FreeBSD on another disk has its own EFI partition and is never listed.
 efi_ours() {
 	[ -n "$ESP_UUID" ] || return 0
-	efibootmgr -v 2>/dev/null | awk -v u="$ESP_UUID" '
-		/^[ +]*Boot[0-9A-Fa-f]{4}\*? FreeBSD / && index(tolower($0), tolower(u)) {
-			sub(/^[ +]*Boot/, ""); sub(/\*.*/, ""); print $1 }'
+	efibootmgr -v 2>/dev/null | efi_entries | awk -F'|' -v u="$ESP_UUID" '
+		$2 == "FreeBSD" && index(tolower($3), tolower(u)) { print $1 }'
 }
 
 efi_entry() {
