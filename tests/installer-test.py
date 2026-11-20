@@ -153,6 +153,7 @@ class Answers(unittest.TestCase):
         self.assertEqual(v["WIZ_LANG"], "de")
         self.assertEqual(v["INPUT_METHODS"], "none")
         self.assertEqual(v["RTC_LOCAL"], "auto")
+        self.assertEqual(v["PKG_BRANCH"], "latest")       # the default: newest packages
 
     def test_erase_has_no_size_and_separate_root(self):
         a = dict(self.BASE, mode="erase", root_password="admin", boot_first=True,
@@ -166,6 +167,15 @@ class Answers(unittest.TestCase):
         self.assertEqual(v["INSTALL_GAMING"], "yes")
         self.assertEqual(v["ENCRYPT"], "no")
         self.assertEqual(v["ENCRYPT_PASSPHRASE"], "")
+
+    def test_package_branch(self):
+        v = source_answers(backend.build_answers(dict(self.BASE, pkg_branch="quarterly")))
+        self.assertEqual(v["PKG_BRANCH"], "quarterly")
+        # Hyprland needs latest whatever was chosen
+        v = source_answers(backend.build_answers(dict(self.BASE, pkg_branch="quarterly", desktop="both")))
+        self.assertEqual(v["PKG_BRANCH"], "latest")
+        with self.assertRaises(ValueError):
+            backend.build_answers(dict(self.BASE, pkg_branch="weekly"))
 
     def test_refuses_what_install_sh_refuses(self):
         for change in ({"disk": ""}, {"mode": ""}, {"username": "Root"}, {"hostname": "a b"},

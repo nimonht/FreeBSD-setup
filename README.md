@@ -152,7 +152,8 @@ away, so your passwords are typed as they will be at the login screen),
 the internet connection (pick your Wi-Fi network there), shows what works
 on your computer, then asks for the disk (*next to what is on it*, with a
 size slider, or *erase*; optional encryption), time zone, your account,
-desktop and apps, and shows a summary. Nothing is written before *Install
+desktop, apps and updates (FreeBSD's newest packages by default, or the
+steadier quarterly ones), and shows a summary. Nothing is written before *Install
 now*. The installation then takes 30 to 90 minutes, mostly downloading; the
 live desktop stays usable meanwhile. At the end, remove the stick and
 restart.

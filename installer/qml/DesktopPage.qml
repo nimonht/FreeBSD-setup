@@ -101,6 +101,38 @@ Item {
             }
 
             Card {
+                id: branchCard
+                Layout.fillWidth: true
+                readonly property bool hypr: app.desktop === "hyprland" || app.desktop === "both"
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 6
+                    Label {
+                        text: "Updates"
+                        color: app.cText
+                        font.bold: true
+                    }
+                    RadioButton {
+                        text: "Newest: FreeBSD's \"latest\" packages, updated every week (recommended)"
+                        checked: app.pkgBranch === "latest" || branchCard.hypr
+                        onClicked: app.pkgBranch = "latest"
+                    }
+                    RadioButton {
+                        text: "Steadier: \"quarterly\" packages, new versions every three months, security fixes in between"
+                        enabled: !branchCard.hypr
+                        checked: app.pkgBranch === "quarterly" && !branchCard.hypr
+                        onClicked: app.pkgBranch = "quarterly"
+                    }
+                    Label {
+                        visible: branchCard.hypr
+                        text: "Hyprland and Caelestia need the newest packages."
+                        color: app.cMuted
+                        Layout.leftMargin: 8
+                    }
+                }
+            }
+
+            Card {
                 Layout.fillWidth: true
                 ColumnLayout {
                     width: parent.width

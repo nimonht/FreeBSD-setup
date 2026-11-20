@@ -30,6 +30,8 @@ Item {
             ["Time zone", app.timezone.replace(/_/g, " ")],
             ["Account", app.fullname + " (" + app.username + "), computer name " + app.hostname],
             ["Desktop", desk],
+            ["Updates", app.pkgBranch === "latest" || app.desktop === "hyprland" || app.desktop === "both"
+                        ? "Newest packages (latest)" : "Quarterly packages"],
             ["Extras", extras.length ? extras.join(", ") : "none"]
         ]
     }

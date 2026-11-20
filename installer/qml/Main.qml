@@ -66,6 +66,7 @@ ApplicationWindow {
     property bool firewall: true
     property bool snapshots: true
     property string terminal: "fish"
+    property string pkgBranch: "latest"
     property var inputMethods: []
     property bool eraseConfirmed: false
 
@@ -113,6 +114,7 @@ ApplicationWindow {
             encrypt: encrypt, passphrase: diskUsesLoginPassword ? password : passphrase,
             timezone: timezone, boot_first: bootFirst, language: language, layout: layout,
             desktop: desktop, input_methods: inputMethods, terminal: terminal,
+            pkg_branch: pkgBranch,
             apps: apps, printing: printing, gaming: gaming, dev: dev,
             firewall: firewall, snapshots: snapshots
         }

@@ -153,7 +153,8 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
   (lib/common.sh) checks this; test with
   `DISK_SETUP=dualboot LIMINE_ENROLL=yes ... tests/install-alongside-limine.conf`.
 - KDE Plasma in FreeBSD packages is Wayland-only (6.8 on "latest", 6.7.5 on
-  "quarterly", which KDE-only installs use). The SDDM login screen
+  "quarterly", which KDE-only installs from the text installer use; the
+  graphical installer asks, "latest" by default). The SDDM login screen
   still runs on X11.
 - Hyprland + Caelestia need the `latest` package branch; KDE alone uses
   `quarterly`. Kernel modules come from the `FreeBSD-ports-kmods` repository

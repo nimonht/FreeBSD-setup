@@ -267,7 +267,7 @@ ANSWER_KEYS = [
     "ENCRYPT", "ENCRYPT_PASSPHRASE", "TIMEZONE", "RTC_LOCAL", "BOOT_DEFAULT",
     "WIZ_LANG", "KEYBOARD_LAYOUT", "DESKTOP", "INPUT_METHODS", "TERMINAL_STYLE",
     "INSTALL_APPS", "INSTALL_PRINTING", "INSTALL_GAMING", "INSTALL_DEVTOOLS",
-    "FIREWALL", "AUTO_SNAPSHOTS",
+    "FIREWALL", "AUTO_SNAPSHOTS", "PKG_BRANCH",
 ]
 
 
@@ -301,6 +301,11 @@ def build_answers(a):
     if term not in ("fish", "zsh", "bash", "none"):
         raise ValueError("Unknown terminal style '%s'." % term)
     ims = [i for i in a.get("input_methods", []) if i in ("vi", "zh-cn", "zh-tw", "ja", "ko", "m17n")]
+    branch = a.get("pkg_branch", "latest")
+    if branch not in ("latest", "quarterly"):
+        raise ValueError("Unknown package branch '%s'." % branch)
+    if desktop in ("hyprland", "both"):
+        branch = "latest"          # Hyprland and Caelestia need it
 
     values = {
         "INSTALL_DISK": disk,
@@ -329,6 +334,7 @@ def build_answers(a):
         "INSTALL_DEVTOOLS": yn(a.get("dev", False)),
         "FIREWALL": yn(a.get("firewall", True)),
         "AUTO_SNAPSHOTS": yn(a.get("snapshots", True)),
+        "PKG_BRANCH": branch,
     }
     lines = ["# Answers for install.sh, written by the LumenBSD graphical installer."]
     lines += ["%s=%s" % (k, sh(values[k])) for k in ANSWER_KEYS]
