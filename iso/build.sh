@@ -30,8 +30,9 @@
 #   DIST_SITE         where base.txz and kernel.txz come from
 #                     (default https://download.freebsd.org/releases/amd64)
 #   PATCH_BASE=no     do not apply freebsd-update patches to the image
-#   ZSTD_LEVEL=N      compression of the system image (default 9; 19 is
-#                     smaller and much slower)
+#   ZSTD_LEVEL=N      final compression of the system image (default 19,
+#                     the smallest; packages are installed with fast zstd and
+#                     everything is recompressed once in the image step)
 #   EXTRA_CA=FILE     CA bundle for a TLS-intercepting proxy; used while
 #                     building only, never put on the ISO
 #   STEPS="..."       run only these steps, on the work directory of an
@@ -46,12 +47,13 @@ REL=${FREEBSD_RELEASE}
 BRANCH=${PKG_BRANCH:-$LIVE_PKG_BRANCH}
 PKG_SITE=${PKG_SITE:-pkg+https://pkg.FreeBSD.org}
 DIST_SITE=${DIST_SITE:-https://download.freebsd.org/releases/amd64}
-ZSTD_LEVEL=${ZSTD_LEVEL:-9}
+ZSTD_LEVEL=${ZSTD_LEVEL:-19}
 WORK=${WORK:-$HERE/work}
 OUT=${OUT:-$HERE/out}
 ROOT=$WORK/root          # the live system, a ZFS pool in a file
 CD=$WORK/cd              # what goes on the ISO
 BPOOL=lumenbuild
+IPOOL=lumenimage         # the same, recompressed, for the ISO
 ISO_NAME="$DISTRO_ID-$DISTRO_VERSION-amd64"
 ALL_STEPS="fetch root packages configure trim image ramdisk iso"
 STEPS=${STEPS:-$ALL_STEPS}
@@ -78,9 +80,11 @@ pool_mounts_off() {
 pool_close() {
 	pool_mounts_off
 	zpool list "$BPOOL" >/dev/null 2>&1 && zpool export "$BPOOL"
-	for _m in $(mdconfig -l -v 2>/dev/null | awk -v f="$WORK/root.img" '$4 == f { print $1 }'); do
+	zpool list "$IPOOL" >/dev/null 2>&1 && zpool destroy -f "$IPOOL"
+	for _m in $(mdconfig -l -v 2>/dev/null | awk -v a="$WORK/root.img" -v b="$WORK/image.img" '$4 == a || $4 == b { print $1 }'); do
 		mdconfig -d -u "$_m"
 	done
+	rm -f "$WORK/image.img"
 	return 0
 }
 trap 'pool_close' EXIT
@@ -100,7 +104,7 @@ pool_new() {
 	truncate -s 30G "$WORK/root.img"
 	MD=$(mdconfig -a -t vnode -f "$WORK/root.img")
 	# altroot: mounted at $ROOT here, "/" inside the image
-	zpool create -f -R "$ROOT" -O mountpoint=/ -O compression="zstd-$ZSTD_LEVEL" \
+	zpool create -f -R "$ROOT" -O mountpoint=/ -O compression=zstd \
 		-O atime=off "$BPOOL" "/dev/$MD"
 }
 
@@ -303,7 +307,11 @@ step_trim() {
 	(
 		cd "$ROOT"
 		rm -rf usr/share/doc usr/local/share/doc usr/share/examples usr/tests usr/lib/debug \
-			usr/include usr/lib/clang usr/local/share/gtk-doc var/cache/pkg/* var/db/freebsd-update/*
+			usr/include usr/lib/clang usr/local/share/gtk-doc var/cache/pkg/* var/db/freebsd-update/* \
+			usr/share/man usr/local/share/man usr/local/man usr/local/share/info
+		# test suites of Python and its packages
+		find usr/local/lib/python3* -type d \( -name test -o -name tests -o -name idle_test \) \
+			-prune -exec rm -rf {} + 2>/dev/null || true
 		find usr/lib usr/lib32 -name '*.a' -type f -delete 2>/dev/null || true
 		for _f in cc c++ clang clang++ clang-cpp cpp ld ld.lld lld lldb lldb-server \
 			llvm-addr2line llvm-ar llvm-cov llvm-cxxfilt llvm-nm llvm-objcopy llvm-objdump \
@@ -315,9 +323,8 @@ step_trim() {
 	# Compilers that came as dependencies: keep their shared libraries only.
 	for _p in llvm19 llvm20 llvm21 gcc13 gcc14 gcc15 binutils; do
 		in_root_pkg info -e "$_p" 2>/dev/null || continue
-		in_root_pkg info -ql "$_p" | grep -Ev '\.so(\.[0-9]+)*$' | while read -r _f; do
-			rm -f "$ROOT$_f"
-		done
+		in_root_pkg info -ql "$_p" | grep -Ev '\.so(\.[0-9]+)*$' | sed "s|^|$ROOT|" |
+			tr '\n' '\0' | xargs -0 rm -f
 	done
 	# C/C++ headers (Python keeps its own: sysconfig can read pyconfig.h).
 	find "$ROOT/usr/local/include" -mindepth 1 -maxdepth 1 ! -name 'python*' -exec rm -rf {} + 2>/dev/null || true
@@ -326,13 +333,25 @@ step_trim() {
 }
 
 step_image() {
-	log "Writing the compressed system image"
+	log "Compressing the system image (zstd-$ZSTD_LEVEL: slow, once)"
 	pool_open
 	pool_mounts_off
 	mkdir -p "$CD/lumen"
 	zfs destroy "$BPOOL@live" 2>/dev/null || true
 	zfs snapshot "$BPOOL@live"
-	zfs send -p -c -e "$BPOOL@live" > "$CD/lumen/system.zfs"
+	# Every block rewritten at the final level, in a second pool: an
+	# uncompressed stream in, a compressed one out (-c keeps the blocks as
+	# they are stored).
+	zpool list "$IPOOL" >/dev/null 2>&1 && zpool destroy -f "$IPOOL"
+	rm -f "$WORK/image.img"
+	truncate -s 30G "$WORK/image.img"
+	_imd=$(mdconfig -a -t vnode -f "$WORK/image.img")
+	zpool create -f -m none -O atime=off "$IPOOL" "/dev/$_imd"
+	zfs send -p "$BPOOL@live" | zfs receive -u -F -o compression="zstd-$ZSTD_LEVEL" "$IPOOL"
+	zfs send -p -c -e "$IPOOL@live" > "$CD/lumen/system.zfs"
+	zpool destroy -f "$IPOOL"
+	mdconfig -d -u "$_imd"
+	rm -f "$WORK/image.img"
 	_sz=$(stat -f %z "$CD/lumen/system.zfs")
 	[ "$_sz" -lt 4294967295 ] || die "the system image is $((_sz / 1048576)) MB: an ISO 9660 file must stay under 4 GB"
 	log "system image: $((_sz / 1048576)) MB"
@@ -373,12 +392,14 @@ step_iso() {
 	cp "$ROOT/COPYRIGHT" "$CD/COPYRIGHT" 2>/dev/null || true
 	printf '%s %s (%s) - %s\n' "$DISTRO_NAME" "$DISTRO_VERSION" "$REL" "$DISTRO_URL" > "$CD/README.TXT"
 
-	# UEFI: a small FAT image with the loader, as FreeBSD's own media have.
+	# UEFI: a small FAT image with the loader, as FreeBSD's own media have
+	# (FAT16: FAT12 cannot address 4 MB in 512-byte clusters; makefs then
+	# writes a broken file system that UEFI firmware cannot read).
 	_esp=$WORK/esp
 	rm -rf "$_esp"; mkdir -p "$_esp/EFI/BOOT"
 	cp "$ROOT/boot/loader.efi" "$_esp/EFI/BOOT/BOOTX64.EFI"
 	rm -f "$WORK/efiboot.img"
-	makefs -t msdos -o fat_type=12 -o sectors_per_cluster=1 -o volume_label=EFISYS \
+	makefs -t msdos -o fat_type=16 -o sectors_per_cluster=1 -o volume_label=EFISYS \
 		-s 4096k "$WORK/efiboot.img" "$_esp"
 
 	_iso=$OUT/$ISO_NAME.iso
@@ -410,6 +431,8 @@ step_iso() {
 	(cd "$OUT" && sha256 "$ISO_NAME.iso" > "$ISO_NAME.iso.sha256")
 	cp "$WORK/packages.list" "$OUT/$ISO_NAME.packages.txt" 2>/dev/null || true
 	log "done: $_iso ($(( $(stat -f %z "$_iso") / 1048576 )) MB)"
+	[ "$(stat -f %z "$_iso")" -le 2147483648 ] ||
+		printf 'build.sh: note: the ISO is larger than 2 GiB, the limit for a file in a GitHub release\n' >&2
 }
 
 for _s in $ALL_STEPS; do

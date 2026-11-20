@@ -28,12 +28,15 @@ if [ "$FW" = uefi ]; then
 	FWARGS="-drive if=pflash,format=raw,readonly=on,file=$OVMF_CODE -drive if=pflash,format=raw,file=$W/vars.fd"
 fi
 
-# Checks run as root on the live system's serial console.
-checks="printf 'CHECKS-%s\\n' BEGIN; cat /var/run/lumen-live/session /var/run/lumen-live/reason; \
-mount -p | head -3; zpool list -H -o name,size,alloc lumenlive; . /etc/os-release; echo \"\$PRETTY_NAME\"; \
-sleep 120; pgrep -lf 'Xorg|sddm|lumen-installer' | cut -c1-90; \
+# Checks run as root on the live system's serial console. (What the ramdisk
+# and the start scripts print goes to the screen only, so the serial line
+# is used from the login prompt on, and the checks look at the result.)
+checks="printf 'CHECKS-%s\\n' BEGIN; printf 'session=%s\\n' \"\$(cat /var/run/lumen-live/session)\"; \
+printf 'reason=%s\\n' \"\$(cat /var/run/lumen-live/reason)\"; mount -p | head -3; \
+zpool list -H -o name,size,alloc lumenlive; . /etc/os-release; echo \"\$PRETTY_NAME\"; \
+sleep 150; pgrep -lf 'Xorg|sddm|lumen-installer|openbox' | cut -c1-90; \
 ls /usr/local/etc/sddm.conf.d /usr/local/etc/X11/xorg.conf.d; \
-grep -h 'EE)' /var/log/Xorg.0.log 2>/dev/null | head -5; printf 'CHECKS-%s\\n' DONE"
+grep -h '(EE)' /var/log/Xorg.0.log 2>/dev/null | head -5; printf 'CHECKS-%s\\n' DONE"
 python3 - "$W/steps.json" "$FW" "$checks" <<'PY'
 import json, sys
 out, fw, checks = sys.argv[1:4]
@@ -43,9 +46,7 @@ if fw == "uefi":
     steps += [[r"Escape to loader prompt", "3", 900],
               [r"OK", 'set console="comconsole,efi"\r', 300],
               [r"OK", "boot\r", 60]]
-steps += [[r"loading LumenBSD into memory", "", 1800],
-          [r"LumenBSD: live session: ", "", 3600],
-          [r"login:", "root\r", 1800],
+steps += [[r"login:", "root\r", 5400],
           [r"#\s*$", checks + "\r", 300],
           [r"CHECKS-DONE", "", 900]]
 json.dump(steps, open(out, "w"))
@@ -78,9 +79,8 @@ Image.open('$W/screen.ppm').save('$W/screen.png')" 2>/dev/null || cp "$W/screen.
 log=$(tr -d '\r' < "$W/serial.log" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g')
 fail=0
 check() { if printf '%s\n' "$log" | grep -a -q -E "$2"; then echo "ok:   $1"; else echo "FAIL: $1"; fail=1; fi; }
-check "system copied into memory" 'loading LumenBSD into memory'
-check "rerooted into the memory pool" '^lumenlive[[:space:]]+/[[:space:]]+zfs'
-check "installer session chosen (no KMS in QEMU)" 'LumenBSD: live session: installer'
+check "rerooted into the system copied into memory" '^lumenlive[[:space:]]+/[[:space:]]+zfs'
+check "installer session chosen (no KMS in QEMU)" '^session=installer'
 check "os-release names LumenBSD" '^LumenBSD [0-9.]+ \(FreeBSD 15'
 check "X server running" 'Xorg'
 check "installer running" 'lumen-installer'

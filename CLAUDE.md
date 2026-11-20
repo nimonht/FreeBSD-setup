@@ -134,6 +134,9 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
   kern_reroot), so it needs RAM of about the image size (4 GB minimum).
   `install.sh` treats a `lumenlive` root as live media and never offers the
   disk carrying the `iso9660/$ISO_LABEL` label.
+  The ramdisk's and the start scripts' messages appear on the screen only
+  (the video console is primary), never on a serial line: tests log in on
+  the serial console and check the result (`/var/run/lumen-live/`).
 - `drm-kmod` and `nvidia-drm-kmod` are separate meta packages and have
   pointed at different DRM versions (6.12 and 5.15), which conflict. The ISO
   build and `stages/drivers.sh` install NVIDIA's module for drm-kmod's version

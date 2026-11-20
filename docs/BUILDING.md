@@ -109,8 +109,8 @@ one; `root` has no password either, as on FreeBSD's own install media.
 | `root` | a ZFS pool in a file (`iso/work/root.img`, compression zstd), the base system unpacked into it, `freebsd-update` patches |
 | `packages` | the packages in [`iso/packages.txt`](../iso/packages.txt), installed with `pkg -c` (the image's own ABI, repositories and install scripts). `drm-kmod` and `nvidia-drm-kmod` are pinned to one DRM version first |
 | `configure` | this repository as `/usr/local/share/freebsd-setup` (as on installed systems), branding (`lib/branding.sh`), the installer, the live session files from [`iso/live/`](../iso/live), the live user, the release's `MANIFEST` (the installer checks the base system it downloads against it) |
-| `trim` | compilers, headers, static libraries and documentation removed: nobody compiles on a live system, and installations download their own packages |
-| `image` | `zfs send` of the pool into `lumen/system.zfs` |
+| `trim` | compilers, headers, static libraries, documentation, manual pages and Python test suites removed: nobody compiles on a live system, and installations download their own packages |
+| `image` | every block recompressed once at zstd-19 (`ZSTD_LEVEL`) in a second pool, then `zfs send -c` into `lumen/system.zfs`. Packages are installed with fast zstd, so only this step is slow |
 | `ramdisk` | the ramdisk with `/rescue` |
 | `iso` | boot files, the EFI image, `makefs -t cd9660`, the hybrid GPT (`mkimg`, as FreeBSD's `mkisoimages.sh`) |
 
