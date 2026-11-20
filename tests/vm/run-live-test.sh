@@ -8,6 +8,9 @@
 #
 #   sh tests/vm/run-live-test.sh iso/out/lumenbsd-0.1-amd64.iso [uefi|bios]
 #
+# MEDIA=usb attaches the ISO as a USB stick (the hybrid GPT and its EFI
+# partition, as when written with Rufus or dd) instead of a DVD.
+#
 # Needs qemu-system-x86_64, OVMF (for uefi), python3. Works without KVM
 # (slow: several minutes). Result: tests/vm/live-work/serial.log and
 # screen.png; exit status 0 when every check passed.
@@ -22,6 +25,7 @@ ACCEL=tcg,thread=multi CPU=Westmere
 [ -w /dev/kvm ] && ACCEL=kvm CPU=max
 
 rm -rf "$W"; mkdir -p "$W"
+W=$(cd "$W" && pwd)      # absolute: QEMU runs from / once daemonized
 FWARGS=""
 if [ "$FW" = uefi ]; then
 	cp "$OVMF_VARS" "$W/vars.fd"
@@ -36,7 +40,10 @@ printf 'reason=%s\\n' \"\$(cat /var/run/lumen-live/reason)\"; mount -p | head -3
 zpool list -H -o name,size,alloc lumenlive; . /etc/os-release; echo \"\$PRETTY_NAME\"; \
 sleep 150; pgrep -lf 'Xorg|sddm|lumen-installer|openbox' | cut -c1-90; \
 ls /usr/local/etc/sddm.conf.d /usr/local/etc/X11/xorg.conf.d; \
-grep -h '(EE)' /var/log/Xorg.0.log 2>/dev/null | head -5; printf 'CHECKS-%s\\n' DONE"
+grep -h '(EE)' /var/log/Xorg.0.log 2>/dev/null | head -5; \
+glabel status -s | awk '\$1 ~ /^iso9660\// { print \"media=\" \$3 }'; \
+printf 'offered=%s\\n' \"\$(su -m lumen -c 'doas /bin/sh /usr/local/share/freebsd-setup/install.sh --probe' | awk -F'\\t' '\$1 == \"disk\" { printf \"%s \", \$2 }')\"; \
+printf 'CHECKS-%s\\n' DONE"
 python3 - "$W/steps.json" "$FW" "$checks" <<'PY'
 import json, sys
 out, fw, checks = sys.argv[1:4]
@@ -52,9 +59,18 @@ steps += [[r"login:", "root\r", 5400],
 json.dump(steps, open(out, "w"))
 PY
 
+MEDIAARGS="-drive file=$ISO,media=cdrom,readonly=on -boot d"
+if [ "${MEDIA:-dvd}" = usb ]; then
+	# Writable, as a real stick: UEFI firmware writes the backup GPT that a
+	# hybrid ISO lacks, and finds no partitions on a read-only one.
+	qemu-img create -q -f qcow2 -b "$ISO" -F raw "$W/stick.qcow2"
+	MEDIAARGS="-device qemu-xhci -drive if=none,id=stick,file=$W/stick.qcow2,format=qcow2 -device usb-storage,drive=stick,bootindex=0"
+fi
+# An empty disk to install on: the installer must offer it, and not the stick.
+qemu-img create -q -f qcow2 "$W/target.qcow2" 40G
 # shellcheck disable=SC2086
 qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 4 -m "${VM_MEM:-6G}" $FWARGS \
-	-drive file="$ISO",media=cdrom,readonly=on -boot d \
+	$MEDIAARGS -drive file="$W/target.qcow2",format=qcow2,if=virtio \
 	-netdev user,id=n0 -device virtio-net-pci,netdev=n0 -vga std \
 	-display none -serial unix:"$W/ser.sock",server=on,wait=off \
 	-monitor unix:"$W/mon.sock",server=on,wait=off -daemonize -pidfile "$W/qemu.pid"
@@ -84,5 +100,15 @@ check "installer session chosen (no KMS in QEMU)" '^session=installer'
 check "os-release names LumenBSD" '^LumenBSD [0-9.]+ \(FreeBSD 15'
 check "X server running" 'Xorg'
 check "installer running" 'lumen-installer'
+# The installer must never offer the stick it runs from (install.sh's
+# disk_candidates; after the reroot nothing on the stick is mounted).
+media=$(printf '%s\n' "$log" | sed -n 's/^media=\([a-z]*[0-9]*\).*/\1/p' | head -1)
+offered=$(printf '%s\n' "$log" | sed -n 's/^offered=//p' | tail -1)
+check "the empty disk is offered for installing" '^offered=.*vtbd0'
+if [ -n "$media" ] && ! printf ' %s ' "$offered" | grep -q " $media "; then
+	echo "ok:   the live media ($media) is not offered for installing (offered: ${offered:-none})"
+else
+	echo "FAIL: the live media (${media:-not found}) is offered for installing: $offered"; fail=1
+fi
 echo "screen: $W/screen.png"
 exit "$fail"

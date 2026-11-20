@@ -98,7 +98,8 @@ sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-e
 
 Everything but the last line runs on Linux, as CI does. The ISO:
 `sh iso/build-in-vm.sh` (Linux, QEMU; KVM makes it fast) or `doas sh iso/build.sh`
-(FreeBSD), then `sh tests/vm/run-live-test.sh iso/out/lumenbsd-*.iso uefi`, which
+(FreeBSD), then `sh tests/vm/run-live-test.sh iso/out/lumenbsd-*.iso uefi`
+(`MEDIA=usb` for the USB-stick path), which
 boots it to the installer session (QEMU has no KMS, so never to KDE) and saves a
 screenshot. The live KDE session can only be tested on real hardware. The last one installs
 FreeBSD in QEMU through the serial console (slow: mostly package downloads); it

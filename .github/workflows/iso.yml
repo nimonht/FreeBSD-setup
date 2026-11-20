@@ -40,7 +40,13 @@ jobs:
           VM_MEM: "12288"
         run: sh iso/build-in-vm.sh
 
-      - name: Boot the ISO (UEFI)
+      - name: Boot the ISO (UEFI, as a DVD)
+        run: sh tests/vm/run-live-test.sh iso/out/*.iso uefi
+
+      - name: Boot the ISO (UEFI, as a USB stick)
+        env:
+          MEDIA: usb
+          WORK: tests/vm/live-work-usb
         run: sh tests/vm/run-live-test.sh iso/out/*.iso uefi
 
       - name: Keep the result
@@ -50,8 +56,8 @@ jobs:
           name: lumenbsd-iso
           path: |
             iso/out/
-            tests/vm/live-work/serial.log
-            tests/vm/live-work/screen.png
+            tests/vm/live-work*/serial.log
+            tests/vm/live-work*/screen.png
           compression-level: 0
 
       - name: Publish the release

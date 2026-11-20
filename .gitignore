@@ -4,4 +4,4 @@ __pycache__/
 iso/work/
 iso/out/
 iso/vm/
-tests/vm/live-work/
+tests/vm/live-work*/
