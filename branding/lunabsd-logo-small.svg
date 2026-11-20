@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LunaBSD artwork, drawn by branding/make-art.py. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+
+<mask id="m118_138"><rect x="-182" y="-162" width="600" height="600" fill="#fff"/><circle cx="160" cy="104.4" r="91.35" fill="#000"/></mask>
+<circle cx="118" cy="138" r="105" fill="#454138" mask="url(#m118_138)"/>
+<rect x="223.157" y="31.8319" width="19.5" height="19.5" fill="#454138"/>
+</svg>

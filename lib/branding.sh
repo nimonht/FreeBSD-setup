@@ -34,18 +34,22 @@ branding_apply() {
 	_b="$REPO_DIR/branding"
 	_s="$_r/usr/local/share/$DISTRO_ID"
 	mkdir -p "$_s"
-	_br_put "$_b/lunabsd-logo.svg" "$_s/$DISTRO_ID-logo.svg"
-	_br_put "$_b/lunabsd-wallpaper.jpg" "$_s/$DISTRO_ID-wallpaper.jpg"
+	for _f in logo.svg logo-reverse.svg logo-small.svg lockup.svg lockup-reverse.svg wordmark.svg \
+		wallpaper.jpg wallpaper-night.jpg; do
+		_br_put "$_b/lunabsd-$_f" "$_s/$DISTRO_ID-$_f"
+	done
 	_br_put "$_b/fastfetch-logo.txt" "$_s/fastfetch-logo.txt"
 	# The logo under its icon name too (os-release LOGO=, KDE About).
 	_br_put "$_b/lunabsd-logo.svg" "$_r/usr/local/share/icons/hicolor/scalable/apps/$DISTRO_ID.svg"
 	_br_put "$_b/lunabsd-logo.svg" "$_r/usr/local/share/pixmaps/$DISTRO_ID.svg"
 
-	# Wallpaper as a Plasma wallpaper package, and the one-time script that
-	# puts it on desktops still showing Plasma's default.
+	# Wallpaper as a Plasma wallpaper package (parchment by day; Plasma
+	# shows images_dark/ with a dark colour scheme), and the one-time script
+	# that puts it on desktops still showing Plasma's default.
 	_w="$_r/usr/local/share/wallpapers/LunaBSD"
 	_br_put "$_b/plasma/metadata.json" "$_w/metadata.json"
 	_br_put "$_b/lunabsd-wallpaper.jpg" "$_w/contents/images/3840x2160.jpg"
+	_br_put "$_b/lunabsd-wallpaper-night.jpg" "$_w/contents/images_dark/3840x2160.jpg"
 	_br_put "$_b/lunabsd-wallpaper-preview.jpg" "$_w/contents/screenshot.jpg"
 	_br_put "$_b/plasma/lunabsd-wallpaper.js" \
 		"$_r/usr/local/share/plasma/shells/org.kde.plasma.desktop/contents/updates/lunabsd-wallpaper.js"
@@ -78,6 +82,9 @@ ABOUT
 	# Boot menu: the LunaBSD name and sunrise (FreeBSD's loader, our art).
 	_br_put "$_b/loader/brand-luna.lua" "$_r/boot/lua/brand-luna.lua" 444
 	_br_put "$_b/loader/logo-luna.lua" "$_r/boot/lua/logo-luna.lua" 444
+	# the same as pictures, for framebuffer consoles (UEFI)
+	_br_put "$_b/loader/lunabsd-brand.png" "$_r/boot/images/lunabsd-brand.png" 444
+	_br_put "$_b/loader/lunabsd-logo.png" "$_r/boot/images/lunabsd-logo.png" 444
 	if [ -z "${BRANDING_NO_LOADER_CONF:-}" ]; then
 		_br_kv "$_r/boot/loader.conf" loader_brand luna
 		_br_kv "$_r/boot/loader.conf" loader_logo luna

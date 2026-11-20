@@ -54,6 +54,7 @@ wireplumber
 pipewire-spa-oss
 noto-basic
 dejavu
+plex-ttf
 
 # The graphical installer (Python + Qt 6 QML) and its helpers
 py312-qt6-pyqt
