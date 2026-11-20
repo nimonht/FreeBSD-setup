@@ -4,87 +4,72 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
-    property bool ready: app.language !== "" && app.layout !== ""
-    property string hint: ""
+LPage {
+    title: "Language"
+    subtitle: "The language of your desktop, and the keyboard you type on. The keyboard changes right away."
+    code: app.stepCode(1)
+    scroll: false
+    ready: app.language !== "" && app.layout !== ""
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 20
-
-        PageHeader {
-            title: "Language and keyboard"
-            subtitle: "The language of your desktop, and the keyboard you type on. The keyboard changes right away."
-        }
+        spacing: 22
 
         RowLayout {
-            spacing: 20
             Layout.fillWidth: true
             Layout.fillHeight: true
+            spacing: 26
 
-            Card {
+            Panel {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                title: "Language"
+                tag: installer.languages.length + " AVAILABLE"
                 padding: 8
-                ColumnLayout {
+                ListView {
+                    id: langs
                     anchors.fill: parent
-                    Label {
-                        text: "Language"
-                        font.bold: true
-                        color: app.cText
-                        Layout.margins: 10
-                    }
-                    ListView {
-                        id: langList
-                        clip: true
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: installer.languages
-                        ScrollBar.vertical: ScrollBar {}
-                        delegate: ItemDelegate {
-                            width: langList.width
-                            text: modelData.label
-                            highlighted: app.language === modelData.code
-                            onClicked: app.setLanguage(modelData.code)
-                        }
+                    clip: true
+                    spacing: 4
+                    model: installer.languages
+                    ScrollBar.vertical: LScrollBar {}
+                    delegate: MenuRow {
+                        width: langs.width - 10
+                        compact: true
+                        title: modelData.label
+                        checked: app.language === modelData.code
+                        onClicked: app.setLanguage(modelData.code)
                     }
                 }
             }
-
-            Card {
+            Panel {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                title: "Keyboard layout"
+                tag: installer.layouts.length + " AVAILABLE"
                 padding: 8
-                ColumnLayout {
+                ListView {
+                    id: layouts
                     anchors.fill: parent
-                    Label {
-                        text: "Keyboard layout"
-                        font.bold: true
-                        color: app.cText
-                        Layout.margins: 10
-                    }
-                    ListView {
-                        id: layoutList
-                        clip: true
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: installer.layouts
-                        ScrollBar.vertical: ScrollBar {}
-                        delegate: ItemDelegate {
-                            width: layoutList.width
-                            text: modelData.label
-                            highlighted: app.layout === modelData.xkb
-                            onClicked: app.setLayout(modelData.xkb, true)
-                        }
+                    clip: true
+                    spacing: 4
+                    model: installer.layouts
+                    ScrollBar.vertical: LScrollBar {}
+                    delegate: MenuRow {
+                        width: layouts.width - 10
+                        compact: true
+                        title: modelData.label
+                        tag: modelData.xkb
+                        checked: app.layout === modelData.xkb
+                        onClicked: app.setLayout(modelData.xkb, true)
                     }
                 }
             }
         }
 
-        TextField {
-            Layout.fillWidth: true
-            placeholderText: "Type here to test the keyboard"
+        LField {
+            label: "Try your keyboard"
+            placeholder: "Type a few letters to check them"
         }
     }
 }

@@ -1,20 +1,23 @@
-// Progress while install.sh runs, a few words about the system, and the
-// full output for the curious.
+// Progress while install.sh runs: the share done, the current step, notes
+// about the system, and install.sh's own output.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
-    property bool ready: false
-    property string hint: ""
-    property int slide: 0
+LPage {
+    title: "Installing"
+    subtitle: "Keep the computer on and connected to the internet."
+    code: "IN PROGRESS"
+    scroll: false
+    ready: false
 
+    property int slide: 0
     readonly property var slides: [
         ["Undo for updates", "Every update can be undone: pick the previous boot environment in the boot menu and you are back where you were."],
-        ["Your files have versions", "Automatic ZFS snapshots keep hourly and daily versions of your files. Deleted something? It is still in a snapshot."],
-        ["Drivers, chosen for you", "Graphics, Wi-Fi firmware, CPU microcode and laptop hotkeys are picked from the hardware found in this computer."],
-        ["Keeping up to date", "Run 'sysup' in a terminal: packages, FreeBSD patches and a snapshot before each update."],
-        ["Help", "Something not working? The README and docs/TROUBLESHOOTING.md on " + installer.distro.DISTRO_URL + " explain what to do."]
+        ["Your files have versions", "Automatic snapshots keep hourly and daily versions of your files. Deleted something? It is still in a snapshot."],
+        ["Drivers, chosen for you", "Graphics, Wi-Fi firmware, CPU microcode and laptop hotkeys are picked from the hardware in this computer."],
+        ["Keeping up to date", "Type sysup in a terminal: packages, FreeBSD's patches, and a snapshot before each update."],
+        ["When something does not work", "The guides on " + installer.distro.DISTRO_URL.replace("https://", "") + " explain what to do."]
     ]
 
     Timer {
@@ -26,111 +29,135 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 18
+        spacing: 24
 
-        PageHeader {
-            title: "Installing " + app.distroName
-            subtitle: "Keep the computer on and connected to the internet."
-        }
-
-        Card {
+        Panel {
             Layout.fillWidth: true
+            title: "Progress"
+            tag: installer.installing ? "RUNNING" : ""
             ColumnLayout {
                 width: parent.width
-                spacing: 10
+                spacing: 14
                 RowLayout {
                     Layout.fillWidth: true
+                    spacing: 26
                     Label {
-                        text: installer.stepTitle
-                        font.pixelSize: 18
-                        font.bold: true
-                        color: app.cText
+                        text: Math.round(installer.fraction * 100) + "%"
+                        color: app.cInk
+                        font.family: app.fMono
+                        font.pixelSize: 54
+                        font.weight: Font.Light
+                        Layout.preferredWidth: 150
+                    }
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        elide: Text.ElideRight
+                        spacing: 6
+                        Label {
+                            Layout.fillWidth: true
+                            text: installer.stepTitle
+                            color: app.cInk
+                            font.pixelSize: 20
+                            font.weight: Font.Medium
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: installer.stepDetail
+                            color: app.cSoft
+                            font.family: app.fMono
+                            font.pixelSize: 13
+                            elide: Text.ElideMiddle
+                        }
+                    }
+                }
+                Meter {
+                    Layout.fillWidth: true
+                    value: installer.fraction
+                    active: installer.installing
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 26
+
+            Panel {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.preferredWidth: 4
+                title: "Notes"
+                tag: (slide + 1) + " / " + slides.length
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 12
+                    Item { Layout.fillHeight: true }
+                    Image {
+                        source: installer.logoUrl
+                        sourceSize.width: 48
+                        sourceSize.height: 48
+                        Layout.preferredWidth: 48
+                        Layout.preferredHeight: 48
                     }
                     Label {
-                        text: Math.round(installer.fraction * 100) + " %"
-                        font.pixelSize: 18
-                        color: app.cAccent
+                        Layout.fillWidth: true
+                        text: slides[slide][0]
+                        color: app.cInk
+                        font.pixelSize: 22
+                        font.weight: Font.Light
+                        font.letterSpacing: 1
+                        wrapMode: Text.Wrap
                     }
-                }
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 10
-                    radius: 5
-                    color: app.cLine
-                    Rectangle {
-                        width: parent.width * installer.fraction
-                        height: parent.height
-                        radius: 5
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0; color: app.cAccent }
-                            GradientStop { position: 1; color: app.cAccent2 }
+                    Label {
+                        Layout.fillWidth: true
+                        text: slides[slide][1]
+                        color: app.cSoft
+                        wrapMode: Text.Wrap
+                        lineHeight: 1.25
+                    }
+                    Item { Layout.fillHeight: true }
+                    Row {
+                        spacing: 6
+                        Repeater {
+                            model: slides.length
+                            Rectangle {
+                                width: 8
+                                height: 8
+                                color: index === slide ? app.cInk : "transparent"
+                                border.width: 1
+                                border.color: app.cInk
+                            }
                         }
-                        Behavior on width { NumberAnimation { duration: 400 } }
                     }
                 }
-                Label {
-                    text: installer.stepDetail
-                    color: app.cMuted
-                    elide: Text.ElideMiddle
-                    Layout.fillWidth: true
+            }
+            Panel {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.preferredWidth: 5
+                title: "Log"
+                tag: "INSTALL.SH"
+                padding: 10
+                ScrollView {
+                    id: logView
+                    anchors.fill: parent
+                    clip: true
+                    ScrollBar.vertical: LScrollBar {}
+                    TextArea {
+                        readOnly: true
+                        text: installer.logText
+                        font.family: app.fMono
+                        font.pixelSize: 12
+                        color: app.cInk
+                        wrapMode: TextEdit.NoWrap
+                        selectionColor: app.cInk
+                        selectedTextColor: app.cPaper
+                        background: null
+                        onTextChanged: cursorPosition = length
+                    }
                 }
             }
-        }
-
-        Card {
-            visible: !details.checked
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            ColumnLayout {
-                anchors.centerIn: parent
-                width: parent.width * 0.8
-                spacing: 12
-                Image {
-                    source: installer.logoUrl
-                    sourceSize.width: 72
-                    sourceSize.height: 72
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Label {
-                    text: slides[slide][0]
-                    font.pixelSize: 22
-                    font.bold: true
-                    color: app.cText
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Label {
-                    text: slides[slide][1]
-                    color: app.cMuted
-                    font.pixelSize: 15
-                    wrapMode: Text.Wrap
-                    horizontalAlignment: Text.AlignHCenter
-                    Layout.fillWidth: true
-                }
-            }
-        }
-
-        ScrollView {
-            visible: details.checked
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            TextArea {
-                readOnly: true
-                text: installer.logText
-                font.family: "monospace"
-                font.pixelSize: 12
-                wrapMode: TextEdit.NoWrap
-                onTextChanged: cursorPosition = length
-                background: Rectangle { color: app.cSide; radius: 10 }
-            }
-        }
-
-        CheckBox {
-            id: details
-            text: "Show details"
         }
     }
 }

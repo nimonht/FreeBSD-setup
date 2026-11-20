@@ -1,105 +1,156 @@
-// The step list on the left, with the power menu of the full-screen
-// installer session (no desktop around it to restart from).
+// The steps, as a menu: done ones are filled and can be revisited, the
+// current one is an ink band. In the full-screen session (no desktop
+// around it) the System menu offers a terminal, restart and power off.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Rectangle {
-    color: app.cSide
+Item {
+    id: side
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 26
-        spacing: 8
-
-        RowLayout {
-            spacing: 12
-            Image {
-                source: installer.logoUrl
-                sourceSize.width: 46
-                sourceSize.height: 46
-            }
-            ColumnLayout {
-                spacing: 0
-                Label {
-                    text: app.distroName
-                    font.pixelSize: 22
-                    font.bold: true
-                    color: app.cText
-                }
-                Label {
-                    text: installer.distro.DISTRO_VERSION + " " + installer.distro.DISTRO_CODENAME
-                    color: app.cMuted
-                    font.pixelSize: 12
+    component Strip: Rectangle {
+        property string label
+        Layout.fillWidth: true
+        implicitHeight: 28
+        color: app.cInk
+        Rectangle {
+            x: 12
+            anchors.verticalCenter: parent.verticalCenter
+            width: 6
+            height: 6
+            color: app.cPaper
+        }
+        Label {
+            x: 26
+            anchors.verticalCenter: parent.verticalCenter
+            text: parent.label
+            color: app.cPaper
+            font.pixelSize: 12
+            font.weight: Font.Medium
+            font.letterSpacing: 2.4
+            font.capitalization: Font.AllUppercase
+        }
+        Row {
+            anchors.right: parent.right
+            anchors.rightMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 3
+            Repeater {
+                model: 3
+                Rectangle {
+                    width: 3
+                    height: 3
+                    color: app.cPaper
+                    opacity: 0.6
                 }
             }
         }
+    }
 
-        Item { Layout.preferredHeight: 26 }
+    Rectangle {
+        anchors.right: parent.right
+        width: 1
+        height: parent.height
+        color: app.cInk
+        opacity: 0.35
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 20
+        anchors.rightMargin: 21
+        spacing: 0
+
+        Strip { label: "Steps" }
+        Item { Layout.preferredHeight: 10 }
 
         Repeater {
             model: app.steps
-            delegate: RowLayout {
-                spacing: 12
-                readonly property bool done: index < app.page
+            delegate: Item {
+                id: step
                 readonly property bool current: index === app.page || (index === app.installPage && app.page === app.donePage)
-                Layout.preferredHeight: 34
+                readonly property bool done: index < app.page && !current
+                readonly property bool canGo: done && index > 0 && app.page <= app.summaryPage
+                Layout.fillWidth: true
+                implicitHeight: 38
+
                 Rectangle {
-                    width: 26
-                    height: 26
-                    radius: 13
-                    color: parent.done ? app.cAccent : "transparent"
-                    border.width: 2
-                    border.color: parent.done || parent.current ? app.cAccent : app.cLine
+                    height: parent.height - 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: step.current ? parent.width : 0
+                    color: app.cInk
+                    Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.topMargin: 2
+                    anchors.bottomMargin: 2
+                    color: app.cWeak
+                    opacity: area.containsMouse && step.canGo ? 0.6 : 0
+                }
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 12
                     Label {
-                        anchors.centerIn: parent
-                        text: parent.parent.done ? "✓" : (index + 1)
-                        color: parent.parent.done ? app.cSide : app.cText
+                        text: (index < 9 ? "0" : "") + (index + 1)
+                        color: step.current ? app.cPaper : app.cSoft
+                        font.family: app.fMono
                         font.pixelSize: 12
-                        font.bold: true
+                    }
+                    Rectangle {
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
+                        color: step.done ? app.cInk : "transparent"
+                        border.width: 1
+                        border.color: step.current ? app.cPaper : (step.done ? app.cInk : app.cSoft)
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: modelData
+                        color: step.current ? app.cPaper : (step.done ? app.cInk : app.cSoft)
+                        font.pixelSize: 15
+                        font.weight: step.current ? Font.Medium : Font.Normal
+                        elide: Text.ElideRight
                     }
                 }
-                Label {
-                    text: modelData
-                    color: parent.current ? app.cText : app.cMuted
-                    font.pixelSize: 15
-                    font.bold: parent.current
+                MouseArea {
+                    id: area
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    enabled: step.canGo
+                    cursorShape: step.canGo ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: app.page = index
                 }
             }
         }
 
         Item { Layout.fillHeight: true }
 
-        Label {
-            visible: installer.demo
-            text: "Demo: nothing on this computer is changed"
-            color: app.cWarn
-            font.pixelSize: 12
-            wrapMode: Text.Wrap
-            Layout.fillWidth: true
-        }
-
         ColumnLayout {
             visible: installer.mode === "kiosk"
-            spacing: 2
             Layout.fillWidth: true
-            Button {
-                text: "Terminal"
-                flat: true
-                Layout.fillWidth: true
+            spacing: 4
+            Strip { label: "System" }
+            Item { Layout.preferredHeight: 4 }
+            MenuRow {
+                kind: "action"
+                compact: true
+                title: "Open a terminal"
                 onClicked: installer.openTerminal()
             }
-            Button {
-                text: "Restart"
-                flat: true
-                Layout.fillWidth: true
+            MenuRow {
+                kind: "action"
+                compact: true
+                title: "Restart"
                 enabled: !installer.installing
                 onClicked: installer.reboot()
             }
-            Button {
-                text: "Power off"
-                flat: true
-                Layout.fillWidth: true
+            MenuRow {
+                kind: "action"
+                compact: true
+                title: "Power off"
                 enabled: !installer.installing
                 onClicked: installer.poweroff()
             }
