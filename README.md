@@ -36,6 +36,13 @@ is the live system, the installer, the setup that turns FreeBSD into a
 desktop (`setup.sh` and `stages/`) and small compatibility services for
 things the desktops expect from Linux.
 
+| | |
+|---|---|
+| ![The installer on the live USB](docs/images/live-vm-installer.png) | ![Installing next to Windows](docs/images/installer-disk.png) |
+| The live ISO, started in a virtual machine (QEMU): FreeBSD has no graphics driver there, so the installer runs alone | Installing next to Windows, with a size slider (demo data) |
+| ![Desktop, apps and updates](docs/images/installer-desktop.png) | ![Installing](docs/images/installer-progress.png) |
+| Desktop, apps and updates | While it installs |
+
 > **Status: 0.1 "Dawn", a preview.** What installs the system and sets up
 > the desktop is FreeBSD-setup's tested code. The live ISO and the graphical
 > installer are new: the ISO has been built and started in a virtual machine
