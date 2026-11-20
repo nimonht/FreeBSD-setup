@@ -28,7 +28,7 @@ from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Palette (also in installer/qml/Theme.qml and docs/BRANDING.md)
+# Palette (also at the top of installer/qml/Main.qml, and in docs/BRANDING.md)
 PARCHMENT = "#D1CDB7"   # background
 PAPER = "#DCD8C0"       # raised surfaces, light text on ink
 GRID = "#C9C4AD"        # grid lines on parchment

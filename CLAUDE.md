@@ -22,8 +22,8 @@ D-Bus and SSH but not yet on a real screen.
 |---|---|
 | `distro.conf` | The distribution's name, version, FreeBSD release, live package branch, ISO label. Everything reads it; renaming happens here. |
 | `iso/` | The live ISO: `build.sh` (on FreeBSD), `build-in-vm.sh` (from Linux/CI), `packages.txt`, `size.py`, the ramdisk (`ramdisk/`), boot menu (`boot/`), live session (`live/`). See docs/BUILDING.md. |
-| `installer/` | The graphical installer: `luna_installer/backend.py` (pure Python, tested), `app.py` (Qt glue), `qml/` (pages), `luna-wifi` (Wi-Fi helper). |
-| `branding/`, `lib/branding.sh` | Logo, wallpaper, boot menu art, and the code that installs them (also `stages/branding.sh`). |
+| `installer/` | The graphical installer: `luna_installer/backend.py` (pure Python, tested), `app.py` (Qt glue), `qml/` (pages and the design system: Qt's Basic style, every control drawn by our components; colours and fonts at the top of `Main.qml`), `luna-wifi` (Wi-Fi helper). |
+| `branding/`, `lib/branding.sh` | All artwork, drawn by `branding/make-art.py` (run it, commit the output); `lib/branding.sh` installs it (also `stages/branding.sh`). The rules: [docs/BRANDING.md](docs/BRANDING.md). |
 | `bootstrap.sh` | The one-liner entry: downloads the repo, runs `install.sh` on the live USB or `setup.sh` on an installed system. `FBS_REF=<branch>` picks a branch. |
 | `install.sh` | Guided installer (ZFS, whole disk or next to other systems, optional GELI). Ends by running `setup.sh --chroot` inside the new system. |
 | `setup.sh` | Runs the stages in `stages/` in order. `setup.sh STAGE...` runs only some. |

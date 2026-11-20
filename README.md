@@ -1,4 +1,9 @@
-<p align="center"><img src="branding/lunabsd-logo.svg" width="120" alt=""></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="branding/lunabsd-lockup-reverse.svg">
+    <img src="branding/lunabsd-lockup.svg" width="420" alt="LunaBSD">
+  </picture>
+</p>
 
 # LunaBSD
 
@@ -42,6 +47,12 @@ things the desktops expect from Linux.
 | The live ISO, started in a virtual machine (QEMU): FreeBSD has no graphics driver there, so the installer runs alone | Installing next to Windows, with a size slider (demo data) |
 | ![Desktop, apps and updates](docs/images/installer-desktop.png) | ![Installing](docs/images/installer-progress.png) |
 | Desktop, apps and updates | While it installs |
+| ![The boot menu](docs/images/boot-menu.png) | ![The wallpaper](branding/lunabsd-wallpaper-preview.jpg) |
+| The boot menu | The wallpaper (a night version goes with dark mode) |
+
+The look is LunaBSD's own: parchment, ink and a measuring grid, with menus
+whose interaction is inspired by NieR:Automata's. Logo, colours, type and
+where each piece is used: [docs/BRANDING.md](docs/BRANDING.md).
 
 > **Status: 0.1 "Crescent", a preview.** What installs the system and sets up
 > the desktop is FreeBSD-setup's tested code. The live ISO and the graphical
