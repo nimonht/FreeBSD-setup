@@ -108,7 +108,7 @@ qemu-system-x86_64 -machine q35 -accel "$ACCEL" -cpu "$CPU" -smp 3 -m "${VM_MEM:
 	-rtc base=$RTC -display none -serial unix:"$W/ser.sock",server=on,wait=off -daemonize -pidfile "$W/qemu.pid"
 python3 "$HERE/drive.py" "$W/ser.sock" "$W/serial.log" "$W/steps.json"
 tr -d '\r' < "$W/serial.log" | grep -a -q 'INSTALLER-EXIT=0' || { echo "FAIL: installer did not finish"; exit 1; }
-tr -d '\r' < "$W/serial.log" | grep -a -q 'FreeBSD is installed' || { echo "FAIL: no success message"; exit 1; }
+tr -d '\r' < "$W/serial.log" | grep -a -q ' is installed.' || { echo "FAIL: no success message"; exit 1; }
 if tr -d '\r' < "$W/serial.log" | grep -a -q 'desktop setup stopped with an error'; then
 	echo "FAIL: the setup stages stopped with an error:"
 	tr -d '\r' < "$W/serial.log" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g' | grep -a -E '^(ERROR|WARNING):' | head -5

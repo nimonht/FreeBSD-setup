@@ -1,33 +1,54 @@
-# FreeBSD-setup
+<p align="center"><img src="branding/lumenbsd-logo.svg" width="120" alt=""></p>
 
-Install FreeBSD 15 as a ready-to-use desktop with one command and a few
-questions.
+# LumenBSD
 
-FreeBSD-setup is a guided installer plus setup wizard for FreeBSD 15. It checks
-your computer, tells you what will and won't work on it, installs FreeBSD on
-ZFS (whole disk, or next to Windows/Linux), and sets up a complete desktop with
-the right drivers for your hardware:
+**FreeBSD, ready for your desktop.** LumenBSD is a desktop distribution of
+FreeBSD 15: a live USB stick that starts KDE Plasma so you can try it, a
+graphical installer in the style of CachyOS's or Windows Setup, and a
+desktop that is set up for your hardware when it arrives.
 
-- KDE Plasma (recommended, familiar if you come from Windows), Hyprland with
-  the Caelestia shell (a modern tiling desktop, for the adventurous), or both
-- Drivers picked automatically: Intel, AMD and NVIDIA graphics (each NVIDIA
-  card gets the driver branch NVIDIA lists for it), firmware for GPUs and Wi-Fi,
-  CPU microcode, laptop touchpads, hotkeys and power saving
-- ZFS with automatic snapshots and boot environments: your files have hourly
-  and daily versions to go back to, and every update can be undone with one
-  reboot
+- **Try before installing.** The USB stick starts a complete KDE Plasma
+  desktop with Firefox. A *Welcome* window offers *Try* or *Install*.
+- **An installer for non-experts.** Language and keyboard, Wi-Fi, a check of
+  what works on your computer, whole disk or next to Windows/Linux, optional
+  encryption, your account, desktop and apps, one summary, one click. It
+  never writes anything before that click.
+- **Drivers picked automatically**, on the live stick and in the installed
+  system: Intel, AMD and NVIDIA graphics (each NVIDIA card gets the driver
+  branch NVIDIA lists for it), firmware for GPUs and Wi-Fi, CPU microcode,
+  laptop touchpads, hotkeys and power saving. Graphics cards without a
+  FreeBSD driver, and virtual machines, still get the installer, on a basic
+  framebuffer, with an explanation.
+- **KDE Plasma** (recommended), **Hyprland with the Caelestia shell** (a
+  modern tiling desktop, for the adventurous), or both.
+- **ZFS with automatic snapshots and boot environments**: your files have
+  hourly and daily versions to go back to, and every update can be undone
+  with one reboot.
 - Sound (PipeWire), printers and scanners, USB drives and phones, input
-  methods for Vietnamese, Chinese, Japanese and Korean, a firewall
-- Optional: everyday apps (Firefox, LibreOffice, VLC, GIMP), gaming (Steam,
-  Wine/Proton), developer tools
+  methods for Vietnamese, Chinese, Japanese and Korean, a firewall; optional
+  everyday apps, gaming (Steam, Wine/Proton) and developer tools.
+- **Always current.** The installer downloads the newest FreeBSD packages
+  while it installs, so a new system is up to date from its first start.
 
-## Is FreeBSD right for you?
+LumenBSD is stock FreeBSD underneath: FreeBSD's kernel, base system, package
+repositories and security updates, with no patches of its own. What it adds
+is the live system, the installer, the setup that turns FreeBSD into a
+desktop (`setup.sh` and `stages/`) and small compatibility services for
+things the desktops expect from Linux.
+
+> **Status: 0.1 "Dawn", a preview.** The installer's steps and the desktop
+> setup are the project's tested FreeBSD-setup code. The live ISO and the
+> graphical installer are new and have not run on real hardware yet; the
+> live KDE session needs a real graphics card, so virtual machines cannot
+> test it. Please report what happens on yours.
+
+## Is LumenBSD right for you?
 
 Read this before you install. FreeBSD is not a drop-in replacement for Linux,
 Windows or macOS on a desktop or laptop: it supports less hardware and runs
-less software, and no setup script can change that.
+less software, and no distribution can change that.
 
-| | Linux (e.g. CachyOS) | Windows / macOS | FreeBSD with this setup |
+| | Linux (e.g. CachyOS) | Windows / macOS | LumenBSD |
 |---|---|---|---|
 | KDE Plasma / Hyprland desktop | Yes | No | Yes, needs a real GPU (below) |
 | Intel / AMD graphics | Yes | Yes | Yes (not yet: Intel Lunar Lake/Battlemage; AMD Radeon RX 9000 may not work yet) |
@@ -47,7 +68,7 @@ less software, and no setup script can change that.
 | Snapshots and undo | Yes (Btrfs) | System Restore / Time Machine | Yes: ZFS snapshots and boot environments |
 | Disk encryption | Yes | BitLocker / FileVault | Yes, optional: FreeBSD's whole partition (GELI, AES-256); the passphrase is typed at every start |
 
-FreeBSD suits you if you like its design and ZFS, your hardware is in the
+LumenBSD suits you if you like its design and ZFS, your hardware is in the
 supported range, and you mostly use open-source software and web apps. It does
 not suit you if you need specific commercial apps, competitive online games,
 long battery life on a gaming laptop, or Bluetooth audio. Dual boot keeps your
@@ -55,19 +76,19 @@ other system for those.
 
 ## What you need
 
-- A 64-bit PC (amd64) with 8 GB RAM (4 GB minimum) and 40 GB of free disk
-  space (30 GB minimum)
+- A 64-bit PC (amd64) with 8 GB RAM (4 GB minimum: the live system runs from
+  memory) and 40 GB of free disk space (30 GB minimum)
 - A real graphics card for the desktop: Intel HD/UHD/Iris/Arc integrated
   graphics, an AMD Radeon, or an NVIDIA GeForce GTX 750 or newer
 - UEFI firmware to install next to Windows/Linux (legacy BIOS: whole disk only)
 - Secure Boot switched off in the firmware setup (FreeBSD's boot loader is
   not signed by Microsoft)
-- An internet connection during installation (Ethernet is easiest; Wi-Fi works
-  with supported cards)
-- A USB stick of 2 GB or more
+- An internet connection during installation (Ethernet, Wi-Fi with a
+  supported card, or a phone's USB tethering)
+- A USB stick of 4 GB or more
 
-Not sure? The installer's first screen is a hardware report, and nothing is
-written before the very last confirmation, so you can safely look and quit.
+Not sure? Start the USB stick: its installer shows a hardware report before
+anything else, and nothing is written before the very last confirmation.
 
 ## Install
 
@@ -91,53 +112,49 @@ partitions there and never touches existing ones.
 
 ### 3. Write the USB stick
 
-Download `FreeBSD-15.1-RELEASE-amd64-memstick.img` from
-[download.freebsd.org](https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/15.1/)
-and write it to the stick (this erases the stick):
+Download `lumenbsd-0.1-amd64.iso` and its `.sha256` file from the
+[Releases page](https://github.com/nimonht/FreeBSD-setup/releases) (or build
+it yourself: [docs/BUILDING.md](docs/BUILDING.md)), then write it to the
+stick. This erases the stick.
 
-- Windows: [Rufus](https://rufus.ie) (choose *DD image* mode) or [balenaEtcher](https://etcher.balena.io)
-- macOS / Linux: balenaEtcher, or `sudo dd if=FreeBSD-15.1-RELEASE-amd64-memstick.img of=/dev/<stick> bs=1M status=progress`
+- Windows: [Rufus](https://rufus.ie) (when it asks, choose *DD image* mode)
+  or [balenaEtcher](https://etcher.balena.io)
+- macOS / Linux: balenaEtcher, or
+  `sudo dd if=lumenbsd-0.1-amd64.iso of=/dev/<stick> bs=1M status=progress`
 
-### 4. Boot it and run the installer
+Check the download first if you can: `sha256sum -c lumenbsd-0.1-amd64.iso.sha256`
+(Windows: `certutil -hashfile lumenbsd-0.1-amd64.iso SHA256` and compare).
 
-1. Restart with the stick plugged in and open the boot menu (usually F12,
-   F8, F11 or Esc right after power-on; on Macs hold Option). Pick the USB
-   stick (UEFI).
-2. At the blue *Welcome* screen choose *Live System*, then log in as `root`
-   (no password). Not a US keyboard? Run `kbdmap` and pick your layout first,
-   so the keys type what is printed on them (the Wi-Fi password below, and
-   the commands). The installer asks for the layout again and uses it for
-   your passwords; only the disk-encryption passphrase is typed with the US
-   layout, because that is the layout when the computer starts.
-3. Connect to the internet:
+### 4. Start from the stick
 
-   ```sh
-   env BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig
-   ```
+Restart with the stick plugged in and open the boot menu (usually F12, F8,
+F11 or Esc right after power-on; on Macs hold Option). Pick the USB stick.
+LumenBSD's boot menu starts by itself after 5 seconds. It copies the system
+into memory (a minute or two; afterwards the stick could be removed), then:
 
-   Type it exactly like this: `BSDINSTALL_CONFIGCURRENT=yes` tells the tool
-   to bring the network up right now in the Live System. Without it, Wi-Fi
-   setup stops with *"Wireless cannot be configured without making changes
-   to the local system!"* and a wired card is not actually connected.
+- **KDE Plasma starts**, with a *Welcome* window: *Try LumenBSD* to look
+  around (the *Install LumenBSD* icon stays on the desktop), or *Install*.
+- **Or only the installer appears, full screen**: on graphics cards FreeBSD
+  has no driver for, older NVIDIA cards, and in virtual machines. The first
+  page says why. Installing works the same.
 
-   Pick your network card (Wi-Fi cards are named `iwlwifi0`, `iwm0`, `rtw880`...),
-   answer *Yes* to DHCP, and pick your Wi-Fi network if you use one.
-4. Start the installer:
+If the screen stays black or freezes, start again and press **T**
+(*Troubleshooting*) in the boot menu: *basic graphics* skips the graphics
+driver, *text-mode installer* uses no graphics at all.
 
-   ```sh
-   fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
-   ```
+### 5. Install
 
-5. Answer the questions: language and keyboard, disk, *install next to the
-   existing systems* or *erase the disk*, your name and password, whether to
-   encrypt the disk (recommended for laptops), time zone, desktop, terminal
-   style and extras, and which system starts first. The last screen shows the
-   full plan; nothing is written before you confirm it.
+The installer asks, one page at a time: language and keyboard (used right
+away, so your passwords are typed as they will be at the login screen),
+the internet connection (pick your Wi-Fi network there), shows what works
+on your computer, then asks for the disk (*next to what is on it*, with a
+size slider, or *erase*; optional encryption), time zone, your account,
+desktop and apps, and shows a summary. Nothing is written before *Install
+now*. The installation then takes 30 to 90 minutes, mostly downloading; the
+live desktop stays usable meanwhile. At the end, remove the stick and
+restart.
 
-The installation then runs on its own for 30-90 minutes, mostly downloading.
-When it says *FreeBSD is installed*, remove the stick and restart.
-
-### 5. First start
+### 6. First start
 
 - Whole disk: FreeBSD starts directly. If another disk in the computer has
   Windows or Linux and you kept that system as the one that starts first,
@@ -161,7 +178,22 @@ settings FreeBSD needs). With Hyprland only, the login screen is a simple text
 screen: choose the session with the arrow keys, then type your name and
 password.
 
-## Already have FreeBSD 15?
+## Without the ISO: stock FreeBSD plus one command
+
+LumenBSD's installer also runs from FreeBSD's own install media: download
+`FreeBSD-15.1-RELEASE-amd64-memstick.img` from
+[download.freebsd.org](https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/15.1/),
+write it to a stick, start it and choose *Live System*, log in as `root` (no
+password; run `kbdmap` first for a non-US keyboard), connect with
+`env BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig`, then run:
+
+```sh
+fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
+```
+
+This is the text-mode version of the same installer, with the same result.
+
+### Already have FreeBSD 15?
 
 Run the same one-liner on an installed FreeBSD. It starts the setup wizard
 instead of the installer:
@@ -296,7 +328,11 @@ groups new accounts get (`/etc/adduser.conf`, when you have none); the
 package branch; the terminal style (system-wide files in `/usr/local/etc` and
 `/usr/local/share`, only where you have none of your own); KDE defaults in
 `/usr/local/etc/xdg` (dark Breeze theme, file indexing off) and
-`/etc/xdg/arkrc`; Firefox privacy defaults in
+`/etc/xdg/arkrc`; the LumenBSD look (boot menu name and logo via
+`loader_brand`/`loader_logo`, wallpaper, login screen background,
+`/etc/xdg/kcm-about-distrorc`, and an rc script that writes
+`/var/run/os-release` as LumenBSD with `ID_LIKE=freebsd`; turn it off with
+`doas sysrc lumenbsd_osrelease_enable=NO`); Firefox privacy defaults in
 `/etc/firefox/policies/policies.json` (no telemetry, studies or sponsored
 content); automatic snapshots and a monthly scrub. In your home folder it adds
 settings you don't have yet, with two exceptions: `~/.login_conf` is
@@ -315,6 +351,11 @@ from the EFI partition, the FreeBSD block from `limine.conf` (or
 Linux). Details: [docs/DUAL-BOOT.md](docs/DUAL-BOOT.md#removing-freebsd).
 
 ## Advanced
+
+To build the ISO yourself (on FreeBSD, or on Linux through a FreeBSD virtual
+machine), change what is on it, or test it: [docs/BUILDING.md](docs/BUILDING.md).
+What LumenBSD takes from Ubuntu, Mint, Fedora and CachyOS, and what is
+planned: [docs/DISTRO.md](docs/DISTRO.md).
 
 ```sh
 ./setup.sh --report              # hardware compatibility report

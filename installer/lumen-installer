@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+"""lumen-installer - the LumenBSD graphical installer.
+
+  lumen-installer             install (from the live desktop's icon)
+  lumen-installer --welcome   "Try or Install" first (live desktop autostart)
+  lumen-installer --kiosk     full screen, the only program (basic graphics)
+  lumen-installer --demo      a made-up computer; nothing is changed
+
+The program lives in /usr/local/share/freebsd-setup/installer (or next to
+this file, in a checkout of the repository).
+"""
+import os
+import sys
+
+for base in (os.path.dirname(os.path.realpath(__file__)), "/usr/local/share/freebsd-setup/installer"):
+    if os.path.isdir(os.path.join(base, "lumen_installer")):
+        sys.path.insert(0, base)
+        break
+
+from lumen_installer.app import main  # noqa: E402
+
+sys.exit(main())
