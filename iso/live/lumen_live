@@ -28,6 +28,7 @@ stop_cmd=":"
 FBS_LIB=/usr/local/share/freebsd-setup/lib
 STATE=/var/run/lumen-live
 XDIR=/usr/local/etc/X11/xorg.conf.d
+NVOFF=/usr/local/share/lumen-live/nvidia-off
 
 lumen_live_load() { # module -> loaded and a display appeared
 	kldload -n "$1" > /dev/null 2>&1 || return 1
@@ -52,6 +53,14 @@ lumen_live_start()
 			session=installer
 			reason="the graphics driver ($driver) did not start a display"
 		fi
+	fi
+	# NVIDIA's EGL/Vulkan registration (set aside by iso/build.sh: without
+	# NVIDIA's kernel module those libraries crash every program using EGL).
+	if [ "$session" = plasma ] && [ "$driver" = nvidia-drm ] && [ -d "$NVOFF" ]; then
+		(cd "$NVOFF" && find . -type f) | while read -r _f; do
+			mkdir -p "/usr/local/${_f%/*}"
+			cp -p "$NVOFF/$_f" "/usr/local/$_f"
+		done
 	fi
 
 	# Wi-Fi cards found at start get an interface (wlan0, wlan1...) that the

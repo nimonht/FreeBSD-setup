@@ -272,6 +272,19 @@ step_configure() {
 	install -m 644 "$REPO_DIR/files/desktop/pulse-client.conf" "$ROOT/usr/local/etc/pulse/client.conf.d/50-freebsd-setup.conf"
 	install -m 644 "$REPO_DIR/files/kde/kdeglobals" "$ROOT/usr/local/etc/xdg/kdeglobals"
 	install -m 755 "$REPO_DIR/files/bin/brightnessctl" "$ROOT/usr/local/bin/brightnessctl"
+
+	# NVIDIA's EGL and Vulkan libraries register themselves for every
+	# program, and crash without NVIDIA's kernel module: X died in GLX
+	# initialisation (libnvidia-egl-gbm) on a machine without NVIDIA.
+	# Installations only get them on NVIDIA machines; the live system puts
+	# them back at start when the NVIDIA driver runs (iso/live/lumen_live).
+	_off=$ROOT/usr/local/share/lumen-live/nvidia-off
+	for _f in share/glvnd/egl_vendor.d/10_nvidia.json share/vulkan/icd.d/nvidia_icd.json \
+		share/vulkan/implicit_layer.d/nvidia_layers.json; do
+		[ -f "$ROOT/usr/local/$_f" ] || continue
+		mkdir -p "$_off/${_f%/*}"
+		mv "$ROOT/usr/local/$_f" "$_off/$_f"
+	done
 	printf 'kern.geom.label.disk_ident.enable="0"\nkern.geom.label.gptid.enable="0"\n' > "$ROOT/boot/loader.conf"
 	cp "$ROOT/usr/share/zoneinfo/UTC" "$ROOT/etc/localtime"
 

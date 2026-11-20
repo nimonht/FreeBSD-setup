@@ -182,7 +182,8 @@ Item {
         }
 
         Item {
-            visible: installer.online === 1
+            // takes the spare height when the Wi-Fi list is not shown
+            visible: installer.online === 1 || !installer.hasWifiCard
             Layout.fillHeight: true
         }
     }
