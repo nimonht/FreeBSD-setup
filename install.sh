@@ -21,11 +21,18 @@
 #   --dry-run       ask everything, show the plan, write nothing
 #   --base-only     install FreeBSD only; run the desktop setup later
 #   --force         allow running from an installed system (testing)
+#   --probe         print what the graphical installer needs to know (disks,
+#                   hardware report, keyboard layouts...) as tab-separated
+#                   lines, and exit without asking or changing anything
+#
+# FBS_RESULT_FILE=FILE   write the final message (where the system starts
+#                        from, what needs attention) to FILE as well
 
 set -eu
 
 REPO_DIR=$(cd "$(dirname "$0")" && pwd)
 FBS_LIB="$REPO_DIR/lib"
+. "$REPO_DIR/distro.conf"
 . "$FBS_LIB/common.sh"
 . "$FBS_LIB/hw.sh"
 . "$FBS_LIB/ui.sh"
@@ -34,10 +41,10 @@ FBS_LIB="$REPO_DIR/lib"
 
 LOG=/tmp/freebsd-install.log
 : > "$LOG"
-UI_TITLE="FreeBSD-setup installer"
+UI_TITLE="$DISTRO_NAME installer"
 MNT=/mnt
 ESP_TMP=/tmp/fbs-esp
-CONFIG_FILE="" ASSUME_YES=no DRY_RUN=no BASE_ONLY=no FORCE=no
+CONFIG_FILE="" ASSUME_YES=no DRY_RUN=no BASE_ONLY=no FORCE=no PROBE=no
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--config) CONFIG_FILE=${2:?}; shift ;;
@@ -45,6 +52,7 @@ while [ $# -gt 0 ]; do
 	--dry-run) DRY_RUN=yes ;;
 	--base-only) BASE_ONLY=yes ;;
 	--force) FORCE=yes ;;
+	--probe) PROBE=yes ;;
 	-h|--help) awk 'NR > 2 && /^#/ { sub(/^# ?/, ""); print; next } NR > 2 { exit }' "$0"; exit 0 ;;
 	*) die "unknown option $1" ;;
 	esac
@@ -75,11 +83,13 @@ case "$_rootfs" in
 cd9660*|*,ro,*) LIVE_MEDIA=yes ;;
 *) LIVE_MEDIA=no ;;
 esac
+# The LumenBSD live system runs from a ZFS pool in memory (iso/ramdisk).
+[ "$(mount -p | awk '$2 == "/" { print $1; exit }')" = lumenlive ] && LIVE_MEDIA=yes
 [ "$LIVE_MEDIA" = yes ] || [ "$FORCE" = yes ] ||
 	die "this is meant to run from the FreeBSD USB stick's Live System, not from an installed FreeBSD. To set up the desktop on this system instead, run: setup.sh"
 kldload -n zfs 2>/dev/null || true
 ui_init
-if [ "$UI_MODE" = auto ] && [ -z "$CONFIG_FILE" ]; then
+if [ "$UI_MODE" = auto ] && [ -z "$CONFIG_FILE" ] && [ "$PROBE" != yes ]; then
 	die "unattended mode needs --config FILE with the answers"
 fi
 
@@ -143,6 +153,10 @@ disk_candidates() {
 		_media=$(echo "$_media" | sed -E 's/(p|s)[0-9]+[a-z]?$//') ;;
 	/dev/*) _media=$(echo "${_dev#/dev/}" | sed -E 's/(p|s)[0-9]+[a-z]?$//') ;;
 	esac
+	# The LumenBSD stick or DVD itself: not mounted any more once the live
+	# system runs from memory, but still the installer's own disk.
+	_stick=$(glabel status -s 2>/dev/null | awk -v l="iso9660/$ISO_LABEL" '$1 == l { print $3; exit }' |
+		sed -E 's/(p|s)[0-9]+[a-z]?$//')
 	# Disks holding mounted file systems, swap or imported pools are in use.
 	_busy=$( { mount -p | awk '{ print $1 }'; swapctl -l 2>/dev/null | awk 'NR > 1 { print $1 }'
 		zpool status -P 2>/dev/null | awk '$1 ~ /^\/dev\// { print $1 }'; } |
@@ -150,6 +164,7 @@ disk_candidates() {
 	for _d in $(sysctl -n kern.disks); do
 		case "$_d" in cd*|md*) continue ;; esac
 		[ "$_d" = "$_media" ] && continue
+		[ "$_d" = "$_stick" ] && continue
 		echo "$_busy" | grep -qx "$_d" && continue
 		echo "$_d"
 	done
@@ -327,12 +342,15 @@ ask_disk() {
 		die "$INSTALL_DISK cannot be installed on: it is the installer's own disk or is in use"
 }
 
-ask_mode() {
-	SECSIZE=$(disk_secsize "$INSTALL_DISK")
-	_scheme=$(disk_scheme "$INSTALL_DISK")
-	_contents=$(disk_contents "$INSTALL_DISK")
+# alongside_check DISK   can the system go next to what is on DISK? Sets
+# SECSIZE, FREE_START, FREE_SECTORS, FREE_GB, HAS_WINDOWS, _scheme,
+# _contents, _alongside_ok (yes/no) and _why (the reason, in words).
+alongside_check() {
+	SECSIZE=$(disk_secsize "$1")
+	_scheme=$(disk_scheme "$1")
+	_contents=$(disk_contents "$1")
 	# shellcheck disable=SC2046
-	set -- $(disk_free "$INSTALL_DISK"); FREE_START=$1 FREE_SECTORS=$2
+	set -- "$1" $(disk_free "$1"); FREE_START=$2 FREE_SECTORS=$3
 	FREE_GB=$(( FREE_SECTORS * SECSIZE / 1073741824 ))
 	HAS_WINDOWS=no
 	case "$_contents" in *Windows*) HAS_WINDOWS=yes ;; esac
@@ -341,9 +359,13 @@ ask_mode() {
 	if [ "$_contents" = empty ]; then _alongside_ok=no _why="the disk is empty"
 	elif [ "$HW_BOOT" != UEFI ]; then _alongside_ok=no _why="this computer started the installer in legacy BIOS mode; installing next to other systems needs UEFI mode"
 	elif [ "$_scheme" != GPT ]; then _alongside_ok=no _why="the disk uses the old MBR partition table; only GPT disks are supported for side-by-side installs"
-	elif [ -z "$(esp_of "$INSTALL_DISK")" ]; then _alongside_ok=no _why="there is no EFI system partition on this disk"
+	elif [ -z "$(esp_of "$1")" ]; then _alongside_ok=no _why="there is no EFI system partition on this disk"
 	elif [ "$FREE_GB" -lt "$MIN_GB" ]; then _alongside_ok=no _why="only $FREE_GB GB is unallocated; at least $MIN_GB GB is needed (shrink a partition in Windows Disk Management or with GParted first)"
 	fi
+}
+
+ask_mode() {
+	alongside_check "$INSTALL_DISK"
 
 	case "$INSTALL_MODE" in ""|erase|alongside) ;;
 	*) die "INSTALL_MODE must be erase or alongside (got '$INSTALL_MODE')" ;; esac
@@ -434,7 +456,7 @@ You type it when installing software or changing system settings." yes; then
 		ROOT_PASSWORD=$USER_PASSWORD ROOT_PASSWORD_HASH=$USER_PASSWORD_HASH
 	fi
 	TARGET_USER=$USERNAME
-	HOSTNAME_NEW=${HOSTNAME_NEW:-freebsd}
+	HOSTNAME_NEW=${HOSTNAME_NEW:-$DISTRO_ID}
 	while :; do
 		HOSTNAME_NEW=$(ui_input "Computer name" "A name for this computer on the network:" "$HOSTNAME_NEW") || exit 1
 		valid_hostname "$HOSTNAME_NEW" && break
@@ -1112,16 +1134,71 @@ do_finish() {
 	step "Finishing"
 	cp "$LOG" "$MNT/var/log/freebsd-install.log" 2>/dev/null || true
 	zfs snapshot -r "$POOL@installed" 2>/dev/null || true
-	zfs unmount -a 2>/dev/null || true
+	# Only the new pool: the LumenBSD live system itself runs from ZFS.
+	zfs list -H -o name -r "$POOL" 2>/dev/null | sort -r | while read -r _ds; do
+		zfs unmount "$_ds" 2>/dev/null || true
+	done
 	zpool export "$POOL" >> "$LOG" 2>&1 || warn "could not export the pool cleanly; it is still fine to reboot"
+}
+
+# ------------------------------------------------------------------ probe ---
+
+# probe   everything the graphical installer (installer/) shows and asks
+# about, as tab-separated lines; changes nothing. Line types:
+#   distro  NAME VERSION                     hw     KEY VALUE
+#   report  OK|WARN|NO|INFO TEXT             net    yes|no
+#   lang    CODE LOCALE LABEL                layout XKB KEYMAP LABEL
+#   disk    NAME BYTES DESCRIPTION REMOVABLE(yes/no) CONTENTS EFI-SYSTEMS
+#           FREE-BYTES ALONGSIDE(yes/no) WHY-NOT HAS-WINDOWS(yes/no)
+#   boot    DISK LIMINE(none/yes/locked) SYSTEMD-BOOT REFIND GRUB WINDOWS CHAIN-NAME DEFAULT-NAME
+#   other   DISK NAME CHAINABLE(yes/no)     (erasing DISK: a system on another disk)
+#   bitlocker yes|no                         min_gb N
+_pt() { printf '%s' "$1" | tr '\t\n' '  '; }
+probe() {
+	printf 'distro\t%s\t%s\n' "$DISTRO_NAME" "$DISTRO_VERSION"
+	for _k in HW_BOOT HW_VM HW_RAM_MB HW_DESKTOP HW_DESKTOP_WHY HW_GPU_PRIMARY HW_LAPTOP \
+		HW_VENDOR HW_MODEL HW_CPU HW_NVIDIA_BRANCH HW_OSREL; do
+		eval "printf 'hw\t%s\t%s\n' $_k \"\$(_pt \"\${$_k:-}\")\""
+	done
+	hw_report | sed -nE 's/^  \[ ?(OK|WARN|NO|INFO) ?\]  (.*)$/report\t\1\t\2/p'
+	printf 'min_gb\t%s\n' "$MIN_GB"
+	printf '%s\n' "$WIZ_LANGS" | awk -F'|' '{ printf "lang\t%s\t%s\t%s\n", $1, $2, $3 }'
+	printf '%s\n' "$WIZ_LAYOUTS" | awk -F'|' '{ printf "layout\t%s\t%s\t%s\n", $1, $2, $3 }'
+	_bl=no; bitlocker_found && _bl=yes
+	printf 'bitlocker\t%s\n' "$_bl"
+	for _d in $(disk_candidates); do
+		_rem=no; disk_removable "$_d" && _rem=yes
+		alongside_check "$_d"
+		printf 'disk\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_d" "$(disk_bytes "$_d")" \
+			"$(_pt "$(disk_descr "$_d")")" "$_rem" "$(_pt "$_contents")" "$(_pt "$(disk_efi_systems "$_d")")" \
+			"$(( FREE_SECTORS * SECSIZE ))" "$_alongside_ok" "$(_pt "$_why")" "$HAS_WINDOWS"
+		if [ "$_alongside_ok" = yes ]; then
+			INSTALL_DISK=$_d
+			detect_boot
+			_lim=none
+			[ -n "$LIMINE_CONF" ] && { _lim=yes; [ "$LIMINE_LOCKED" = yes ] && _lim=locked; }
+			printf 'boot\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_d" "$_lim" "$HAS_SDBOOT" "$HAS_REFIND" \
+				"$HAS_GRUB" "$HAS_WINBOOT" "$(_pt "$CHAIN_NAME")" "$(_pt "$DEFAULT_NAME")"
+		fi
+		_o=$(efi_systems "$_d" elsewhere | head -1)
+		if [ -n "$_o" ]; then
+			_ch=no; chain_ok "$(printf '%s' "$_o" | cut -d'|' -f3)" && _ch=yes
+			printf 'other\t%s\t%s\t%s\n' "$_d" "$(_pt "$(printf '%s' "$_o" | cut -d'|' -f2)")" "$_ch"
+		fi
+	done
+	_net=no
+	fetch -q -T 10 -o /dev/null "$DIST_URL/MANIFEST" 2>/dev/null && _net=yes
+	printf 'net\t%s\n' "$_net"
 }
 
 # --------------------------------------------------------------------- main ---
 
+if [ "$PROBE" = yes ]; then probe; exit 0; fi
+
 if [ "$UI_MODE" != auto ]; then
 	_rep=$(mktemp)
 	{
-		echo "Welcome! This installs FreeBSD with a ready-to-use desktop."
+		echo "Welcome! This installs $DISTRO_NAME: FreeBSD with a ready-to-use desktop."
 		echo "First, what was found in this computer:"
 		echo
 		hw_report
@@ -1157,7 +1234,7 @@ do_finish
 
 # (Built with ifs: under set -e a failing $(...) in an assignment would end
 # the script right here.)
-_done="FreeBSD is installed.
+_done="$DISTRO_NAME is installed.
 
 Remove the USB stick and restart the computer."
 if [ "$BOOT_DEFAULT" != freebsd ] && { [ "$INSTALL_MODE" = alongside ] || [ -n "${OTHER_SYSTEM:-}" ]; }; then
@@ -1203,6 +1280,7 @@ if [ -n "$WARNINGS" ]; then
 Things that need attention:$WARNINGS"
 fi
 PHASE=finished
+[ -n "${FBS_RESULT_FILE:-}" ] && printf '%s\n' "$_done" > "$FBS_RESULT_FILE"
 ui_msg "Done" "$_done"
 printf '%s\n' "$_done"
 if [ "$UI_MODE" != auto ] && ui_yesno "Restart" "Restart now?" yes; then shutdown -r now; fi

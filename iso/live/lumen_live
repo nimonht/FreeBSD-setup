@@ -1,0 +1,122 @@
+#!/bin/sh
+#
+# PROVIDE: lumen_live
+# REQUIRE: FILESYSTEMS devmatch
+# BEFORE: netif dbus sddm LOGIN
+# KEYWORD: nojail
+#
+# Written by FreeBSD-setup: the LumenBSD live session (live media only).
+# Reads the hardware the way the installer does (lib/hw.sh), then:
+#   - loads the graphics driver for it: Intel, AMD, or NVIDIA's current
+#     branch (unless "basic graphics" was picked in the boot menu)
+#   - starts KDE Plasma (Wayland) when the driver gives a display, and
+#     otherwise the installer alone on a basic framebuffer (X11): virtual
+#     machines and graphics cards FreeBSD has no driver for
+#   - starts nothing graphical when the text-mode installer was picked
+#     (the boot menu's Troubleshooting submenu; /etc/rc.local runs it)
+# The decision and its reason are kept in /var/run/lumen-live/ for the
+# installer, which explains them.
+
+. /etc/rc.subr
+
+name=lumen_live
+desc="LumenBSD live session: graphics driver and session"
+rcvar=lumen_live_enable
+start_cmd=lumen_live_start
+stop_cmd=":"
+
+FBS_LIB=/usr/local/share/freebsd-setup/lib
+STATE=/var/run/lumen-live
+XDIR=/usr/local/etc/X11/xorg.conf.d
+
+lumen_live_load() { # module -> loaded and a display appeared
+	kldload -n "$1" > /dev/null 2>&1 || return 1
+	_i=0
+	while [ ! -e /dev/dri/card0 ] && [ "$_i" -lt 15 ]; do sleep 1; _i=$((_i + 1)); done
+	[ -e /dev/dri/card0 ]
+}
+
+lumen_live_start()
+{
+	local session reason driver _dev _n
+	. "$FBS_LIB/hw.sh"
+	. /usr/local/share/freebsd-setup/distro.conf
+	hw_detect
+	mkdir -p "$STATE"
+	session=installer reason="" driver=none
+
+	if [ -n "$(kenv -q lumen.text_installer)" ]; then
+		session=text
+	elif [ -n "$(kenv -q lumen.basic_graphics)" ]; then
+		reason="basic graphics was chosen in the boot menu"
+	elif [ "$HW_DESKTOP" != yes ]; then
+		reason=$HW_DESKTOP_WHY
+	else
+		case "$HW_GPU_PRIMARY" in
+		intel)	driver=i915kms ;;
+		amd)	driver=amdgpu
+			[ "$HW_AMD_KMOD" = radeonkms ] && driver=/boot/modules/radeonkms.ko ;;
+		nvidia)	if [ "$HW_NVIDIA_BRANCH" = current ]; then driver=nvidia-drm
+			else reason="this NVIDIA card needs the $HW_NVIDIA_BRANCH driver, which the live system does not carry (the installed system gets it)"; fi ;;
+		esac
+		if [ "$driver" != none ]; then
+			echo "LumenBSD: starting the graphics driver ($driver)"
+			if lumen_live_load "$driver"; then
+				session=plasma
+			else
+				reason="the graphics driver ($driver) did not start a display"
+			fi
+		fi
+	fi
+
+	# Wi-Fi cards found at start get an interface (wlan0, wlan1...) that the
+	# installer and the network applet can use.
+	_n=0
+	for _dev in $(sysctl -n net.wlan.devices 2>/dev/null); do
+		sysrc "wlans_$_dev=wlan$_n" "ifconfig_wlan$_n=WPA DHCP" > /dev/null
+		_n=$((_n + 1))
+	done
+	[ -f /etc/wpa_supplicant.conf ] ||
+		printf 'ctrl_interface=/var/run/wpa_supplicant\nctrl_interface_group=wheel\nupdate_config=1\n' > /etc/wpa_supplicant.conf
+
+	# X11 (the login screen, and the installer session): the NVIDIA driver,
+	# or a basic framebuffer when no graphics driver runs.
+	FBS_LIB="$FBS_LIB" /usr/local/share/freebsd-setup/files/bin/gpu-xorg-config > /dev/null 2>&1 || true
+	mkdir -p "$XDIR"
+	rm -f "$XDIR/10-lumen-live-fb.conf"
+	if [ "$session" = installer ]; then
+		_fb=scfb; [ "$HW_BOOT" = UEFI ] || _fb=vesa
+		cat > "$XDIR/10-lumen-live-fb.conf" <<XORG
+# Written by FreeBSD-setup: LumenBSD live session without a graphics driver.
+Section "Device"
+	Identifier "Basic framebuffer"
+	Driver     "$_fb"
+EndSection
+XORG
+	fi
+
+	case "$session" in
+	plasma)    _s=plasma.desktop ;;
+	installer) _s=lumen-installer.desktop ;;
+	esac
+	if [ "$session" = text ]; then
+		echo 'sddm_enable="NO"' > /etc/rc.conf.d/sddm
+	else
+		echo 'sddm_enable="YES"' > /etc/rc.conf.d/sddm
+		cat > /usr/local/etc/sddm.conf.d/20-lumen-autologin.conf <<CONF
+# Written by FreeBSD-setup: the live session starts without a login.
+[Autologin]
+User=$LIVE_USER
+Session=$_s
+Relogin=false
+CONF
+	fi
+	echo "$session" > "$STATE/session"
+	printf '%s\n' "$reason" > "$STATE/reason"
+	echo "$driver" > "$STATE/driver"
+	echo "LumenBSD: live session: $session${reason:+ ($reason)}"
+}
+
+load_rc_config $name
+: "${lumen_live_enable:=NO}"
+run_rc_command "$1"

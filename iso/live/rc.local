@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# Written by FreeBSD-setup: /etc/rc.local of the LumenBSD live system. When
+# the text-mode installer was picked in the boot menu (Troubleshooting), it
+# runs here on the console, as FreeBSD's own install media run bsdinstall.
+
+[ "$(cat /var/run/lumen-live/session 2>/dev/null)" = text ] || exit 0
+echo
+echo "Starting the LumenBSD text-mode installer..."
+/bin/sh /usr/local/share/freebsd-setup/install.sh
+echo
+echo "The installer has ended. Log in as root (no password) to use the live"
+echo "system's console, or type: shutdown -r now"

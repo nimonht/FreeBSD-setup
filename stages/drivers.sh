@@ -82,7 +82,14 @@ if in_list nvidia $GPU_DRIVERS && [ "$NVIDIA_BRANCH" != none ]; then
 	else
 		say "NVIDIA driver ($NVIDIA_PKG)"
 		if [ -n "$_drmpkg" ]; then
-			pkg_install "$_drmpkg"
+			# nvidia-drm-kmod (a meta package) can name another DRM version
+			# than drm-kmod, which the Intel/AMD driver uses (seen: 5.15 and
+			# 6.12); the two cannot be installed together, which breaks
+			# hybrid laptops. Take NVIDIA's module built for drm-kmod's version.
+			_dflav=$(pkg_flavor drm-kmod 'drm-[0-9]+-kmod'); _dflav=${_dflav#drm-}; _dflav=${_dflav%-kmod}
+			_f="nvidia-drm-${_dflav}-kmod${_drmpkg#nvidia-drm-kmod}"
+			[ -n "$_dflav" ] && pkg_has "$_f" && _drmpkg=$_f
+			pkg_install "$_drmpkg" "$NVIDIA_PKG"
 			# The kernel module, DRM module and userland must be one version.
 			_dv=$(pkg query %v "$NVIDIA_PKG" 2>/dev/null | sed 's/[_,].*//')
 			_kv=$(pkg query %v "nvidia-kmod${NVIDIA_PKG#nvidia-driver}" 2>/dev/null || true)

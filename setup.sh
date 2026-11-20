@@ -24,8 +24,9 @@ set -eu
 # realpath: "freebsd-setup" in /usr/local/sbin is a symlink to this file
 REPO_DIR=$(dirname "$(realpath "$0")")
 FBS_LIB="$REPO_DIR/lib"
-STAGES="base drivers system network zfs audio desktop kde hyprland caelestia terminal input printing apps gaming security finish"
+STAGES="base drivers system network zfs audio desktop kde hyprland caelestia branding terminal input printing apps gaming security finish"
 
+. "$REPO_DIR/distro.conf"
 . "$FBS_LIB/common.sh"
 . "$FBS_LIB/hw.sh"
 . "$FBS_LIB/ui.sh"
@@ -46,6 +47,7 @@ Stages, in order (each one skips itself when it does not apply):
   kde        KDE Plasma 6
   hyprland   Hyprland, its tools and session
   caelestia  Caelestia shell + dotfiles for Hyprland (built for FreeBSD)
+  branding   LumenBSD look: boot menu, wallpaper, login screen, About page
   terminal   optional ready-made terminal: fish, zsh or bash, prompt, fastfetch
   input      fcitx5 input methods (Vietnamese, Chinese, Japanese, Korean...)
   printing   CUPS printing, network printer discovery, scanners

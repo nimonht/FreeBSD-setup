@@ -15,7 +15,9 @@ jobs:
           shellcheck --version
           shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
             setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* \
-            caelestia/build.sh files/rc.d/* tests/*.sh tests/vm/*.sh files/shell/fbs-terminal-greeting
+            caelestia/build.sh files/rc.d/* tests/*.sh tests/vm/*.sh files/shell/fbs-terminal-greeting \
+            iso/*.sh iso/ramdisk/init.sh iso/ramdisk/rc iso/live/lumen_live iso/live/lumen-installer-session \
+            iso/live/rc.local installer/lumen-wifi
           shellcheck -s bash -S warning files/shell/bash.bashrc
 
       - name: fish and zsh syntax
@@ -49,3 +51,19 @@ jobs:
           sudo apt-get install -y --no-install-recommends python3-gi gir1.2-glib-2.0 libglib2.0-bin dbus
           sh tests/power-profiles-test.sh
           sh tests/timedate-test.sh
+
+      - name: Graphical installer logic tests (Python)
+        run: python3 tests/installer-test.py
+
+      - name: Graphical installer pages load (Qt, off screen)
+        run: |
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 fonts-dejavu-core
+          pip install --quiet PyQt6 pyflakes
+          python3 -m pyflakes installer/lumen_installer installer/lumen-installer tests/installer-test.py
+          QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python3 installer/lumen-installer --screenshots installer-screens
+
+      - name: Installer screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-screens
+          path: installer-screens/
