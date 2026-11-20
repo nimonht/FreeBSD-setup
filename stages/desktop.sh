@@ -22,18 +22,7 @@ say "USB drives, phones and other operating systems' partitions"
 pkg_install bsdisks fusefs-ntfs fusefs-exfat fusefs-ext2 fusefs-simple-mtpfs
 svc bsdisks
 mkdir -p /usr/local/etc/polkit-1/rules.d
-cat > /usr/local/etc/polkit-1/rules.d/50-freebsd-setup.rules <<'RULES'
-// Written by FreeBSD-setup: members of "operator" may mount drives and
-// shut down / restart / suspend without typing the root password.
-polkit.addRule(function(action, subject) {
-	if (subject.isInGroup("operator") && subject.local && subject.active &&
-	    (action.id.indexOf("org.freedesktop.udisks2.") == 0 ||
-	     action.id.indexOf("org.freedesktop.consolekit.system.") == 0 ||
-	     action.id.indexOf("org.freedesktop.login1.") == 0)) {
-		return polkit.Result.YES;
-	}
-});
-RULES
+install_file "$REPO_DIR/files/desktop/50-freebsd-setup.rules" /usr/local/etc/polkit-1/rules.d/50-freebsd-setup.rules
 
 # Keyboard layout for X11 programs and the SDDM login screen.
 if [ -n "${KEYBOARD_LAYOUT:-}" ]; then

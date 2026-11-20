@@ -168,11 +168,33 @@ step_root() {
 	fi
 }
 
+# nvidia_packages "names"   NVIDIA's driver, its kernel module and its DRM
+# module must be one version and built for the DRM version installed. The
+# FreeBSD-ports-kmods repository has carried newer modules than the driver,
+# built against another DRM version, so try the main repository on its own
+# first. Without a consistent set, the live image goes without NVIDIA (those
+# cards then get the installer on the basic framebuffer).
+nvidia_packages() {
+	for _r in "-r FreeBSD-ports" ""; do
+		# shellcheck disable=SC2086
+		if in_root_pkg install -y $_r $1; then
+			_d=$(in_root_pkg query '%v' nvidia-driver 2>/dev/null | sed 's/[_,].*//')
+			_k=$(in_root_pkg query '%v' nvidia-kmod 2>/dev/null)
+			case "$_k" in "$_d".*|"$_d") log "NVIDIA driver $_d"; return 0 ;; esac
+			printf 'build.sh: NVIDIA driver %s and kernel module %s differ\n' "$_d" "$_k" >&2
+		fi
+		# shellcheck disable=SC2046
+		in_root_pkg delete -y $(in_root_pkg query -g '%n' 'nvidia-*' 2>/dev/null) 2>/dev/null || true
+	done
+	printf 'build.sh: WARNING: no consistent NVIDIA driver in the package repositories; the live image has none\n' >&2
+}
+
 step_packages() {
 	log "Installing the live system's packages ($BRANCH branch; the longest step)"
 	pool_open
 	pkg_repos "$PKG_SITE"
 	mkdir -p "$ROOT/dev" "$WORK/pkgcache" "$ROOT/var/cache/pkg"
+	pool_mounts_off
 	mount -t devfs devfs "$ROOT/dev"
 	mount -t nullfs "$WORK/pkgcache" "$ROOT/var/cache/pkg"
 	cp /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true
@@ -185,10 +207,13 @@ step_packages() {
 	_drm=$(in_root_pkg rquery -U '%dn' drm-kmod | grep -E '^drm-[0-9]+-kmod$' | head -1)
 	[ -n "$_drm" ] || die "the drm-kmod package names no DRM driver version"
 	_dv=${_drm#drm-}; _dv=${_dv%-kmod}
-	_list=$(printf '%s\n' $_list | sed -e "s/^drm-kmod\$/$_drm/" -e "s/^nvidia-drm-kmod\$/nvidia-drm-$_dv-kmod/" | xargs)
-	log "graphics drivers: $_drm, nvidia-drm-$_dv-kmod"
+	_nv=""
+	for _p in $_list; do case "$_p" in nvidia-*) _nv="$_nv $_p" ;; esac; done
+	_list=$(printf '%s\n' $_list | grep -v '^nvidia-' | sed -e "s/^drm-kmod\$/$_drm/" | xargs)
+	log "graphics drivers: $_drm"
 	# shellcheck disable=SC2086
 	in_root_pkg install -y $_list
+	[ -n "$_nv" ] && nvidia_packages "$(echo "$_nv" | sed "s/nvidia-drm-kmod/nvidia-drm-$_dv-kmod/")"
 	in_root_pkg query '%n %v' | sort > "$WORK/packages.list"
 	pool_mounts_off
 	rm -f "$ROOT/tmp/build-ca.pem"
@@ -229,7 +254,20 @@ step_configure() {
 	sed -i '' "s/@HOSTNAME@/$LIVE_HOSTNAME/" "$ROOT/etc/rc.conf"
 	install -m 600 "$_live/doas.conf" "$ROOT/usr/local/etc/doas.conf"
 	install -m 644 "$_live/motd" "$ROOT/etc/motd.template"
-	: > "$ROOT/etc/fstab"
+	install -m 644 "$_live/sysctl.conf" "$ROOT/etc/sysctl.conf"
+	printf 'proc\t/proc\tprocfs\trw\t0\t0\nfdescfs\t/dev/fd\tfdescfs\trw\t0\t0\n' > "$ROOT/etc/fstab"
+
+	# What an installed desktop gets from stages/system.sh, desktop.sh, audio.sh
+	# and kde.sh, from the same files: GPU and backlight access for the video
+	# group, polkit (mount drives, restart), PipeWire, KDE defaults.
+	install -m 644 "$REPO_DIR/files/devfs.rules" "$ROOT/etc/devfs.rules"
+	mkdir -p "$ROOT/usr/local/etc/polkit-1/rules.d" "$ROOT/usr/local/etc/pulse/client.conf.d"
+	install -m 644 "$REPO_DIR/files/desktop/50-freebsd-setup.rules" "$ROOT/usr/local/etc/polkit-1/rules.d/50-freebsd-setup.rules"
+	install -m 755 "$REPO_DIR/files/bin/start-pipewire" "$ROOT/usr/local/bin/start-pipewire"
+	install -m 644 "$REPO_DIR/files/desktop/start-pipewire.desktop" "$ROOT/usr/local/etc/xdg/autostart/start-pipewire.desktop"
+	install -m 644 "$REPO_DIR/files/desktop/pulse-client.conf" "$ROOT/usr/local/etc/pulse/client.conf.d/50-freebsd-setup.conf"
+	install -m 644 "$REPO_DIR/files/kde/kdeglobals" "$ROOT/usr/local/etc/xdg/kdeglobals"
+	install -m 755 "$REPO_DIR/files/bin/brightnessctl" "$ROOT/usr/local/bin/brightnessctl"
 	printf 'kern.geom.label.disk_ident.enable="0"\nkern.geom.label.gptid.enable="0"\n' > "$ROOT/boot/loader.conf"
 	cp "$ROOT/usr/share/zoneinfo/UTC" "$ROOT/etc/localtime"
 

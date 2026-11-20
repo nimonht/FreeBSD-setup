@@ -91,18 +91,7 @@ fi
 # No raw access to disks (da*): that would let the user read and overwrite
 # any file system on them, past all file permissions. USB drives are mounted
 # through bsdisks (see the desktop stage), which needs no such access.
-cat > /etc/devfs.rules <<'RULES'
-# Written by FreeBSD-setup.
-[localrules=10]
-add path 'backlight/*' mode 0660 group video
-add path 'dri/*'       mode 0660 group video
-add path 'drm/*'       mode 0660 group video
-add path 'video*'      mode 0660 group video
-add path 'cuse'        mode 0660 group operator
-add path 'ugen*'       mode 0660 group operator
-add path 'usb/*'       mode 0660 group operator
-add path 'cd*'         mode 0660 group operator
-RULES
+install_file "$REPO_DIR/files/devfs.rules" /etc/devfs.rules
 sysrc devfs_system_ruleset=localrules >/dev/null
 is_live && { service devfs restart >> "$LOG" 2>&1 || true; }
 

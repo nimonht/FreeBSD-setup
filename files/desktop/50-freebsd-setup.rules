@@ -1,0 +1,10 @@
+// Written by FreeBSD-setup: members of "operator" may mount drives and
+// shut down / restart / suspend without typing the root password.
+polkit.addRule(function(action, subject) {
+	if (subject.isInGroup("operator") && subject.local && subject.active &&
+	    (action.id.indexOf("org.freedesktop.udisks2.") == 0 ||
+	     action.id.indexOf("org.freedesktop.consolekit.system.") == 0 ||
+	     action.id.indexOf("org.freedesktop.login1.") == 0)) {
+		return polkit.Result.YES;
+	}
+});

@@ -51,6 +51,7 @@ networkmgr
 # Sound, fonts
 pipewire
 wireplumber
+pipewire-spa-oss
 noto-basic
 dejavu
 

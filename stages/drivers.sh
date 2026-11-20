@@ -89,7 +89,11 @@ if in_list nvidia $GPU_DRIVERS && [ "$NVIDIA_BRANCH" != none ]; then
 			_dflav=$(pkg_flavor drm-kmod 'drm-[0-9]+-kmod'); _dflav=${_dflav#drm-}; _dflav=${_dflav%-kmod}
 			_f="nvidia-drm-${_dflav}-kmod${_drmpkg#nvidia-drm-kmod}"
 			[ -n "$_dflav" ] && pkg_has "$_f" && _drmpkg=$_f
-			pkg_install "$_drmpkg" "$NVIDIA_PKG"
+			# The main repository first: FreeBSD-ports-kmods has carried
+			# NVIDIA modules newer than the driver and built against another
+			# DRM version (November 2026). One matching set matters more than
+			# the newest module.
+			pkg_get -r FreeBSD-ports "$_drmpkg" "$NVIDIA_PKG" || pkg_install "$_drmpkg" "$NVIDIA_PKG"
 			# The kernel module, DRM module and userland must be one version.
 			_dv=$(pkg query %v "$NVIDIA_PKG" 2>/dev/null | sed 's/[_,].*//')
 			_kv=$(pkg query %v "nvidia-kmod${NVIDIA_PKG#nvidia-driver}" 2>/dev/null || true)
