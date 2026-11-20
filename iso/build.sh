@@ -389,6 +389,9 @@ step_ramdisk() {
 step_iso() {
 	log "Building the ISO"
 	pool_open
+	# Only boot/ and luna/ belong on the ISO: drop whatever an earlier
+	# build (or an older layout) left in the staging directory.
+	find "$CD" -mindepth 1 -maxdepth 1 ! -name boot ! -name luna -exec rm -rf {} +
 	# The boot loader and its files; of the kernel only what starts the
 	# ramdisk (the live system brings its own copy of everything else).
 	rm -rf "${CD:?}/boot"
