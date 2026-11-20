@@ -1,8 +1,8 @@
-<p align="center"><img src="branding/lumenbsd-logo.svg" width="120" alt=""></p>
+<p align="center"><img src="branding/lunabsd-logo.svg" width="120" alt=""></p>
 
-# LumenBSD
+# LunaBSD
 
-**FreeBSD, ready for your desktop.** LumenBSD is a desktop distribution of
+**FreeBSD, ready for your desktop.** LunaBSD is a desktop distribution of
 FreeBSD 15: a live USB stick that starts KDE Plasma so you can try it, a
 graphical installer in the style of CachyOS's or Windows Setup, and a
 desktop that is set up for your hardware when it arrives.
@@ -30,7 +30,7 @@ desktop that is set up for your hardware when it arrives.
 - **Always current.** The installer downloads the newest FreeBSD packages
   while it installs, so a new system is up to date from its first start.
 
-LumenBSD is stock FreeBSD underneath: FreeBSD's kernel, base system, package
+LunaBSD is stock FreeBSD underneath: FreeBSD's kernel, base system, package
 repositories and security updates, with no patches of its own. What it adds
 is the live system, the installer, the setup that turns FreeBSD into a
 desktop (`setup.sh` and `stages/`) and small compatibility services for
@@ -43,7 +43,7 @@ things the desktops expect from Linux.
 | ![Desktop, apps and updates](docs/images/installer-desktop.png) | ![Installing](docs/images/installer-progress.png) |
 | Desktop, apps and updates | While it installs |
 
-> **Status: 0.1 "Dawn", a preview.** What installs the system and sets up
+> **Status: 0.1 "Crescent", a preview.** What installs the system and sets up
 > the desktop is FreeBSD-setup's tested code. The live ISO and the graphical
 > installer are new: the ISO has been built and started in a virtual machine
 > (UEFI, as a DVD and as a USB stick), where it loaded into memory and
@@ -53,13 +53,13 @@ things the desktops expect from Linux.
 > have on FreeBSD), an installation started from the ISO, and anything on
 > real hardware. Please report what happens on yours.
 
-## Is LumenBSD right for you?
+## Is LunaBSD right for you?
 
 Read this before you install. FreeBSD is not a drop-in replacement for Linux,
 Windows or macOS on a desktop or laptop: it supports less hardware and runs
 less software, and no distribution can change that.
 
-| | Linux (e.g. CachyOS) | Windows / macOS | LumenBSD |
+| | Linux (e.g. CachyOS) | Windows / macOS | LunaBSD |
 |---|---|---|---|
 | KDE Plasma / Hyprland desktop | Yes | No | Yes, needs a real GPU (below) |
 | Intel / AMD graphics | Yes | Yes | Yes (not yet: Intel Lunar Lake/Battlemage; AMD Radeon RX 9000 may not work yet) |
@@ -79,7 +79,7 @@ less software, and no distribution can change that.
 | Snapshots and undo | Yes (Btrfs) | System Restore / Time Machine | Yes: ZFS snapshots and boot environments |
 | Disk encryption | Yes | BitLocker / FileVault | Yes, optional: FreeBSD's whole partition (GELI, AES-256); the passphrase is typed at every start |
 
-LumenBSD suits you if you like its design and ZFS, your hardware is in the
+LunaBSD suits you if you like its design and ZFS, your hardware is in the
 supported range, and you mostly use open-source software and web apps. It does
 not suit you if you need specific commercial apps, competitive online games,
 long battery life on a gaming laptop, or Bluetooth audio. Dual boot keeps your
@@ -123,7 +123,7 @@ partitions there and never touches existing ones.
 
 ### 3. Write the USB stick
 
-Download `lumenbsd-0.1-amd64.iso` and its `.sha256` file from the
+Download `lunabsd-0.1-amd64.iso` and its `.sha256` file from the
 [Releases page](https://github.com/nimonht/FreeBSD-setup/releases) (or build
 it yourself: [docs/BUILDING.md](docs/BUILDING.md)), then write it to the
 stick. This erases the stick.
@@ -131,20 +131,20 @@ stick. This erases the stick.
 - Windows: [Rufus](https://rufus.ie) (when it asks, choose *DD image* mode)
   or [balenaEtcher](https://etcher.balena.io)
 - macOS / Linux: balenaEtcher, or
-  `sudo dd if=lumenbsd-0.1-amd64.iso of=/dev/<stick> bs=1M status=progress`
+  `sudo dd if=lunabsd-0.1-amd64.iso of=/dev/<stick> bs=1M status=progress`
 
-Check the download first if you can: `sha256sum -c lumenbsd-0.1-amd64.iso.sha256`
-(Windows: `certutil -hashfile lumenbsd-0.1-amd64.iso SHA256` and compare).
+Check the download first if you can: `sha256sum -c lunabsd-0.1-amd64.iso.sha256`
+(Windows: `certutil -hashfile lunabsd-0.1-amd64.iso SHA256` and compare).
 
 ### 4. Start from the stick
 
 Restart with the stick plugged in and open the boot menu (usually F12, F8,
 F11 or Esc right after power-on; on Macs hold Option). Pick the USB stick.
-LumenBSD's boot menu starts by itself after 5 seconds. It copies the system
+LunaBSD's boot menu starts by itself after 5 seconds. It copies the system
 into memory (a minute or two; afterwards the stick could be removed), then:
 
-- **KDE Plasma starts**, with a *Welcome* window: *Try LumenBSD* to look
-  around (the *Install LumenBSD* icon stays on the desktop), or *Install*.
+- **KDE Plasma starts**, with a *Welcome* window: *Try LunaBSD* to look
+  around (the *Install LunaBSD* icon stays on the desktop), or *Install*.
 - **Or only the installer appears, full screen**: on graphics cards FreeBSD
   has no driver for, older NVIDIA cards, and in virtual machines. The first
   page says why. Installing works the same.
@@ -192,7 +192,7 @@ password.
 
 ## Without the ISO: stock FreeBSD plus one command
 
-LumenBSD's installer also runs from FreeBSD's own install media: download
+LunaBSD's installer also runs from FreeBSD's own install media: download
 `FreeBSD-15.1-RELEASE-amd64-memstick.img` from
 [download.freebsd.org](https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/15.1/),
 write it to a stick, start it and choose *Live System*, log in as `root` (no
@@ -340,11 +340,11 @@ groups new accounts get (`/etc/adduser.conf`, when you have none); the
 package branch; the terminal style (system-wide files in `/usr/local/etc` and
 `/usr/local/share`, only where you have none of your own); KDE defaults in
 `/usr/local/etc/xdg` (dark Breeze theme, file indexing off) and
-`/etc/xdg/arkrc`; the LumenBSD look (boot menu name and logo via
+`/etc/xdg/arkrc`; the LunaBSD look (boot menu name and logo via
 `loader_brand`/`loader_logo`, wallpaper, login screen background,
 `/etc/xdg/kcm-about-distrorc`, and an rc script that writes
-`/var/run/os-release` as LumenBSD with `ID_LIKE=freebsd`; turn it off with
-`doas sysrc lumenbsd_osrelease_enable=NO`); Firefox privacy defaults in
+`/var/run/os-release` as LunaBSD with `ID_LIKE=freebsd`; turn it off with
+`doas sysrc lunabsd_osrelease_enable=NO`); Firefox privacy defaults in
 `/etc/firefox/policies/policies.json` (no telemetry, studies or sponsored
 content); automatic snapshots and a monthly scrub. In your home folder it adds
 settings you don't have yet, with two exceptions: `~/.login_conf` is
@@ -366,7 +366,7 @@ Linux). Details: [docs/DUAL-BOOT.md](docs/DUAL-BOOT.md#removing-freebsd).
 
 To build the ISO yourself (on FreeBSD, or on Linux through a FreeBSD virtual
 machine), change what is on it, or test it: [docs/BUILDING.md](docs/BUILDING.md).
-What LumenBSD takes from Ubuntu, Mint, Fedora and CachyOS, and what is
+What LunaBSD takes from Ubuntu, Mint, Fedora and CachyOS, and what is
 planned: [docs/DISTRO.md](docs/DISTRO.md).
 
 ```sh

@@ -1,10 +1,10 @@
 --
--- Written by FreeBSD-setup: the LumenBSD name in the boot menu
--- (loader_brand="lumen" in /boot/loader.conf).
+-- Written by FreeBSD-setup: the LunaBSD name in the boot menu
+-- (loader_brand="luna" in /boot/loader.conf).
 --
 local drawer = require("drawer")
 
-drawer.addBrand("lumen", {
+drawer.addBrand("luna", {
 	ascii = {
 		image = {
 "  _                                ____   _____ _____  ",

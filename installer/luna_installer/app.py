@@ -1,6 +1,6 @@
-"""The LumenBSD installer window: QML pages (installer/qml) over install.sh.
+"""The LunaBSD installer window: QML pages (installer/qml) over install.sh.
 
-Runs as the live user; whatever needs root (install.sh, lumen-wifi,
+Runs as the live user; whatever needs root (install.sh, luna-wifi,
 restarting) goes through doas, which the live system allows without a
 password. Nothing here decides how to install: install.sh does, from the
 answers file this writes.
@@ -26,8 +26,8 @@ from . import demo as demo_data
 
 REPO = backend.REPO
 INSTALL_SH = os.path.join(REPO, "install.sh")
-WIFI = shutil.which("lumen-wifi") or os.path.join(REPO, "installer", "lumen-wifi")
-LIVE_STATE = "/var/run/lumen-live"
+WIFI = shutil.which("luna-wifi") or os.path.join(REPO, "installer", "luna-wifi")
+LIVE_STATE = "/var/run/luna-live"
 
 
 def _read(path):
@@ -129,11 +129,11 @@ class Installer(QObject):
 
     @pyqtProperty(str, constant=True)
     def logoUrl(self):
-        return QUrl.fromLocalFile(os.path.join(REPO, "branding", "lumenbsd-logo.svg")).toString()
+        return QUrl.fromLocalFile(os.path.join(REPO, "branding", "lunabsd-logo.svg")).toString()
 
     @pyqtProperty(str, constant=True)
     def wallpaperUrl(self):
-        return QUrl.fromLocalFile(os.path.join(REPO, "branding", "lumenbsd-wallpaper.jpg")).toString()
+        return QUrl.fromLocalFile(os.path.join(REPO, "branding", "lunabsd-wallpaper.jpg")).toString()
 
     # --------------------------------------------------------------- probe --
 
@@ -269,7 +269,7 @@ class Installer(QObject):
             else:
                 self._wifiState = ""
                 msg = out.strip().splitlines()[-1] if out.strip() else "Could not connect."
-                self._wifiError = msg.replace("lumen-wifi: ", "").capitalize()
+                self._wifiError = msg.replace("luna-wifi: ", "").capitalize()
             self.wifiChanged.emit()
         if self._demo:
             def fake():
@@ -410,7 +410,7 @@ class Installer(QObject):
             timer.timeout.connect(tick)
             timer.start(40)
             return ""
-        self._tmp = tempfile.mkdtemp(prefix="lumen-installer-")
+        self._tmp = tempfile.mkdtemp(prefix="luna-installer-")
         conf = os.path.join(self._tmp, "answers.conf")
         fd = os.open(conf, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -473,7 +473,7 @@ class Installer(QObject):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="lumen-installer", description="Install LumenBSD.")
+    ap = argparse.ArgumentParser(prog="luna-installer", description="Install LunaBSD.")
     ap.add_argument("--welcome", action="store_true", help="start with 'Try or Install' (live desktop)")
     ap.add_argument("--kiosk", action="store_true", help="full screen, the only program on screen")
     ap.add_argument("--demo", action="store_true", help="made-up computer, nothing is changed")
@@ -495,10 +495,10 @@ def main(argv=None):
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Material")
     os.environ.setdefault("QT_QUICK_CONTROLS_MATERIAL_THEME", "Dark")
     app = QGuiApplication(sys.argv[:1])
-    app.setApplicationName("lumen-installer")
-    app.setOrganizationName("LumenBSD")
-    app.setDesktopFileName("lumen-installer")
-    app.setWindowIcon(QIcon(os.path.join(REPO, "branding", "lumenbsd-logo.svg")))
+    app.setApplicationName("luna-installer")
+    app.setOrganizationName("LunaBSD")
+    app.setDesktopFileName("luna-installer")
+    app.setWindowIcon(QIcon(os.path.join(REPO, "branding", "lunabsd-logo.svg")))
 
     mode = "kiosk" if args.kiosk else ("welcome" if args.welcome else "install")
     installer = Installer(mode, args.demo)
@@ -507,13 +507,13 @@ def main(argv=None):
     engine.quit.connect(app.quit)
     engine.load(QUrl.fromLocalFile(os.path.join(REPO, "installer", "qml", "Main.qml")))
     if not engine.rootObjects():
-        print("lumen-installer: the user interface could not be loaded", file=sys.stderr)
+        print("luna-installer: the user interface could not be loaded", file=sys.stderr)
         return 1
     root = engine.rootObjects()[0]
     if args.screenshots and isinstance(root, QQuickWindow):
         demo_data.take_screenshots(app, root, args.screenshots)
     rc = app.exec()
     if qml_problems:
-        print("lumen-installer: %d QML problem(s)" % len(qml_problems), file=sys.stderr)
+        print("luna-installer: %d QML problem(s)" % len(qml_problems), file=sys.stderr)
         return rc or 1
     return rc

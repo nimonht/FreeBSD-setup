@@ -1,12 +1,12 @@
 #!/bin/sh
 #
-# tests/vm/run-live-test.sh - boot the LumenBSD live ISO in QEMU and check
+# tests/vm/run-live-test.sh - boot the LunaBSD live ISO in QEMU and check
 # that the live system starts: boot menu -> ramdisk -> system copied into
 # memory -> reroot -> live session. A plain QEMU guest has no KMS graphics,
 # so the expected session is the installer alone on a basic framebuffer
 # (scfb on UEFI, vesa on BIOS); the test saves a picture of the screen.
 #
-#   sh tests/vm/run-live-test.sh iso/out/lumenbsd-0.1-amd64.iso [uefi|bios]
+#   sh tests/vm/run-live-test.sh iso/out/lunabsd-0.1-amd64.iso [uefi|bios]
 #
 # MEDIA=usb attaches the ISO as a USB stick (the hybrid GPT and its EFI
 # partition, as when written with Rufus or dd) instead of a DVD.
@@ -35,14 +35,14 @@ fi
 # Checks run as root on the live system's serial console. (What the ramdisk
 # and the start scripts print goes to the screen only, so the serial line
 # is used from the login prompt on, and the checks look at the result.)
-checks="printf 'CHECKS-%s\\n' BEGIN; printf 'session=%s\\n' \"\$(cat /var/run/lumen-live/session)\"; \
-printf 'reason=%s\\n' \"\$(cat /var/run/lumen-live/reason)\"; mount -p | head -3; \
-zpool list -H -o name,size,alloc lumenlive; . /etc/os-release; echo \"\$PRETTY_NAME\"; \
-sleep 150; pgrep -lf 'Xorg|sddm|lumen-installer|openbox' | cut -c1-90; \
+checks="printf 'CHECKS-%s\\n' BEGIN; printf 'session=%s\\n' \"\$(cat /var/run/luna-live/session)\"; \
+printf 'reason=%s\\n' \"\$(cat /var/run/luna-live/reason)\"; mount -p | head -3; \
+zpool list -H -o name,size,alloc lunalive; . /etc/os-release; echo \"\$PRETTY_NAME\"; \
+sleep 150; pgrep -lf 'Xorg|sddm|luna-installer|openbox' | cut -c1-90; \
 ls /usr/local/etc/sddm.conf.d /usr/local/etc/X11/xorg.conf.d; \
 grep -h '(EE)' /var/log/Xorg.0.log 2>/dev/null | head -5; \
 glabel status -s | awk '\$1 ~ /^iso9660\// { print \"media=\" \$3 }'; \
-printf 'offered=%s\\n' \"\$(su -m lumen -c 'doas /bin/sh /usr/local/share/freebsd-setup/install.sh --probe' | awk -F'\\t' '\$1 == \"disk\" { printf \"%s \", \$2 }')\"; \
+printf 'offered=%s\\n' \"\$(su -m luna -c 'doas /bin/sh /usr/local/share/freebsd-setup/install.sh --probe' | awk -F'\\t' '\$1 == \"disk\" { printf \"%s \", \$2 }')\"; \
 printf 'CHECKS-%s\\n' DONE"
 python3 - "$W/steps.json" "$FW" "$checks" <<'PY'
 import json, sys
@@ -95,11 +95,11 @@ Image.open('$W/screen.ppm').save('$W/screen.png')" 2>/dev/null || cp "$W/screen.
 log=$(tr -d '\r' < "$W/serial.log" | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g')
 fail=0
 check() { if printf '%s\n' "$log" | grep -a -q -E "$2"; then echo "ok:   $1"; else echo "FAIL: $1"; fail=1; fi; }
-check "rerooted into the system copied into memory" '^lumenlive[[:space:]]+/[[:space:]]+zfs'
+check "rerooted into the system copied into memory" '^lunalive[[:space:]]+/[[:space:]]+zfs'
 check "installer session chosen (no KMS in QEMU)" '^session=installer'
-check "os-release names LumenBSD" '^LumenBSD [0-9.]+ \(FreeBSD 15'
+check "os-release names LunaBSD" '^LunaBSD [0-9.]+ \(FreeBSD 15'
 check "X server running" 'Xorg'
-check "installer running" 'lumen-installer'
+check "installer running" 'luna-installer'
 # The installer must never offer the stick it runs from (install.sh's
 # disk_candidates; after the reroot nothing on the stick is mounted).
 media=$(printf '%s\n' "$log" | sed -n 's/^media=\([a-z]*[0-9]*\).*/\1/p' | head -1)

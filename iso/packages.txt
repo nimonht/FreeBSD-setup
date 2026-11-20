@@ -1,5 +1,5 @@
-# Packages on the LumenBSD live image, one per line ("#" starts a comment).
-# The live image is for trying LumenBSD and for installing it; installations
+# Packages on the LunaBSD live image, one per line ("#" starts a comment).
+# The live image is for trying LunaBSD and for installing it; installations
 # download their own, newest packages (stages/), so this list stays small.
 # Size check before a build: python3 iso/size.py (needs no FreeBSD).
 

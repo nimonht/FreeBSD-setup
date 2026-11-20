@@ -23,26 +23,26 @@ Start here:
   environment from it).
 - **Re-run** a part: `doas freebsd-setup <stage>` (`freebsd-setup --list`).
 
-## The LumenBSD USB stick
+## The LunaBSD USB stick
 
 - **The stick does not appear in the boot menu, or "no bootable device".**
   Write the ISO again with Rufus in *DD image* mode or with balenaEtcher (ISO
   mode in Rufus copies files and loses the boot code). Switch Secure Boot off.
-- **"LumenBSD could not start: the USB stick or DVD was not found".** The
+- **"LunaBSD could not start: the USB stick or DVD was not found".** The
   kernel did not see the stick: try another USB port (a USB 2 port, or one
   directly on the computer instead of a hub).
 - **"...needs at least ... MB" of memory.** The live system runs from memory
   and needs 4 GB. On a computer with less, use the text installer from
   FreeBSD's own install media instead (README, *Without the ISO*).
 - **Black screen or a freeze where KDE Plasma should appear.** Restart, press
-  **T** in the LumenBSD boot menu and choose *basic graphics*: the graphics
+  **T** in the LunaBSD boot menu and choose *basic graphics*: the graphics
   driver is skipped and the installer starts on a simple framebuffer. The
   installed system decides its driver again; if its desktop does not start
   either, see [The desktop does not start](#the-desktop-does-not-start).
 - **Only the installer appears, no desktop.** On purpose: its first page
   says why (a virtual machine, a graphics card FreeBSD has no driver for, an
   NVIDIA card older than the driver on the stick). The installation is the
-  same. For the record: `cat /var/run/lumen-live/reason`.
+  same. For the record: `cat /var/run/luna-live/reason`.
 - **No graphics at all.** *Troubleshooting* > *text-mode installer* runs the
   text version of the same installer on the console.
 - **The Wi-Fi list stays empty.** The card may have no FreeBSD driver (see

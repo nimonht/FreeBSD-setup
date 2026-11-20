@@ -1,33 +1,33 @@
 #!/bin/sh
 #
-# PROVIDE: lumenbsd_osrelease
+# PROVIDE: lunabsd_osrelease
 # REQUIRE: os-release
 # BEFORE: LOGIN
 #
 # Written by FreeBSD-setup: /etc/os-release (a link to /var/run/os-release,
 # which FreeBSD writes at every start) names the distribution, so the
-# desktop's "About this System", fastfetch and the like say LumenBSD. The
+# desktop's "About this System", fastfetch and the like say LunaBSD. The
 # FreeBSD version stays in it, and ID_LIKE=freebsd tells programs that this
 # is FreeBSD underneath.
 #
-# Off:  sysrc lumenbsd_osrelease_enable=NO  (then FreeBSD's own file stays)
+# Off:  sysrc lunabsd_osrelease_enable=NO  (then FreeBSD's own file stays)
 
 . /etc/rc.subr
 
-name="lumenbsd_osrelease"
+name="lunabsd_osrelease"
 desc="Name the distribution in /var/run/os-release"
-rcvar="lumenbsd_osrelease_enable"
-start_cmd="lumenbsd_osrelease_start"
+rcvar="lunabsd_osrelease_enable"
+start_cmd="lunabsd_osrelease_start"
 stop_cmd=":"
 
-: "${lumenbsd_osrelease_enable:=YES}"
-: "${lumenbsd_osrelease_conf:=/usr/local/share/freebsd-setup/distro.conf}"
+: "${lunabsd_osrelease_enable:=YES}"
+: "${lunabsd_osrelease_conf:=/usr/local/share/freebsd-setup/distro.conf}"
 
-lumenbsd_osrelease_start()
+lunabsd_osrelease_start()
 {
 	local _fv _t
-	[ -r "$lumenbsd_osrelease_conf" ] || return 0
-	. "$lumenbsd_osrelease_conf"
+	[ -r "$lunabsd_osrelease_conf" ] || return 0
+	. "$lunabsd_osrelease_conf"
 	_fv=$(freebsd-version -u)
 	_t=$(mktemp -t os-release) || return 1
 	cat > "$_t" <<__EOF__

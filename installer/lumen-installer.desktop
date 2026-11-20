@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Install LumenBSD
-Comment=Install LumenBSD on this computer
-Exec=lumen-installer
-Icon=lumenbsd
-Terminal=false
-Categories=System;

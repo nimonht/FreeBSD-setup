@@ -1,7 +1,7 @@
 
-Welcome to the LumenBSD live system.
+Welcome to the LunaBSD live system.
 
-  Install LumenBSD:        lumen-installer   (or the "Install LumenBSD" icon)
+  Install LunaBSD:        luna-installer   (or the "Install LunaBSD" icon)
   Text-mode installer:     doas /usr/local/share/freebsd-setup/install.sh
   Help and known issues:   https://github.com/nimonht/FreeBSD-setup
 

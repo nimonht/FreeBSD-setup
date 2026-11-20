@@ -1,6 +1,6 @@
-# lib/live.sh - the LumenBSD live session's plan: which graphics driver to
+# lib/live.sh - the LunaBSD live session's plan: which graphics driver to
 # try, or why the installer starts alone. POSIX sh, sourced after hw.sh and
-# hw_detect. Used by iso/live/lumen_live; tested by tests/live-test.sh.
+# hw_detect. Used by iso/live/luna_live; tested by tests/live-test.sh.
 #
 #   live_plan TEXT BASIC   TEXT/BASIC: non-empty when the boot menu's text
 #                          installer / basic graphics was chosen. Sets

@@ -1,6 +1,6 @@
 --
--- Written by FreeBSD-setup: the LumenBSD sunrise next to the boot menu
--- (loader_logo="lumen" in /boot/loader.conf).
+-- Written by FreeBSD-setup: the LunaBSD sunrise next to the boot menu
+-- (loader_logo="luna" in /boot/loader.conf).
 --
 local color = require("color")
 local drawer = require("drawer")
@@ -9,7 +9,7 @@ local y = color.escapefg(color.YELLOW)
 local r = color.escapefg(color.RED)
 local d = color.resetfg()
 
-drawer.addLogo("lumen", {
+drawer.addLogo("luna", {
 	ascii = {
 		image = {
 y .. "          \\    |    /" .. d,

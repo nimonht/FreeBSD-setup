@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# iso/build-in-vm.sh - build the LumenBSD ISO from Linux (or any system with
+# iso/build-in-vm.sh - build the LunaBSD ISO from Linux (or any system with
 # QEMU): boots FreeBSD's official cloud image in a virtual machine, runs
 # iso/build.sh in it, and copies the ISO back. CI uses this too.
 #
@@ -55,10 +55,10 @@ if ! running; then
 		xz -dc "$D/$IMG.xz" > "$D/disk.qcow2"
 		qemu-img resize -q "$D/disk.qcow2" 80G      # the image grows to fill it at first start
 	fi
-	[ -f "$D/ssh_key" ] || ssh-keygen -q -t ed25519 -N "" -C lumenbsd-build-vm -f "$D/ssh_key"
+	[ -f "$D/ssh_key" ] || ssh-keygen -q -t ed25519 -N "" -C lunabsd-build-vm -f "$D/ssh_key"
 	# cloud-init (FreeBSD's nuageinit): root may log in with this key only.
 	rm -rf "$D/cidata"; mkdir -p "$D/cidata"
-	printf 'instance-id: lumenbsd-build\nlocal-hostname: lumenbsd-build\n' > "$D/cidata/meta-data"
+	printf 'instance-id: lunabsd-build\nlocal-hostname: lunabsd-build\n' > "$D/cidata/meta-data"
 	{
 		echo '#!/bin/sh'
 		echo 'mkdir -p /root/.ssh && chmod 700 /root/.ssh'
@@ -90,9 +90,9 @@ until $SSH true 2>/dev/null; do
 done
 
 log "Copying the repository into the VM"
-$SSH 'rm -rf /root/lumen && mkdir -p /root/lumen'
+$SSH 'rm -rf /root/luna && mkdir -p /root/luna'
 (cd "$REPO_DIR" && tar -cf - --exclude ./.git --exclude ./iso/work --exclude ./iso/out --exclude ./iso/vm \
-	--exclude ./tests/vm/work --exclude ./tests/vm/live-work .) | $SSH 'tar -xf - -C /root/lumen'
+	--exclude ./tests/vm/work --exclude ./tests/vm/live-work .) | $SSH 'tar -xf - -C /root/luna'
 if [ -n "${EXTRA_CA:-}" ]; then
 	$SSH 'cat > /root/build-ca.pem' < "$EXTRA_CA"
 fi
@@ -108,7 +108,7 @@ done
 [ -n "${BUILD_PROXY:-}" ] && envs="$envs HTTPS_PROXY='$BUILD_PROXY' https_proxy='$BUILD_PROXY'"
 
 log "Building (output follows)"
-$SSH "cd /root/lumen && env WORK=/build/work OUT=/build/out $envs sh iso/build.sh"
+$SSH "cd /root/luna && env WORK=/build/work OUT=/build/out $envs sh iso/build.sh"
 
 log "Copying the ISO out"
 for f in $($SSH 'ls /build/out'); do

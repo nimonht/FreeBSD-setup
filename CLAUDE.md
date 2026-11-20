@@ -1,6 +1,6 @@
-# LumenBSD (repository: FreeBSD-setup)
+# LunaBSD (repository: FreeBSD-setup)
 
-LumenBSD is a desktop distribution of FreeBSD 15: a live ISO (KDE Plasma from
+LunaBSD is a desktop distribution of FreeBSD 15: a live ISO (KDE Plasma from
 RAM, `iso/`), a graphical installer (`installer/`, PyQt6 + QML), and the setup
 that turns FreeBSD into a desktop (`setup.sh`, `stages/`): KDE Plasma and/or
 Hyprland with the Caelestia shell. Underneath it is stock FreeBSD: no kernel
@@ -22,7 +22,7 @@ D-Bus and SSH but not yet on a real screen.
 |---|---|
 | `distro.conf` | The distribution's name, version, FreeBSD release, live package branch, ISO label. Everything reads it; renaming happens here. |
 | `iso/` | The live ISO: `build.sh` (on FreeBSD), `build-in-vm.sh` (from Linux/CI), `packages.txt`, `size.py`, the ramdisk (`ramdisk/`), boot menu (`boot/`), live session (`live/`). See docs/BUILDING.md. |
-| `installer/` | The graphical installer: `lumen_installer/backend.py` (pure Python, tested), `app.py` (Qt glue), `qml/` (pages), `lumen-wifi` (Wi-Fi helper). |
+| `installer/` | The graphical installer: `luna_installer/backend.py` (pure Python, tested), `app.py` (Qt glue), `qml/` (pages), `luna-wifi` (Wi-Fi helper). |
 | `branding/`, `lib/branding.sh` | Logo, wallpaper, boot menu art, and the code that installs them (also `stages/branding.sh`). |
 | `bootstrap.sh` | The one-liner entry: downloads the repo, runs `install.sh` on the live USB or `setup.sh` on an installed system. `FBS_REF=<branch>` picks a branch. |
 | `install.sh` | Guided installer (ZFS, whole disk or next to other systems, optional GELI). Ends by running `setup.sh --chroot` inside the new system. |
@@ -42,7 +42,7 @@ D-Bus and SSH but not yet on a real screen.
   `install.sh --config FILE --yes` does the work. Never reimplement a disk,
   boot or encryption decision in Python or QML; extend `--probe` instead.
   Validation in `backend.py` mirrors `install.sh` (tests check it).
-- **The live ISO decides hardware at boot** (`iso/live/lumen_live`), like the
+- **The live ISO decides hardware at boot** (`iso/live/luna_live`), like the
   installed system; nothing hardware-specific is baked into the image.
 - **The name "FreeBSD" is a trademark**: user-facing identity is
   `$DISTRO_NAME` from `distro.conf`. FreeBSD's own technical names stay
@@ -84,21 +84,21 @@ sh tests/efiboot-test.sh        # reading efibootmgr -v (FreeBSD 15 and later la
 sh tests/timedate-test.sh       # timedate1 D-Bus service for KDE's Date & Time (needs python3-gobject, dbus)
 sh tests/live-test.sh           # live USB: which graphics driver / why only the installer, per machine
 python3 tests/installer-test.py # graphical installer logic: probe parsing, checks, answers file (sourced by sh)
-QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python3 installer/lumen-installer --screenshots /tmp/shots
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python3 installer/luna-installer --screenshots /tmp/shots
                                 # every installer page renders; fails on any QML warning (pip install PyQt6)
 python3 iso/size.py             # live image size from FreeBSD's package catalogue
 shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
   setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* \
   caelestia/build.sh files/rc.d/* tests/*.sh tests/vm/*.sh files/shell/fbs-terminal-greeting \
-  iso/*.sh iso/ramdisk/init.sh iso/ramdisk/rc iso/live/lumen_live iso/live/lumen-installer-session \
-  iso/live/rc.local installer/lumen-wifi lib/live.sh
+  iso/*.sh iso/ramdisk/init.sh iso/ramdisk/rc iso/live/luna_live iso/live/luna-installer-session \
+  iso/live/rc.local installer/luna-wifi lib/live.sh
 shellcheck -s bash -S warning files/shell/bash.bashrc
 sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-erase-kde.conf
 ```
 
 Everything but the last line runs on Linux, as CI does. The ISO:
 `sh iso/build-in-vm.sh` (Linux, QEMU; KVM makes it fast) or `doas sh iso/build.sh`
-(FreeBSD), then `sh tests/vm/run-live-test.sh iso/out/lumenbsd-*.iso uefi`
+(FreeBSD), then `sh tests/vm/run-live-test.sh iso/out/lunabsd-*.iso uefi`
 (`MEDIA=usb` for the USB-stick path), which
 boots it to the installer session (QEMU has no KMS, so never to KDE) and saves a
 screenshot. The live KDE session can only be tested on real hardware. The last one installs
@@ -128,22 +128,22 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
 
 ## Facts worth knowing before changing things
 
-- The live ISO boots a ramdisk that copies `lumen/system.zfs` into a ZFS pool
-  `lumenlive` in memory and re-roots into it (GhostBSD's method). Reading the
+- The live ISO boots a ramdisk that copies `luna/system.zfs` into a ZFS pool
+  `lunalive` in memory and re-roots into it (GhostBSD's method). Reading the
   system from the stick instead does not work: `reboot -r` force-unmounts
   everything except init's temporary copy (sys/kern/kern_shutdown.c,
   kern_reroot), so it needs RAM of about the image size (4 GB minimum).
-  `install.sh` treats a `lumenlive` root as live media and never offers the
+  `install.sh` treats a `lunalive` root as live media and never offers the
   disk carrying the `iso9660/$ISO_LABEL` label.
   The ramdisk's and the start scripts' messages appear on the screen only
   (the video console is primary), never on a serial line: tests log in on
-  the serial console and check the result (`/var/run/lumen-live/`).
+  the serial console and check the result (`/var/run/luna-live/`).
 - `drm-kmod` and `nvidia-drm-kmod` are separate meta packages and have
   pointed at different DRM versions (6.12 and 5.15), which conflict. The ISO
   build and `stages/drivers.sh` install NVIDIA's module for drm-kmod's version
   (`nvidia-drm-612-kmod`).
-- `lumenbsd_osrelease` (rc.d) rewrites `/var/run/os-release` after FreeBSD's
-  `os-release` script: `ID=lumenbsd`, `ID_LIKE=freebsd`, FreeBSD's version in
+- `lunabsd_osrelease` (rc.d) rewrites `/var/run/os-release` after FreeBSD's
+  `os-release` script: `ID=lunabsd`, `ID_LIKE=freebsd`, FreeBSD's version in
   `FREEBSD_VERSION` and `PRETTY_NAME`.
 - The installed copy of this repo lives in `/usr/local/share/freebsd-setup`;
   `freebsd-setup` is a symlink to its `setup.sh`. Saved answers:
