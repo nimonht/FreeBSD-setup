@@ -154,7 +154,8 @@ sh tests/vm/run-live-test.sh iso/out/lumenbsd-*.iso uefi        # boot the ISO i
 ```
 
 `run-live-test.sh` boots the ISO in QEMU (UEFI by default, `bios` as second
-argument), checks that the system was copied into memory, re-rooted, chose
+argument; `MEDIA=usb` attaches it as a USB stick instead of a DVD, which
+tests the hybrid GPT and its EFI partition), checks that the system was copied into memory, re-rooted, chose
 the installer session (QEMU has no KMS graphics) and started X and the
 installer, and saves a picture of the screen as
 `tests/vm/live-work/screen.png`. What it cannot test: the KDE Plasma live
