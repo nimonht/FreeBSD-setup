@@ -1,7 +1,8 @@
 // Written by FreeBSD-setup: the LunaBSD wallpaper for each desktop that
 // still shows Plasma's own default. Plasma runs this once per user; a
 // wallpaper someone picked is never replaced.
-var image = "file:///usr/local/share/wallpapers/LunaBSD/contents/images/3840x2160.jpg";
+// the package, so Plasma picks the day or night picture by colour scheme
+var image = "file:///usr/local/share/wallpapers/LunaBSD/";
 var all = desktops();
 for (var i = 0; i < all.length; i++) {
 	var d = all[i];

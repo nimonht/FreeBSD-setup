@@ -402,6 +402,8 @@ step_iso() {
 	install -m 444 "$HERE/boot/local.lua" "$CD/boot/lua/local.lua"
 	install -m 444 "$REPO_DIR/branding/loader/brand-luna.lua" "$CD/boot/lua/brand-luna.lua"
 	install -m 444 "$REPO_DIR/branding/loader/logo-luna.lua" "$CD/boot/lua/logo-luna.lua"
+	mkdir -p "$CD/boot/images"
+	install -m 444 "$REPO_DIR/branding/loader/lunabsd-brand.png" "$REPO_DIR/branding/loader/lunabsd-logo.png" "$CD/boot/images/"
 	cp "$ROOT/COPYRIGHT" "$CD/COPYRIGHT" 2>/dev/null || true
 	printf '%s %s (%s) - %s\n' "$DISTRO_NAME" "$DISTRO_VERSION" "$REL" "$DISTRO_URL" > "$CD/README.TXT"
 
