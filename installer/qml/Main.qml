@@ -1,41 +1,38 @@
-// The LunaBSD installer window: a list of steps on the left, one page at a
-// time on the right. The answers live here; install.sh does the work
-// (installer/luna_installer/app.py starts it).
+// The LunaBSD installer window. The look: printed matter on an instrument
+// grid (parchment, ink, one signal red), menus whose choices are swept in
+// ink, capitals for short labels only. The answers live here; install.sh
+// does the work (installer/luna_installer/app.py starts it).
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Layouts
 import QtQuick.Window
 
 ApplicationWindow {
     id: app
-    width: 1120
-    height: 740
-    minimumWidth: 940
-    minimumHeight: 620
+    width: 1180
+    height: 760
+    minimumWidth: 980
+    minimumHeight: 640
     visible: true
     visibility: installer.mode === "kiosk" ? Window.FullScreen : Window.AutomaticVisibility
     title: distroName + " Installer"
     color: cBg
+    font.family: fSans
+    font.pixelSize: 15
 
-    Material.theme: Material.Dark
-    Material.accent: cAccent
-    Material.background: cBg
-    Material.foreground: cText
-
-    // ---------------------------------------------------------- colours --
-    readonly property color cBg: "#121829"
-    readonly property color cSide: "#0B1020"
-    readonly property color cCard: "#1A2240"
-    readonly property color cCardHi: "#24305A"
-    readonly property color cLine: "#2C3763"
-    readonly property color cText: "#E9ECF5"
-    readonly property color cMuted: "#A0A8C3"
-    readonly property color cAccent: "#FF9F43"
-    readonly property color cAccent2: "#FF5E62"
-    readonly property color cOk: "#4CD08A"
-    readonly property color cWarn: "#FFC857"
-    readonly property color cBad: "#FF6B6B"
+    // ----------------------------------------------------------- design --
+    // Text colours meet 4.5:1 on parchment and paper (checked).
+    readonly property color cBg: "#D1CDB7"        // parchment
+    readonly property color cGrid: "#CAC5AE"      // the grid on it
+    readonly property color cPaper: "#DCD8C0"     // raised surfaces; text on ink
+    readonly property color cWeak: "#BAB5A1"      // shadows, washes
+    readonly property color cDisabled: "#8F8A76"
+    readonly property color cSoft: "#58544A"      // secondary text
+    readonly property color cInk: "#454138"       // text, bands, rules
+    readonly property color cSignal: "#8A3322"    // erasing, errors
+    readonly property color cOchre: "#5E4A1C"     // limitations
+    readonly property string fSans: "IBM Plex Sans"
+    readonly property string fMono: "IBM Plex Mono"
     readonly property string distroName: installer.distro.DISTRO_NAME
 
     // ---------------------------------------------------------- answers --
@@ -73,7 +70,7 @@ ApplicationWindow {
     // ------------------------------------------------------------ pages --
     property int page: 0
     readonly property var steps: ["Welcome", "Language", "Network", "Your computer", "Disk",
-                                  "Time zone", "About you", "Desktop", "Summary", "Install"]
+                                  "Time zone", "Your account", "Desktop", "Summary", "Install"]
     readonly property int summaryPage: 8
     readonly property int installPage: 9
     readonly property int donePage: 10
@@ -88,6 +85,7 @@ ApplicationWindow {
             if (ds[i].name === disk) return ds[i]
         return null
     }
+    function stepCode(i) { return "STEP " + (i < 9 ? "0" : "") + (i + 1) + " / 10" }
 
     function next() {
         if (page === summaryPage) beginInstall()
@@ -122,8 +120,7 @@ ApplicationWindow {
     function beginInstall() {
         var err = installer.startInstall(answers())
         if (err !== "") {
-            errorDialog.message = err
-            errorDialog.open()
+            notice.show("Please check", err)
             return
         }
         page = installPage
@@ -152,10 +149,7 @@ ApplicationWindow {
             resultText = text
             page = donePage
         }
-        function onNotice(text) {
-            errorDialog.message = text
-            errorDialog.open()
-        }
+        function onNotice(text) { notice.show("Notice", text) }
     }
 
     Component.onCompleted: {
@@ -163,88 +157,126 @@ ApplicationWindow {
         installer.checkNetwork()
     }
 
-    RowLayout {
+    Backdrop { anchors.fill: parent }
+
+    ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        SideBar {
-            Layout.fillHeight: true
-            Layout.preferredWidth: 260
-        }
+        TopBar { Layout.fillWidth: true }
 
-        ColumnLayout {
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
 
-            StackLayout {
-                id: stack
-                currentIndex: app.page
-                Layout.fillWidth: true
+            SideBar {
                 Layout.fillHeight: true
-
-                WelcomePage {}
-                KeyboardPage {}
-                NetworkPage {}
-                ComputerPage {}
-                DiskPage {}
-                LocationPage {}
-                AccountPage {}
-                DesktopPage {}
-                SummaryPage {}
-                InstallPage {}
-                DonePage {}
+                Layout.preferredWidth: 270
             }
 
-            Rectangle {
+            ColumnLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 76
-                visible: app.page > 0 && app.page <= app.summaryPage
-                color: app.cBg
-                Rectangle { width: parent.width; height: 1; color: app.cLine }
+                Layout.fillHeight: true
+                spacing: 0
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 40
-                    anchors.rightMargin: 40
-                    spacing: 16
+                StackLayout {
+                    id: stack
+                    currentIndex: app.page
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
 
-                    Button {
-                        text: "Back"
-                        flat: true
-                        onClicked: app.back()
+                    WelcomePage {}
+                    KeyboardPage {}
+                    NetworkPage {}
+                    ComputerPage {}
+                    DiskPage {}
+                    LocationPage {}
+                    AccountPage {}
+                    DesktopPage {}
+                    SummaryPage {}
+                    InstallPage {}
+                    DonePage {}
+                }
+
+                // the footer: what is missing, and the way on
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 74
+                    visible: app.page > 0 && app.page <= app.summaryPage
+                    Rectangle {
+                        x: 48
+                        width: parent.width - 88
+                        height: 1
+                        color: app.cInk
                     }
-                    Item { Layout.fillWidth: true }
-                    Label {
-                        text: app.currentPage && app.currentPage.hint ? app.currentPage.hint : ""
-                        color: app.cMuted
-                        elide: Text.ElideRight
-                        Layout.maximumWidth: 460
-                    }
-                    AccentButton {
-                        id: nextButton
-                        text: app.page === app.summaryPage ? "Install now" : "Next"
-                        enabled: app.currentPage ? app.currentPage.ready : false
-                        danger: app.page === app.summaryPage && app.installMode === "erase"
-                        onClicked: app.next()
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 48
+                        anchors.rightMargin: 40
+                        spacing: 18
+                        Rectangle {
+                            visible: hintLabel.text !== ""
+                            Layout.preferredWidth: 7
+                            Layout.preferredHeight: 7
+                            color: app.cSoft
+                        }
+                        Label {
+                            id: hintLabel
+                            Layout.fillWidth: true
+                            text: app.currentPage && app.currentPage.hint ? app.currentPage.hint : ""
+                            color: app.cSoft
+                            font.pixelSize: 14
+                            elide: Text.ElideRight
+                        }
+                        LButton {
+                            text: "Back"
+                            onClicked: app.back()
+                        }
+                        LButton {
+                            text: app.page === app.summaryPage ? "Install now" : "Next"
+                            kind: app.page === app.summaryPage && app.installMode === "erase" ? "danger" : "primary"
+                            enabled: app.currentPage ? app.currentPage.ready : false
+                            onClicked: app.next()
+                        }
                     }
                 }
             }
         }
     }
 
-    Dialog {
-        id: errorDialog
+    // A message that needs an answer before going on.
+    Popup {
+        id: notice
+        property string heading: ""
         property string message: ""
-        anchors.centerIn: parent
-        width: Math.min(560, app.width - 80)
+        function show(h, m) { heading = h; message = m; open() }
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(560, app.width - 120)
         modal: true
-        title: "Please check"
-        standardButtons: Dialog.Ok
-        Label {
-            width: parent.width
-            text: errorDialog.message
-            wrapMode: Text.Wrap
+        padding: 0
+        Overlay.modal: Rectangle { color: Qt.rgba(0.27, 0.25, 0.22, 0.45) }
+        background: Item {}
+        contentItem: Panel {
+            title: notice.heading
+            accent: app.cSignal
+            ColumnLayout {
+                width: parent.width
+                spacing: 18
+                Label {
+                    Layout.fillWidth: true
+                    text: notice.message
+                    color: app.cInk
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 15
+                }
+                LButton {
+                    Layout.alignment: Qt.AlignRight
+                    text: "Understood"
+                    kind: "primary"
+                    onClicked: notice.close()
+                }
+            }
         }
     }
 }

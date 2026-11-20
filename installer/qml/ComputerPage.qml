@@ -3,99 +3,106 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
-    property bool ready: !installer.probing && (app.probe.disks || []).length > 0
-    property string hint: installer.probing ? "Looking at this computer..." : ""
-
-    function colour(s) { return s === "OK" ? app.cOk : s === "WARN" ? app.cWarn : s === "NO" ? app.cBad : app.cMuted }
-    function mark(s) { return s === "OK" ? "✓" : s === "WARN" ? "!" : s === "NO" ? "✕" : "i" }
+LPage {
+    title: "Your computer"
+    subtitle: ((app.hw.HW_VENDOR || "") + " " + (app.hw.HW_MODEL || "")).trim() !== ""
+              ? ((app.hw.HW_VENDOR || "") + " " + (app.hw.HW_MODEL || "")).trim() + ". What was found, and what works with " + app.distroName + "."
+              : "What was found, and what works with " + app.distroName + "."
+    code: app.stepCode(3)
+    ready: !installer.probing && (app.probe.disks || []).length > 0
+    hint: installer.probing ? "Looking at this computer" : ""
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 40
-        spacing: 20
+        width: parent.width
+        spacing: 24
 
-        PageHeader {
-            title: "Your computer"
-            subtitle: (app.hw.HW_VENDOR || "") + " " + (app.hw.HW_MODEL || "")
-                      + ((app.hw.HW_VENDOR || app.hw.HW_MODEL) ? ": " : "") + "what was found, and what works with " + app.distroName + "."
-        }
-
-        Card {
-            visible: installer.probing || installer.probeError !== ""
+        Panel {
+            visible: installer.probing
             Layout.fillWidth: true
             RowLayout {
                 width: parent.width
                 spacing: 14
-                BusyIndicator {
-                    running: installer.probing
-                    visible: running
-                }
+                Busy {}
                 Label {
                     Layout.fillWidth: true
-                    wrapMode: Text.Wrap
-                    color: installer.probeError !== "" ? app.cBad : app.cText
-                    text: installer.probing ? "Looking at this computer's disks and devices..."
-                                            : "The computer could not be checked: " + installer.probeError
+                    text: "Looking at this computer's disks and devices."
+                    color: app.cInk
                 }
-                Button {
-                    visible: !installer.probing
+            }
+        }
+
+        Panel {
+            visible: !installer.probing && installer.probeError !== ""
+            Layout.fillWidth: true
+            title: "Could not check this computer"
+            accent: app.cSignal
+            RowLayout {
+                width: parent.width
+                spacing: 16
+                Label {
+                    Layout.fillWidth: true
+                    text: installer.probeError
+                    color: app.cInk
+                    wrapMode: Text.Wrap
+                }
+                LButton {
                     text: "Try again"
                     onClicked: installer.startProbe()
                 }
             }
         }
 
-        Card {
+        Panel {
             visible: !installer.probing && app.hw.HW_DESKTOP === "no"
-            accent: app.cWarn
             Layout.fillWidth: true
+            title: "No graphical desktop here"
+            accent: app.cOchre
             Label {
                 width: parent.width
                 wrapMode: Text.Wrap
-                color: app.cText
+                color: app.cInk
+                lineHeight: 1.2
                 text: "A graphical desktop will not start on this computer: " + (app.hw.HW_DESKTOP_WHY || "")
-                      + ".\nYou can still install " + app.distroName + " with the text console, for example on a server or to try things."
+                      + ". You can still install " + app.distroName + " with the text console, for example on a server."
             }
         }
 
-        Card {
+        Panel {
             visible: !installer.probing && (app.probe.report || []).length > 0
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            padding: 10
-            ListView {
-                id: report
-                anchors.fill: parent
-                clip: true
-                spacing: 2
-                model: app.probe.report || []
-                ScrollBar.vertical: ScrollBar {}
-                delegate: RowLayout {
-                    width: report.width - 16
-                    spacing: 12
-                    Rectangle {
-                        width: 24
-                        height: 24
-                        radius: 12
-                        Layout.alignment: Qt.AlignTop
-                        Layout.topMargin: 6
-                        color: Qt.rgba(colour(modelData.status).r, colour(modelData.status).g, colour(modelData.status).b, 0.18)
-                        Label {
-                            anchors.centerIn: parent
-                            text: mark(modelData.status)
-                            color: colour(modelData.status)
-                            font.bold: true
-                            font.pixelSize: 12
-                        }
-                    }
-                    Label {
-                        text: modelData.text
-                        color: app.cText
-                        wrapMode: Text.Wrap
+            title: "Hardware check"
+            tag: (app.probe.report || []).length + " ITEMS"
+            ColumnLayout {
+                width: parent.width
+                spacing: 0
+                Repeater {
+                    model: app.probe.report || []
+                    delegate: ColumnLayout {
                         Layout.fillWidth: true
-                        topPadding: 8
-                        bottomPadding: 8
+                        spacing: 0
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 9
+                            Layout.bottomMargin: 9
+                            spacing: 16
+                            StatusTag {
+                                status: modelData.status
+                                Layout.alignment: Qt.AlignTop
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: modelData.text
+                                color: app.cInk
+                                wrapMode: Text.Wrap
+                                lineHeight: 1.15
+                            }
+                        }
+                        Rectangle {
+                            visible: index < (app.probe.report || []).length - 1
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: app.cWeak
+                        }
                     }
                 }
             }

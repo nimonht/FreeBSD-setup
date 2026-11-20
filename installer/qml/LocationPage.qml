@@ -3,11 +3,15 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
-    property bool ready: app.timezone !== ""
-    property string hint: ""
-    property string filter: ""
+LPage {
+    id: page
+    title: "Time zone"
+    subtitle: "Search for your city, or a city near you."
+    code: app.stepCode(5)
+    scroll: false
+    ready: app.timezone !== ""
 
+    property string filter: ""
     readonly property var shown: {
         var f = filter.toLowerCase(), out = [], zs = installer.timezones
         for (var i = 0; i < zs.length; i++) {
@@ -20,34 +24,58 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 16
+        spacing: 22
 
-        PageHeader {
-            title: "Time zone"
-            subtitle: "Chosen: " + app.timezone.replace(/_/g, " ") + ". Search for your city or a city near you."
-        }
-
-        TextField {
+        RowLayout {
             Layout.fillWidth: true
-            placeholderText: "Search: city, country or region"
-            onTextChanged: parent.parent.filter = text
+            spacing: 26
+            LField {
+                label: "Search"
+                placeholder: "City, country or region"
+                onEdited: page.filter = text
+            }
+            ColumnLayout {
+                Layout.preferredWidth: 300
+                Layout.alignment: Qt.AlignBottom
+                spacing: 6
+                Label {
+                    text: "Chosen"
+                    color: app.cSoft
+                    font.pixelSize: 12
+                    font.weight: Font.Medium
+                    font.letterSpacing: 2
+                    font.capitalization: Font.AllUppercase
+                }
+                Label {
+                    Layout.preferredHeight: 42
+                    verticalAlignment: Text.AlignVCenter
+                    text: app.timezone.replace(/_/g, " ")
+                    color: app.cInk
+                    font.family: app.fMono
+                    font.pixelSize: 16
+                }
+            }
         }
 
-        Card {
+        Panel {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            title: "Time zones"
+            tag: page.shown.length + " SHOWN"
             padding: 8
             ListView {
                 id: zones
                 anchors.fill: parent
                 clip: true
-                model: shown
-                ScrollBar.vertical: ScrollBar {}
-                delegate: ItemDelegate {
-                    width: zones.width
-                    highlighted: app.timezone === modelData.zone
-                    text: modelData.city + "  —  " + modelData.region + (modelData.comment !== "" ? " (" + modelData.comment + ")" : "")
+                spacing: 4
+                model: page.shown
+                ScrollBar.vertical: LScrollBar {}
+                delegate: MenuRow {
+                    width: zones.width - 10
+                    compact: true
+                    title: modelData.city + (modelData.comment !== "" ? " (" + modelData.comment + ")" : "")
+                    tag: modelData.region.toUpperCase()
+                    checked: app.timezone === modelData.zone
                     onClicked: {
                         app.timezone = modelData.zone
                         app.zoneTouched = true

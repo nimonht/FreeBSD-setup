@@ -4,8 +4,12 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Item {
+LPage {
     id: page
+    title: "Your account"
+    subtitle: "You log in with it, and its password also unlocks administration (doas)."
+    code: app.stepCode(6)
+
     property bool userTouched: false
     readonly property string nameErr: app.fullname === "" ? "" : installer.checkFullname(app.fullname)
     readonly property string userErr: app.username === "" ? "" : installer.checkUsername(app.username)
@@ -13,163 +17,124 @@ Item {
     readonly property string passErr: pw2.text === "" ? "" : installer.checkPassword(app.password, pw2.text, "password")
     readonly property string rootErr: app.sameRootPassword || rpw2.text === "" ? "" : installer.checkPassword(app.rootPassword, rpw2.text, "password")
     readonly property bool diskPassBad: app.encrypt && app.diskUsesLoginPassword && app.password !== "" && !installer.isAscii(app.password)
-    property bool ready: app.fullname !== "" && app.username !== "" && nameErr === "" && userErr === "" && hostErr === ""
-                         && app.password !== "" && pw2.text === app.password && !diskPassBad
-                         && (app.sameRootPassword || (app.rootPassword !== "" && rpw2.text === app.rootPassword))
-    property string hint: ""
+    readonly property int strength: installer.strength(app.password)
+    ready: app.fullname !== "" && app.username !== "" && nameErr === "" && userErr === "" && hostErr === ""
+           && app.password !== "" && pw2.text === app.password && !diskPassBad
+           && (app.sameRootPassword || (app.rootPassword !== "" && rpw2.text === app.rootPassword))
+    hint: app.fullname === "" ? "Type your name" : app.password === "" ? "Choose a password" : ""
 
-    component Field: ColumnLayout {
-        property alias label: lbl.text
-        property string error: ""
-        default property alias field: holder.data
-        spacing: 4
-        Layout.fillWidth: true
-        Label {
-            id: lbl
-            color: app.cMuted
-        }
-        Item {
-            id: holder
+    ColumnLayout {
+        width: parent.width
+        spacing: 24
+
+        Panel {
             Layout.fillWidth: true
-            implicitHeight: children.length > 0 ? children[0].implicitHeight : 0
-        }
-        Label {
-            visible: parent.error !== ""
-            text: parent.error
-            color: app.cBad
-            wrapMode: Text.Wrap
-            Layout.fillWidth: true
-        }
-    }
-
-    Flickable {
-        anchors.fill: parent
-        contentHeight: col.implicitHeight + 80
-        clip: true
-        ScrollBar.vertical: ScrollBar {}
-
-        ColumnLayout {
-            id: col
-            x: 40
-            y: 40
-            width: Math.min(parent.width - 80, 720)
-            spacing: 14
-
-            PageHeader {
-                title: "About you"
-                subtitle: "Your account on this computer. You log in with it and use its password for administration (doas)."
-            }
-
-            Field {
-                label: "Your name"
-                error: page.nameErr
-                TextField {
-                    width: parent.width
+            title: "You"
+            ColumnLayout {
+                width: parent.width
+                spacing: 18
+                LField {
+                    label: "Your name"
                     text: app.fullname
-                    onTextEdited: {
+                    error: page.nameErr
+                    onEdited: {
                         app.fullname = text
                         if (!page.userTouched) app.username = installer.suggestUsername(text)
                     }
                 }
-            }
-            RowLayout {
-                spacing: 16
-                Layout.fillWidth: true
-                Field {
-                    label: "Login name"
-                    error: page.userErr
-                    TextField {
-                        width: parent.width
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 20
+                    LField {
+                        label: "Login name"
                         text: app.username
-                        onTextEdited: {
+                        error: page.userErr
+                        onEdited: {
                             app.username = text
                             page.userTouched = true
                         }
                     }
-                }
-                Field {
-                    label: "Computer name"
-                    error: page.hostErr
-                    TextField {
-                        width: parent.width
+                    LField {
+                        label: "Computer name"
                         text: app.hostname
-                        onTextEdited: app.hostname = text
+                        error: page.hostErr
+                        onEdited: app.hostname = text
                     }
                 }
             }
-            RowLayout {
+        }
+
+        Panel {
+            Layout.fillWidth: true
+            title: "Password"
+            ColumnLayout {
+                width: parent.width
                 spacing: 16
-                Layout.fillWidth: true
-                Field {
-                    label: "Password"
-                    TextField {
-                        id: pw1
-                        width: parent.width
-                        echoMode: TextInput.Password
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 20
+                    LField {
+                        label: "Password"
+                        secret: true
                         text: app.password
-                        onTextEdited: app.password = text
+                        onEdited: app.password = text
                     }
-                }
-                Field {
-                    label: "Password again"
-                    error: page.passErr
-                    TextField {
+                    LField {
                         id: pw2
-                        width: parent.width
-                        echoMode: TextInput.Password
+                        label: "Password again"
+                        secret: true
                         text: installer.demo ? app.password : ""
+                        error: page.passErr
                     }
                 }
-            }
-            RowLayout {
-                visible: app.password !== ""
-                spacing: 10
-                Repeater {
-                    model: 3
-                    Rectangle {
-                        width: 60
-                        height: 6
-                        radius: 3
-                        color: index < installer.strength(app.password)
-                               ? [app.cBad, app.cWarn, app.cOk][installer.strength(app.password) - 1] : app.cLine
+                RowLayout {
+                    visible: app.password !== ""
+                    spacing: 6
+                    Repeater {
+                        model: 3
+                        Rectangle {
+                            width: 54
+                            height: 6
+                            color: index < page.strength ? (page.strength === 1 ? app.cSignal : app.cInk) : app.cWeak
+                        }
+                    }
+                    Label {
+                        Layout.leftMargin: 10
+                        color: app.cSoft
+                        font.pixelSize: 14
+                        text: ["Weak password: use more words or characters", "Weak password: use more words or characters",
+                               "Fair password", "Strong password"][page.strength]
                     }
                 }
                 Label {
-                    color: app.cMuted
-                    text: ["Weak password", "Weak password", "Fair password", "Strong password"][installer.strength(app.password)]
+                    visible: page.diskPassBad
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: app.cSignal
+                    text: "This password also unlocks the disk and is typed before the system starts: use letters, digits and "
+                          + "simple symbols only (no accents), or choose a separate disk passphrase on the Disk page."
                 }
-            }
-            Label {
-                visible: page.diskPassBad
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                color: app.cBad
-                text: "This password also unlocks the disk, and it is typed before the system starts: use letters, digits and simple symbols only (no accents), or choose a separate disk passphrase on the Disk page."
-            }
-            CheckBox {
-                text: "Use the same password for the administrator account (root)"
-                checked: app.sameRootPassword
-                onToggled: app.sameRootPassword = checked
-            }
-            RowLayout {
-                visible: !app.sameRootPassword
-                spacing: 16
-                Layout.fillWidth: true
-                Field {
-                    label: "Administrator password"
-                    TextField {
-                        width: parent.width
-                        echoMode: TextInput.Password
-                        onTextEdited: app.rootPassword = text
+                MenuRow {
+                    kind: "check"
+                    compact: true
+                    title: "Use the same password for the administrator account (root)"
+                    checked: app.sameRootPassword
+                    onClicked: app.sameRootPassword = !app.sameRootPassword
+                }
+                RowLayout {
+                    visible: !app.sameRootPassword
+                    Layout.fillWidth: true
+                    spacing: 20
+                    LField {
+                        label: "Administrator password"
+                        secret: true
+                        onEdited: app.rootPassword = text
                     }
-                }
-                Field {
-                    label: "Administrator password again"
-                    error: page.rootErr
-                    TextField {
+                    LField {
                         id: rpw2
-                        width: parent.width
-                        echoMode: TextInput.Password
+                        label: "Administrator password again"
+                        secret: true
+                        error: page.rootErr
                     }
                 }
             }

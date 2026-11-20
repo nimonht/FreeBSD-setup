@@ -492,8 +492,8 @@ def main(argv=None):
                 qml_problems.append(message)
         qInstallMessageHandler(handler)
 
-    os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Material")
-    os.environ.setdefault("QT_QUICK_CONTROLS_MATERIAL_THEME", "Dark")
+    # The Basic style: every control is drawn by installer/qml itself.
+    os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"
     app = QGuiApplication(sys.argv[:1])
     app.setApplicationName("luna-installer")
     app.setOrganizationName("LunaBSD")
