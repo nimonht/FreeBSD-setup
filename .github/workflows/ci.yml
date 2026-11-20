@@ -33,6 +33,9 @@ jobs:
       - name: Configuration tests (POSIX sh)
         run: sh tests/config-test.sh
 
+      - name: Live USB graphics driver plan (POSIX sh)
+        run: sh tests/live-test.sh
+
       - name: X11 graphics configuration tests (POSIX sh)
         run: sh tests/gpu-config-test.sh
 

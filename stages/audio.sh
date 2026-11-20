@@ -9,22 +9,14 @@ pkg_install pipewire wireplumber pipewire-spa-oss pavucontrol pamixer playerctl 
 # FreeBSD has no systemd user session, so the desktop session starts PipeWire.
 install_file "$REPO_DIR/files/bin/start-pipewire" /usr/local/bin/start-pipewire 755
 mkdir -p /usr/local/etc/xdg/autostart
-cat > /usr/local/etc/xdg/autostart/start-pipewire.desktop <<'DESK'
-[Desktop Entry]
-Type=Application
-Name=PipeWire audio
-Exec=/usr/local/bin/start-pipewire
-NoDisplay=true
-X-KDE-autostart-phase=1
-DESK
+install_file "$REPO_DIR/files/desktop/start-pipewire.desktop" /usr/local/etc/xdg/autostart/start-pipewire.desktop
 
 # PulseAudio must not start its own server: pipewire-pulse is the server, and
 # a PulseAudio started first (KDE's autostart, an app at login) wins the race
 # and the volume applet then talks to the wrong one. A drop-in, so the
 # package's client.conf stays untouched.
 mkdir -p /usr/local/etc/pulse/client.conf.d
-printf '# Written by FreeBSD-setup: pipewire-pulse is the sound server.\nautospawn = no\n' \
-	> /usr/local/etc/pulse/client.conf.d/50-freebsd-setup.conf
+install_file "$REPO_DIR/files/desktop/pulse-client.conf" /usr/local/etc/pulse/client.conf.d/50-freebsd-setup.conf
 
 # Laptop speakers vs headphones: pick the analog device automatically.
 sysctl_set hw.snd.default_auto 1

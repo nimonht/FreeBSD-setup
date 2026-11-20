@@ -82,6 +82,7 @@ sh tests/limine-test.sh         # never edit a checksum-protected limine.conf
 sh tests/pkg-retry-test.sh      # broken package downloads are retried
 sh tests/efiboot-test.sh        # reading efibootmgr -v (FreeBSD 15 and later layouts)
 sh tests/timedate-test.sh       # timedate1 D-Bus service for KDE's Date & Time (needs python3-gobject, dbus)
+sh tests/live-test.sh           # live USB: which graphics driver / why only the installer, per machine
 python3 tests/installer-test.py # graphical installer logic: probe parsing, checks, answers file (sourced by sh)
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python3 installer/lumen-installer --screenshots /tmp/shots
                                 # every installer page renders; fails on any QML warning (pip install PyQt6)
@@ -90,7 +91,7 @@ shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
   setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* \
   caelestia/build.sh files/rc.d/* tests/*.sh tests/vm/*.sh files/shell/fbs-terminal-greeting \
   iso/*.sh iso/ramdisk/init.sh iso/ramdisk/rc iso/live/lumen_live iso/live/lumen-installer-session \
-  iso/live/rc.local installer/lumen-wifi
+  iso/live/rc.local installer/lumen-wifi lib/live.sh
 shellcheck -s bash -S warning files/shell/bash.bashrc
 sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-erase-kde.conf
 ```

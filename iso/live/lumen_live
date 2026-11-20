@@ -40,32 +40,17 @@ lumen_live_start()
 {
 	local session reason driver _dev _n
 	. "$FBS_LIB/hw.sh"
+	. "$FBS_LIB/live.sh"
 	. /usr/local/share/freebsd-setup/distro.conf
 	hw_detect
 	mkdir -p "$STATE"
-	session=installer reason="" driver=none
-
-	if [ -n "$(kenv -q lumen.text_installer)" ]; then
-		session=text
-	elif [ -n "$(kenv -q lumen.basic_graphics)" ]; then
-		reason="basic graphics was chosen in the boot menu"
-	elif [ "$HW_DESKTOP" != yes ]; then
-		reason=$HW_DESKTOP_WHY
-	else
-		case "$HW_GPU_PRIMARY" in
-		intel)	driver=i915kms ;;
-		amd)	driver=amdgpu
-			[ "$HW_AMD_KMOD" = radeonkms ] && driver=/boot/modules/radeonkms.ko ;;
-		nvidia)	if [ "$HW_NVIDIA_BRANCH" = current ]; then driver=nvidia-drm
-			else reason="this NVIDIA card needs the $HW_NVIDIA_BRANCH driver, which the live system does not carry (the installed system gets it)"; fi ;;
-		esac
-		if [ "$driver" != none ]; then
-			echo "LumenBSD: starting the graphics driver ($driver)"
-			if lumen_live_load "$driver"; then
-				session=plasma
-			else
-				reason="the graphics driver ($driver) did not start a display"
-			fi
+	live_plan "$(kenv -q lumen.text_installer)" "$(kenv -q lumen.basic_graphics)"
+	session=$LIVE_SESSION reason=$LIVE_REASON driver=$LIVE_DRIVER
+	if [ "$session" = plasma ]; then
+		echo "LumenBSD: starting the graphics driver ($driver)"
+		if ! lumen_live_load "$driver"; then
+			session=installer
+			reason="the graphics driver ($driver) did not start a display"
 		fi
 	fi
 
