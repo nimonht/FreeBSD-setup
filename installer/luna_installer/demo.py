@@ -1,4 +1,4 @@
-"""Made-up data for lumen-installer --demo: a laptop with Windows on an NVMe
+"""Made-up data for luna-installer --demo: a laptop with Windows on an NVMe
 disk and a USB backup drive. Used for screenshots and tests on any OS;
 nothing is read from or written to the real computer."""
 
@@ -10,7 +10,7 @@ STATE = {"online": False}
 
 GB = 1073741824
 PROBE = "\n".join([
-    "distro\tLumenBSD\t0.1",
+    "distro\tLunaBSD\t0.1",
     "hw\tHW_BOOT\tUEFI",
     "hw\tHW_VM\tnone",
     "hw\tHW_RAM_MB\t16046",

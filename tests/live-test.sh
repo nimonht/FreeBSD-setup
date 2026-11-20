@@ -1,5 +1,5 @@
 #!/bin/sh
-# tests/live-test.sh - the LumenBSD live session's driver plan (lib/live.sh)
+# tests/live-test.sh - the LunaBSD live session's driver plan (lib/live.sh)
 # for every recorded machine: which graphics driver the live USB tries, or
 # why only the installer starts. Runs anywhere with a POSIX sh.
 set -u

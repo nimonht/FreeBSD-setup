@@ -34,21 +34,21 @@ branding_apply() {
 	_b="$REPO_DIR/branding"
 	_s="$_r/usr/local/share/$DISTRO_ID"
 	mkdir -p "$_s"
-	_br_put "$_b/lumenbsd-logo.svg" "$_s/$DISTRO_ID-logo.svg"
-	_br_put "$_b/lumenbsd-wallpaper.jpg" "$_s/$DISTRO_ID-wallpaper.jpg"
+	_br_put "$_b/lunabsd-logo.svg" "$_s/$DISTRO_ID-logo.svg"
+	_br_put "$_b/lunabsd-wallpaper.jpg" "$_s/$DISTRO_ID-wallpaper.jpg"
 	_br_put "$_b/fastfetch-logo.txt" "$_s/fastfetch-logo.txt"
 	# The logo under its icon name too (os-release LOGO=, KDE About).
-	_br_put "$_b/lumenbsd-logo.svg" "$_r/usr/local/share/icons/hicolor/scalable/apps/$DISTRO_ID.svg"
-	_br_put "$_b/lumenbsd-logo.svg" "$_r/usr/local/share/pixmaps/$DISTRO_ID.svg"
+	_br_put "$_b/lunabsd-logo.svg" "$_r/usr/local/share/icons/hicolor/scalable/apps/$DISTRO_ID.svg"
+	_br_put "$_b/lunabsd-logo.svg" "$_r/usr/local/share/pixmaps/$DISTRO_ID.svg"
 
 	# Wallpaper as a Plasma wallpaper package, and the one-time script that
 	# puts it on desktops still showing Plasma's default.
-	_w="$_r/usr/local/share/wallpapers/LumenBSD"
+	_w="$_r/usr/local/share/wallpapers/LunaBSD"
 	_br_put "$_b/plasma/metadata.json" "$_w/metadata.json"
-	_br_put "$_b/lumenbsd-wallpaper.jpg" "$_w/contents/images/3840x2160.jpg"
-	_br_put "$_b/lumenbsd-wallpaper-preview.jpg" "$_w/contents/screenshot.jpg"
-	_br_put "$_b/plasma/lumenbsd-wallpaper.js" \
-		"$_r/usr/local/share/plasma/shells/org.kde.plasma.desktop/contents/updates/lumenbsd-wallpaper.js"
+	_br_put "$_b/lunabsd-wallpaper.jpg" "$_w/contents/images/3840x2160.jpg"
+	_br_put "$_b/lunabsd-wallpaper-preview.jpg" "$_w/contents/screenshot.jpg"
+	_br_put "$_b/plasma/lunabsd-wallpaper.js" \
+		"$_r/usr/local/share/plasma/shells/org.kde.plasma.desktop/contents/updates/lunabsd-wallpaper.js"
 
 	# KDE's "About this System". /etc/xdg comes before /usr/local/etc/xdg,
 	# where the kinfocenter package puts FreeBSD's.
@@ -69,21 +69,21 @@ ABOUT
 	_sd="$_r/usr/local/share/sddm/themes/breeze"
 	if [ -d "$_sd" ]; then
 		_t=$(mktemp) || return 1
-		printf '# Written by FreeBSD-setup: LumenBSD login screen background.\n[General]\nbackground=/usr/local/share/%s/%s-wallpaper.jpg\n' \
+		printf '# Written by FreeBSD-setup: LunaBSD login screen background.\n[General]\nbackground=/usr/local/share/%s/%s-wallpaper.jpg\n' \
 			"$DISTRO_ID" "$DISTRO_ID" > "$_t"
 		_br_put "$_t" "$_sd/theme.conf.user"
 		rm -f "$_t"
 	fi
 
-	# Boot menu: the LumenBSD name and sunrise (FreeBSD's loader, our art).
-	_br_put "$_b/loader/brand-lumen.lua" "$_r/boot/lua/brand-lumen.lua" 444
-	_br_put "$_b/loader/logo-lumen.lua" "$_r/boot/lua/logo-lumen.lua" 444
+	# Boot menu: the LunaBSD name and sunrise (FreeBSD's loader, our art).
+	_br_put "$_b/loader/brand-luna.lua" "$_r/boot/lua/brand-luna.lua" 444
+	_br_put "$_b/loader/logo-luna.lua" "$_r/boot/lua/logo-luna.lua" 444
 	if [ -z "${BRANDING_NO_LOADER_CONF:-}" ]; then
-		_br_kv "$_r/boot/loader.conf" loader_brand lumen
-		_br_kv "$_r/boot/loader.conf" loader_logo lumen
+		_br_kv "$_r/boot/loader.conf" loader_brand luna
+		_br_kv "$_r/boot/loader.conf" loader_logo luna
 	fi
 
 	# os-release names the distribution (FreeBSD's version stays in it).
-	_br_put "$REPO_DIR/files/rc.d/lumenbsd_osrelease" "$_r/usr/local/etc/rc.d/lumenbsd_osrelease" 755
+	_br_put "$REPO_DIR/files/rc.d/lunabsd_osrelease" "$_r/usr/local/etc/rc.d/lunabsd_osrelease" 755
 	return 0
 }

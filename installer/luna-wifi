@@ -1,13 +1,13 @@
 #!/bin/sh
 #
-# lumen-wifi - Wi-Fi for the LumenBSD installer (runs as root).
+# luna-wifi - Wi-Fi for the LunaBSD installer (runs as root).
 #
-#   lumen-wifi devices          Wi-Fi cards FreeBSD has a driver for
-#   lumen-wifi scan             networks in range: SIGNAL<TAB>SECURITY<TAB>SSID
+#   luna-wifi devices          Wi-Fi cards FreeBSD has a driver for
+#   luna-wifi scan             networks in range: SIGNAL<TAB>SECURITY<TAB>SSID
 #                               (SECURITY: open or wpa), strongest first
-#   lumen-wifi connect SSID     connect; the password (if any) is read from
+#   luna-wifi connect SSID     connect; the password (if any) is read from
 #                               standard input. Exit 0 once an address is set
-#   lumen-wifi status           STATE<TAB>SSID<TAB>IP of the Wi-Fi interface
+#   luna-wifi status           STATE<TAB>SSID<TAB>IP of the Wi-Fi interface
 #
 # The connection is also written where install.sh takes the network settings
 # of the live system from (/tmp/bsdinstall_etc, as bsdinstall does), so the
@@ -17,7 +17,7 @@ set -u
 CONF=/etc/wpa_supplicant.conf
 CARRY=/tmp/bsdinstall_etc
 
-die() { echo "lumen-wifi: $*" >&2; exit 1; }
+die() { echo "luna-wifi: $*" >&2; exit 1; }
 
 # The first Wi-Fi interface, created (and its wpa_supplicant started) when
 # the card appeared after the system started.
@@ -58,7 +58,7 @@ scan)
 	;;
 connect)
 	ssid=${2:-}
-	[ -n "$ssid" ] || die "usage: lumen-wifi connect SSID < password"
+	[ -n "$ssid" ] || die "usage: luna-wifi connect SSID < password"
 	w=$(wlan_if) || die "no Wi-Fi card with a driver"
 	IFS= read -r pass || true
 	# Remove an earlier attempt for the same network.

@@ -1,6 +1,6 @@
-# Building LumenBSD
+# Building LunaBSD
 
-How the LumenBSD ISO is made, how the live system starts, and how to change
+How the LunaBSD ISO is made, how the live system starts, and how to change
 and test it. Users do not need any of this: they download the ISO.
 
 ## Build the ISO
@@ -55,9 +55,9 @@ after a release it can take a few days until all of them are built.
 
 | Path on the ISO | What it is |
 |---|---|
-| `boot/` | FreeBSD's boot loader (BIOS and UEFI), the kernel and `zfs.ko`, the LumenBSD boot menu ([`iso/boot/`](../iso/boot), [`branding/loader/`](../branding/loader)) |
-| `lumen/ramdisk.ufs.gz` | a small ramdisk: FreeBSD's `/rescue` tools and [`iso/ramdisk/init.sh`](../iso/ramdisk/init.sh) |
-| `lumen/system.zfs` | the whole live system as a compressed ZFS stream (`zfs send`) |
+| `boot/` | FreeBSD's boot loader (BIOS and UEFI), the kernel and `zfs.ko`, the LunaBSD boot menu ([`iso/boot/`](../iso/boot), [`branding/loader/`](../branding/loader)) |
+| `luna/ramdisk.ufs.gz` | a small ramdisk: FreeBSD's `/rescue` tools and [`iso/ramdisk/init.sh`](../iso/ramdisk/init.sh) |
+| `luna/system.zfs` | the whole live system as a compressed ZFS stream (`zfs send`) |
 
 The ISO is a hybrid image: written to a USB stick it is a GPT disk with a
 BIOS boot partition and an EFI partition (as FreeBSD's own ISOs); burnt or
@@ -65,14 +65,14 @@ attached as a CD it boots through El Torito, BIOS and UEFI.
 
 ### How the live system starts
 
-1. FreeBSD's loader shows the LumenBSD menu and loads the kernel, `zfs.ko`
+1. FreeBSD's loader shows the LunaBSD menu and loads the kernel, `zfs.ko`
    and the ramdisk as the root file system (`iso/boot/loader.conf`).
 2. `init(8)` runs the ramdisk's `init.sh` (`init_script`): it finds the
-   media by its label (`/dev/iso9660/LUMENBSD`), checks that there is enough
-   memory, creates a swap-backed memory disk with a ZFS pool `lumenlive`,
-   and receives `lumen/system.zfs` into it.
+   media by its label (`/dev/iso9660/LUNABSD`), checks that there is enough
+   memory, creates a swap-backed memory disk with a ZFS pool `lunalive`,
+   and receives `luna/system.zfs` into it.
 3. The ramdisk's `/etc/rc` exports the pool and re-roots into it
-   (`reboot -r` with `vfs.root.mountfrom=zfs:lumenlive`). `init` starts
+   (`reboot -r` with `vfs.root.mountfrom=zfs:lunalive`). `init` starts
    again, on the live system.
 
 The system is copied into memory because `reboot -r` unmounts everything
@@ -82,21 +82,21 @@ The cost is memory: about the size of `system.zfs`, which is why the live
 system needs 4 GB. The gain: the live system is writable (settings,
 downloads, even `pkg install`), and the stick can be removed.
 
-4. On the live system, [`iso/live/lumen_live`](../iso/live/lumen_live) runs
+4. On the live system, [`iso/live/luna_live`](../iso/live/luna_live) runs
    early: it reads the hardware with `lib/hw.sh` (the installer's own
    detection), loads the graphics driver (`i915kms`, `amdgpu`/`radeonkms`,
    or NVIDIA's `nvidia-drm` for the current driver branch), and waits for a
    display. With a display, SDDM logs the live user in to KDE Plasma
-   (Wayland). Without one, SDDM starts the *LumenBSD Installer* session:
+   (Wayland). Without one, SDDM starts the *LunaBSD Installer* session:
    X11 on the firmware framebuffer (`scfb` on UEFI, `vesa` on BIOS), a light
    window manager and the installer full screen. The decision and its reason
-   are in `/var/run/lumen-live/`; the installer shows the reason.
+   are in `/var/run/luna-live/`; the installer shows the reason.
 5. The boot menu's *Troubleshooting* submenu (key T) sets
-   `lumen.basic_graphics` (skip the graphics driver) or
-   `lumen.text_installer` (no graphics; `/etc/rc.local` runs `install.sh`
+   `luna.basic_graphics` (skip the graphics driver) or
+   `luna.text_installer` (no graphics; `/etc/rc.local` runs `install.sh`
    on the console).
 
-The live user is `lumen`, without password, allowed to use `doas` without
+The live user is `luna`, without password, allowed to use `doas` without
 one; `root` has no password either, as on FreeBSD's own install media.
 
 ### What the build does
@@ -110,7 +110,7 @@ one; `root` has no password either, as on FreeBSD's own install media.
 | `packages` | the packages in [`iso/packages.txt`](../iso/packages.txt), installed with `pkg -c` (the image's own ABI, repositories and install scripts). `drm-kmod` and `nvidia-drm-kmod` are pinned to one DRM version first |
 | `configure` | this repository as `/usr/local/share/freebsd-setup` (as on installed systems), branding (`lib/branding.sh`), the installer, the live session files from [`iso/live/`](../iso/live), the live user, the release's `MANIFEST` (the installer checks the base system it downloads against it) |
 | `trim` | compilers, headers, static libraries, documentation, manual pages and Python test suites removed: nobody compiles on a live system, and installations download their own packages |
-| `image` | every block recompressed once at zstd-19 (`ZSTD_LEVEL`) in a second pool, then `zfs send -c` into `lumen/system.zfs`. Packages are installed with fast zstd, so only this step is slow |
+| `image` | every block recompressed once at zstd-19 (`ZSTD_LEVEL`) in a second pool, then `zfs send -c` into `luna/system.zfs`. Packages are installed with fast zstd, so only this step is slow |
 | `ramdisk` | the ramdisk with `/rescue` |
 | `iso` | boot files, the EFI image, `makefs -t cd9660`, the hybrid GPT (`mkimg`, as FreeBSD's `mkisoimages.sh`) |
 
@@ -135,7 +135,7 @@ why not, the boot managers found, and the hardware report.
 | Packages on the live system | [`iso/packages.txt`](../iso/packages.txt), then check the size: `python3 iso/size.py` |
 | Live session behaviour | [`iso/live/`](../iso/live) |
 | Boot menu entries | [`iso/boot/local.lua`](../iso/boot/local.lua) |
-| Installer pages | [`installer/qml/`](../installer/qml); logic in [`installer/lumen_installer/`](../installer/lumen_installer) |
+| Installer pages | [`installer/qml/`](../installer/qml); logic in [`installer/luna_installer/`](../installer/luna_installer) |
 | What an installation sets up | `setup.sh` and `stages/`, as before |
 
 The name "FreeBSD" belongs to the FreeBSD Foundation; a derived system must
@@ -148,9 +148,9 @@ boot entry starts FreeBSD's loader, `/EFI/freebsd`, `freebsd-update`).
 ```sh
 python3 tests/installer-test.py        # installer logic (any OS, no Qt)
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
-  python3 installer/lumen-installer --screenshots /tmp/shots   # every page, fails on QML warnings (needs PyQt6)
-python3 installer/lumen-installer --demo                       # click through it (nothing is changed)
-sh tests/vm/run-live-test.sh iso/out/lumenbsd-*.iso uefi        # boot the ISO in QEMU
+  python3 installer/luna-installer --screenshots /tmp/shots   # every page, fails on QML warnings (needs PyQt6)
+python3 installer/luna-installer --demo                       # click through it (nothing is changed)
+sh tests/vm/run-live-test.sh iso/out/lunabsd-*.iso uefi        # boot the ISO in QEMU
 ```
 
 `run-live-test.sh` boots the ISO in QEMU (UEFI by default, `bios` as second

@@ -1,11 +1,11 @@
 #!/bin/sh
 #
-# PROVIDE: lumen_live
+# PROVIDE: luna_live
 # REQUIRE: FILESYSTEMS devmatch
 # BEFORE: netif dbus sddm LOGIN
 # KEYWORD: nojail
 #
-# Written by FreeBSD-setup: the LumenBSD live session (live media only).
+# Written by FreeBSD-setup: the LunaBSD live session (live media only).
 # Reads the hardware the way the installer does (lib/hw.sh), then:
 #   - loads the graphics driver for it: Intel, AMD, or NVIDIA's current
 #     branch (unless "basic graphics" was picked in the boot menu)
@@ -14,30 +14,30 @@
 #     machines and graphics cards FreeBSD has no driver for
 #   - starts nothing graphical when the text-mode installer was picked
 #     (the boot menu's Troubleshooting submenu; /etc/rc.local runs it)
-# The decision and its reason are kept in /var/run/lumen-live/ for the
+# The decision and its reason are kept in /var/run/luna-live/ for the
 # installer, which explains them.
 
 . /etc/rc.subr
 
-name=lumen_live
-desc="LumenBSD live session: graphics driver and session"
-rcvar=lumen_live_enable
-start_cmd=lumen_live_start
+name=luna_live
+desc="LunaBSD live session: graphics driver and session"
+rcvar=luna_live_enable
+start_cmd=luna_live_start
 stop_cmd=":"
 
 FBS_LIB=/usr/local/share/freebsd-setup/lib
-STATE=/var/run/lumen-live
+STATE=/var/run/luna-live
 XDIR=/usr/local/etc/X11/xorg.conf.d
-NVOFF=/usr/local/share/lumen-live/nvidia-off
+NVOFF=/usr/local/share/luna-live/nvidia-off
 
-lumen_live_load() { # module -> loaded and a display appeared
+luna_live_load() { # module -> loaded and a display appeared
 	kldload -n "$1" > /dev/null 2>&1 || return 1
 	_i=0
 	while [ ! -e /dev/dri/card0 ] && [ "$_i" -lt 15 ]; do sleep 1; _i=$((_i + 1)); done
 	[ -e /dev/dri/card0 ]
 }
 
-lumen_live_start()
+luna_live_start()
 {
 	local session reason driver _dev _n
 	. "$FBS_LIB/hw.sh"
@@ -45,11 +45,11 @@ lumen_live_start()
 	. /usr/local/share/freebsd-setup/distro.conf
 	hw_detect
 	mkdir -p "$STATE"
-	live_plan "$(kenv -q lumen.text_installer)" "$(kenv -q lumen.basic_graphics)"
+	live_plan "$(kenv -q luna.text_installer)" "$(kenv -q luna.basic_graphics)"
 	session=$LIVE_SESSION reason=$LIVE_REASON driver=$LIVE_DRIVER
 	if [ "$session" = plasma ]; then
-		echo "LumenBSD: starting the graphics driver ($driver)"
-		if ! lumen_live_load "$driver"; then
+		echo "LunaBSD: starting the graphics driver ($driver)"
+		if ! luna_live_load "$driver"; then
 			session=installer
 			reason="the graphics driver ($driver) did not start a display"
 		fi
@@ -77,11 +77,11 @@ lumen_live_start()
 	# or a basic framebuffer when no graphics driver runs.
 	FBS_LIB="$FBS_LIB" /usr/local/share/freebsd-setup/files/bin/gpu-xorg-config > /dev/null 2>&1 || true
 	mkdir -p "$XDIR"
-	rm -f "$XDIR/10-lumen-live-fb.conf"
+	rm -f "$XDIR/10-luna-live-fb.conf"
 	if [ "$session" = installer ]; then
 		_fb=scfb; [ "$HW_BOOT" = UEFI ] || _fb=vesa
-		cat > "$XDIR/10-lumen-live-fb.conf" <<XORG
-# Written by FreeBSD-setup: LumenBSD live session without a graphics driver.
+		cat > "$XDIR/10-luna-live-fb.conf" <<XORG
+# Written by FreeBSD-setup: LunaBSD live session without a graphics driver.
 Section "Device"
 	Identifier "Basic framebuffer"
 	Driver     "$_fb"
@@ -91,13 +91,13 @@ XORG
 
 	case "$session" in
 	plasma)    _s=plasma.desktop ;;
-	installer) _s=lumen-installer.desktop ;;
+	installer) _s=luna-installer.desktop ;;
 	esac
 	if [ "$session" = text ]; then
 		echo 'sddm_enable="NO"' > /etc/rc.conf.d/sddm
 	else
 		echo 'sddm_enable="YES"' > /etc/rc.conf.d/sddm
-		cat > /usr/local/etc/sddm.conf.d/20-lumen-autologin.conf <<CONF
+		cat > /usr/local/etc/sddm.conf.d/20-luna-autologin.conf <<CONF
 # Written by FreeBSD-setup: the live session starts without a login.
 [Autologin]
 User=$LIVE_USER
@@ -108,9 +108,9 @@ CONF
 	echo "$session" > "$STATE/session"
 	printf '%s\n' "$reason" > "$STATE/reason"
 	echo "$driver" > "$STATE/driver"
-	echo "LumenBSD: live session: $session${reason:+ ($reason)}"
+	echo "LunaBSD: live session: $session${reason:+ ($reason)}"
 }
 
 load_rc_config $name
-: "${lumen_live_enable:=NO}"
+: "${luna_live_enable:=NO}"
 run_rc_command "$1"

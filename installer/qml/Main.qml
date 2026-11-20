@@ -1,6 +1,6 @@
-// The LumenBSD installer window: a list of steps on the left, one page at a
+// The LunaBSD installer window: a list of steps on the left, one page at a
 // time on the right. The answers live here; install.sh does the work
-// (installer/lumen_installer/app.py starts it).
+// (installer/luna_installer/app.py starts it).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -129,7 +129,7 @@ ApplicationWindow {
         page = installPage
     }
 
-    // Used by lumen-installer --screenshots (demo data only).
+    // Used by luna-installer --screenshots (demo data only).
     function gotoPage(i) { page = i }
     function demoFill() {
         setLanguage("en")

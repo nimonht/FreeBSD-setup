@@ -47,7 +47,7 @@ Stages, in order (each one skips itself when it does not apply):
   kde        KDE Plasma 6
   hyprland   Hyprland, its tools and session
   caelestia  Caelestia shell + dotfiles for Hyprland (built for FreeBSD)
-  branding   LumenBSD look: boot menu, wallpaper, login screen, About page
+  branding   LunaBSD look: boot menu, wallpaper, login screen, About page
   terminal   optional ready-made terminal: fish, zsh or bash, prompt, fastfetch
   input      fcitx5 input methods (Vietnamese, Chinese, Japanese, Korean...)
   printing   CUPS printing, network printer discovery, scanners

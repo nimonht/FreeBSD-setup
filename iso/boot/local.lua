@@ -1,8 +1,8 @@
 --
--- /boot/lua/local.lua of the LumenBSD live media: a "Troubleshooting"
+-- /boot/lua/local.lua of the LunaBSD live media: a "Troubleshooting"
 -- submenu in the boot menu (key T) for computers where the normal start
 -- does not work. Each entry sets a variable that the live system reads
--- (iso/live/lumen_live) and starts.
+-- (iso/live/luna_live) and starts.
 --
 
 local color = require("color")
@@ -14,7 +14,7 @@ local function start_with(var)
 	core.boot()
 end
 
-menu.lumen_troubleshooting = {
+menu.luna_troubleshooting = {
 	entries = {
 		{
 			entry_type = core.MENU_RETURN,
@@ -24,14 +24,14 @@ menu.lumen_troubleshooting = {
 			entry_type = core.MENU_ENTRY,
 			name = "Start with " .. color.highlight("b") ..
 			    "asic graphics (black screen or freeze?)",
-			func = function() start_with("lumen.basic_graphics") end,
+			func = function() start_with("luna.basic_graphics") end,
 			alias = {"b", "B"},
 		},
 		{
 			entry_type = core.MENU_ENTRY,
 			name = "Start the " .. color.highlight("t") ..
 			    "ext-mode installer (no graphics at all)",
-			func = function() start_with("lumen.text_installer") end,
+			func = function() start_with("luna.text_installer") end,
 			alias = {"t", "T"},
 		},
 	},
@@ -40,6 +40,6 @@ menu.lumen_troubleshooting = {
 menu.welcome.all_entries.vendor = {
 	entry_type = core.MENU_SUBMENU,
 	name = color.highlight("T") .. "roubleshooting",
-	submenu = menu.lumen_troubleshooting,
+	submenu = menu.luna_troubleshooting,
 	alias = {"t", "T"},
 }

@@ -83,8 +83,8 @@ case "$_rootfs" in
 cd9660*|*,ro,*) LIVE_MEDIA=yes ;;
 *) LIVE_MEDIA=no ;;
 esac
-# The LumenBSD live system runs from a ZFS pool in memory (iso/ramdisk).
-[ "$(mount -p | awk '$2 == "/" { print $1; exit }')" = lumenlive ] && LIVE_MEDIA=yes
+# The LunaBSD live system runs from a ZFS pool in memory (iso/ramdisk).
+[ "$(mount -p | awk '$2 == "/" { print $1; exit }')" = lunalive ] && LIVE_MEDIA=yes
 [ "$LIVE_MEDIA" = yes ] || [ "$FORCE" = yes ] ||
 	die "this is meant to run from the FreeBSD USB stick's Live System, not from an installed FreeBSD. To set up the desktop on this system instead, run: setup.sh"
 kldload -n zfs 2>/dev/null || true
@@ -153,7 +153,7 @@ disk_candidates() {
 		_media=$(echo "$_media" | sed -E 's/(p|s)[0-9]+[a-z]?$//') ;;
 	/dev/*) _media=$(echo "${_dev#/dev/}" | sed -E 's/(p|s)[0-9]+[a-z]?$//') ;;
 	esac
-	# The LumenBSD stick or DVD itself: not mounted any more once the live
+	# The LunaBSD stick or DVD itself: not mounted any more once the live
 	# system runs from memory, but still the installer's own disk.
 	_stick=$(glabel status -s 2>/dev/null | awk -v l="iso9660/$ISO_LABEL" '$1 == l { print $3; exit }' |
 		sed -E 's/(p|s)[0-9]+[a-z]?$//')
@@ -1134,7 +1134,7 @@ do_finish() {
 	step "Finishing"
 	cp "$LOG" "$MNT/var/log/freebsd-install.log" 2>/dev/null || true
 	zfs snapshot -r "$POOL@installed" 2>/dev/null || true
-	# Only the new pool: the LumenBSD live system itself runs from ZFS.
+	# Only the new pool: the LunaBSD live system itself runs from ZFS.
 	zfs list -H -o name -r "$POOL" 2>/dev/null | sort -r | while read -r _ds; do
 		zfs unmount "$_ds" 2>/dev/null || true
 	done

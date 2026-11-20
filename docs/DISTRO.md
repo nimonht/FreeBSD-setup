@@ -1,10 +1,10 @@
-# What makes a desktop distribution, and where LumenBSD stands
+# What makes a desktop distribution, and where LunaBSD stands
 
 Ubuntu, Linux Mint, Fedora and CachyOS are popular for much the same reasons.
-This page lists those reasons, how LumenBSD does each one on FreeBSD, and
+This page lists those reasons, how LunaBSD does each one on FreeBSD, and
 what is still missing. It is the project's roadmap.
 
-| What people like | Who does it well | LumenBSD now | Still to do |
+| What people like | Who does it well | LunaBSD now | Still to do |
 |---|---|---|---|
 | **Try before installing**: the USB stick starts a full desktop | Ubuntu, Mint, Fedora, CachyOS | Live KDE Plasma from RAM; *Welcome* window with *Try* / *Install* (`iso/`) | Not yet tried on real hardware |
 | **It always starts**: a fallback when the graphics driver fails | Ubuntu ("safe graphics"), Fedora ("basic graphics") | No driver or a VM: the installer on the firmware framebuffer, with the reason; boot menu *Troubleshooting* (basic graphics, text installer) | |
@@ -16,9 +16,9 @@ what is still missing. It is the project's roadmap.
 | **Software centre** | All of them | KDE Discover has no catalogue for FreeBSD packages; `pkg` in the terminal | OctoPkg is in ports; or an AppStream catalogue for FreeBSD's packages |
 | **Wi-Fi and Bluetooth in the panel** | All of them (NetworkManager, BlueZ) | Installer: own Wi-Fi page; desktop: NetworkMgr tray icon | A `nmcli`/NetworkManager D-Bus shim on top of `wpa_supplicant`, so Plasma's and Caelestia's own panels work (see CLAUDE.md: shims, not patches) |
 | **A recognisable look** | All of them | Name and sunrise in the boot menu, wallpaper, login screen, *About this System*, `os-release` | Plymouth-style boot splash (`boot_mute` + `splash` in loader.conf hides errors, so not yet); SDDM theme |
-| **Its own name** | All of them | LumenBSD. The FreeBSD Foundation's trademark policy does not allow a derived system to call itself FreeBSD | |
+| **Its own name** | All of them | LunaBSD. The FreeBSD Foundation's trademark policy does not allow a derived system to call itself FreeBSD | |
 | **Regular releases, built by machines** | Ubuntu (6-monthly), Fedora, CachyOS (monthly ISOs) | `iso/build.sh`; GitHub Actions builds and boot-tests the ISO, a tag publishes it | A release every FreeBSD minor release (June, December) plus monthly ISO refreshes |
-| **Own package repository** for what upstream lacks | CachyOS (optimised packages), Mint (its tools) | None: Caelestia is built from source on each machine | A `pkg` repository (poudriere in CI) for Caelestia, the shims and LumenBSD's own tools, so `pkg upgrade` updates them |
+| **Own package repository** for what upstream lacks | CachyOS (optimised packages), Mint (its tools) | None: Caelestia is built from source on each machine | A `pkg` repository (poudriere in CI) for Caelestia, the shims and LunaBSD's own tools, so `pkg upgrade` updates them |
 | **Install without internet** | Ubuntu, Mint, Fedora (offline ISO) | Online install: always the newest packages, small ISO | Optional offline install: copy the live system (`zfs send`) and adjust it |
 
 ## Principles (from what went wrong elsewhere)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the graphical installer's logic (installer/lumen_installer/
+"""Tests for the graphical installer's logic (installer/luna_installer/
 backend.py): reading install.sh --probe, the checks it shares with
 install.sh, the answers file (sourced by a real sh here), and progress.
 
@@ -16,7 +16,7 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "installer"))
 
-from lumen_installer import backend, demo  # noqa: E402
+from luna_installer import backend, demo  # noqa: E402
 
 
 class Probe(unittest.TestCase):
@@ -55,7 +55,7 @@ class Probe(unittest.TestCase):
         self.assertEqual(self.p["min_gb"], 30)
 
     def test_boot_places(self):
-        places = backend.boot_places(self.p["boot"]["nda0"], "LumenBSD")
+        places = backend.boot_places(self.p["boot"]["nda0"], "LunaBSD")
         self.assertTrue(any("firmware boot menu" in x for x in places))
         self.assertTrue(any("Start Windows Boot Manager" in x for x in places))
         locked = backend.boot_places({"limine": "locked"})
@@ -81,7 +81,7 @@ class Checks(unittest.TestCase):
     def test_system_users_from_passwd(self):
         with tempfile.NamedTemporaryFile("w", delete=False) as f:
             f.write("root:*:0:0::0:0:Charlie &:/root:/bin/sh\nmessagebus:*:556:556::0:0:D-BUS:/nonexistent:/usr/sbin/nologin\n"
-                    "lumen:*:1001:1001::0:0:Live user:/home/lumen:/bin/sh\nnobody:*:65534:65534::0:0:Unprivileged:/nonexistent:/usr/sbin/nologin\n")
+                    "luna:*:1001:1001::0:0:Live user:/home/luna:/bin/sh\nnobody:*:65534:65534::0:0:Unprivileged:/nonexistent:/usr/sbin/nologin\n")
         try:
             reserved = backend.system_users(f.name)
         finally:
@@ -89,10 +89,10 @@ class Checks(unittest.TestCase):
         self.assertEqual(reserved, {"root", "messagebus", "nobody"})
         self.assertNotEqual(backend.check_username("messagebus", reserved), "")
         # the live user's name is free on the installed system
-        self.assertEqual(backend.check_username("lumen", reserved), "")
+        self.assertEqual(backend.check_username("luna", reserved), "")
 
     def test_hostname(self):
-        for h in ["lumenbsd", "alex-thinkpad", "a", "host.example.org", "A1"]:
+        for h in ["lunabsd", "alex-thinkpad", "a", "host.example.org", "A1"]:
             self.assertEqual(backend.check_hostname(h), "", h)
         for h in ["", "-x", "x-", "a b", "x_y", "a" * 65]:
             self.assertNotEqual(backend.check_hostname(h), "", h)
@@ -239,15 +239,15 @@ class Tables(unittest.TestCase):
 
     def test_distro(self):
         d = backend.read_distro()
-        self.assertEqual(d["DISTRO_NAME"], "LumenBSD")
+        self.assertEqual(d["DISTRO_NAME"], "LunaBSD")
         self.assertTrue(d["FREEBSD_RELEASE"].startswith("15."))
 
     def test_result_details(self):
         text = demo.RESULT % backend.read_distro()
-        out = backend.result_details(text, "LumenBSD")
-        self.assertFalse(out.startswith("LumenBSD is installed"))
+        out = backend.result_details(text, "LunaBSD")
+        self.assertFalse(out.startswith("LunaBSD is installed"))
         self.assertIn("firmware boot menu", out)
-        self.assertEqual(backend.result_details("LumenBSD is installed.\n\nRemove the USB stick and restart the computer.", "LumenBSD"), "")
+        self.assertEqual(backend.result_details("LunaBSD is installed.\n\nRemove the USB stick and restart the computer.", "LunaBSD"), "")
 
 
 if __name__ == "__main__":

@@ -31,8 +31,8 @@ def read_conf(path):
 
 
 def read_distro(repo=REPO):
-    d = {"DISTRO_NAME": "LumenBSD", "DISTRO_ID": "lumenbsd", "DISTRO_VERSION": "",
-         "DISTRO_CODENAME": "", "DISTRO_TAGLINE": "", "DISTRO_URL": "", "ISO_LABEL": "LUMENBSD"}
+    d = {"DISTRO_NAME": "LunaBSD", "DISTRO_ID": "lunabsd", "DISTRO_VERSION": "",
+         "DISTRO_CODENAME": "", "DISTRO_TAGLINE": "", "DISTRO_URL": "", "ISO_LABEL": "LUNABSD"}
     d.update(read_conf(os.path.join(repo, "distro.conf")))
     return d
 
@@ -150,7 +150,7 @@ def default_disk(disks, min_gb=0):
     return max(pool, key=lambda d: d["bytes"])["name"] if pool else ""
 
 
-def boot_places(boot, distro_name="LumenBSD"):
+def boot_places(boot, distro_name="LunaBSD"):
     """Where the new system will be reachable from, in words (side by side)."""
     out = []
     if boot.get("limine") == "locked":
@@ -336,7 +336,7 @@ def build_answers(a):
         "AUTO_SNAPSHOTS": yn(a.get("snapshots", True)),
         "PKG_BRANCH": branch,
     }
-    lines = ["# Answers for install.sh, written by the LumenBSD graphical installer."]
+    lines = ["# Answers for install.sh, written by the LunaBSD graphical installer."]
     lines += ["%s=%s" % (k, sh(values[k])) for k in ANSWER_KEYS]
     return "\n".join(lines) + "\n"
 
@@ -375,7 +375,7 @@ STAGES = [
     ("zfs", "Setting up snapshots"), ("audio", "Setting up sound"),
     ("desktop", "Installing fonts and the login screen"), ("kde", "Installing KDE Plasma (the longest part)"),
     ("hyprland", "Installing Hyprland"), ("caelestia", "Building the Caelestia shell"),
-    ("branding", "Applying the LumenBSD look"), ("terminal", "Setting up the terminal"),
+    ("branding", "Applying the LunaBSD look"), ("terminal", "Setting up the terminal"),
     ("input", "Setting up input methods"), ("printing", "Setting up printing"),
     ("apps", "Installing apps"), ("gaming", "Installing gaming tools"),
     ("security", "Setting up the firewall"), ("finish", "Finishing the desktop"),

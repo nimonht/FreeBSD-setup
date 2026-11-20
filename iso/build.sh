@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# iso/build.sh - build the LumenBSD live image: one ISO file that starts from
+# iso/build.sh - build the LunaBSD live image: one ISO file that starts from
 # a USB stick (written with Rufus in DD mode, balenaEtcher or dd) or a DVD,
 # on UEFI and legacy BIOS PCs, into a live KDE Plasma desktop with the
 # graphical installer.
@@ -9,13 +9,13 @@
 #
 # Needs FreeBSD 15 (amd64) as root, the zfs kernel module, about 40 GB of free
 # disk space, 8 GB of memory and an internet connection. Result:
-# iso/out/lumenbsd-<version>-amd64.iso, with .sha256 and a package list.
+# iso/out/lunabsd-<version>-amd64.iso, with .sha256 and a package list.
 #
 # How the live media starts (docs/BUILDING.md has the details):
 #   1. FreeBSD's boot loader loads the kernel and a small ramdisk.
-#   2. The ramdisk's init.sh copies the compressed system (lumen/system.zfs,
+#   2. The ramdisk's init.sh copies the compressed system (luna/system.zfs,
 #      a ZFS stream) into a ZFS pool in memory and switches to it (reboot -r).
-#   3. The live system starts; lumen_live picks the graphics driver and
+#   3. The live system starts; luna_live picks the graphics driver and
 #      starts KDE Plasma, or the installer on a basic framebuffer.
 #
 # Environment:
@@ -52,8 +52,8 @@ WORK=${WORK:-$HERE/work}
 OUT=${OUT:-$HERE/out}
 ROOT=$WORK/root          # the live system, a ZFS pool in a file
 CD=$WORK/cd              # what goes on the ISO
-BPOOL=lumenbuild
-IPOOL=lumenimage         # the same, recompressed, for the ISO
+BPOOL=lunabuild
+IPOOL=lunaimage         # the same, recompressed, for the ISO
 ISO_NAME="$DISTRO_ID-$DISTRO_VERSION-amd64"
 ALL_STEPS="fetch root packages configure trim image ramdisk iso"
 STEPS=${STEPS:-$ALL_STEPS}
@@ -241,18 +241,18 @@ step_configure() {
 	BRANDING_NO_LOADER_CONF=yes branding_apply "$ROOT"
 
 	# The graphical installer and its helpers.
-	install -m 755 "$REPO_DIR/installer/lumen-installer" "$ROOT/usr/local/bin/lumen-installer"
-	install -m 755 "$REPO_DIR/installer/lumen-wifi" "$ROOT/usr/local/sbin/lumen-wifi"
-	install -m 644 "$REPO_DIR/installer/lumen-installer.desktop" \
-		"$ROOT/usr/local/share/applications/lumen-installer.desktop"
+	install -m 755 "$REPO_DIR/installer/luna-installer" "$ROOT/usr/local/bin/luna-installer"
+	install -m 755 "$REPO_DIR/installer/luna-wifi" "$ROOT/usr/local/sbin/luna-wifi"
+	install -m 644 "$REPO_DIR/installer/luna-installer.desktop" \
+		"$ROOT/usr/local/share/applications/luna-installer.desktop"
 
 	# The live session: hardware -> graphics driver -> desktop or installer.
-	install -m 755 "$_live/lumen_live" "$ROOT/usr/local/etc/rc.d/lumen_live"
-	install -m 755 "$_live/lumen-installer-session" "$ROOT/usr/local/libexec/lumen-installer-session"
+	install -m 755 "$_live/luna_live" "$ROOT/usr/local/etc/rc.d/luna_live"
+	install -m 755 "$_live/luna-installer-session" "$ROOT/usr/local/libexec/luna-installer-session"
 	mkdir -p "$ROOT/usr/local/share/xsessions" "$ROOT/usr/local/etc/sddm.conf.d" "$ROOT/usr/local/etc/xdg/autostart"
-	install -m 644 "$_live/lumen-installer.session.desktop" "$ROOT/usr/local/share/xsessions/lumen-installer.desktop"
-	install -m 644 "$_live/sddm-live.conf" "$ROOT/usr/local/etc/sddm.conf.d/10-lumen-live.conf"
-	install -m 644 "$_live/lumen-welcome.desktop" "$ROOT/usr/local/etc/xdg/autostart/lumen-welcome.desktop"
+	install -m 644 "$_live/luna-installer.session.desktop" "$ROOT/usr/local/share/xsessions/luna-installer.desktop"
+	install -m 644 "$_live/sddm-live.conf" "$ROOT/usr/local/etc/sddm.conf.d/10-luna-live.conf"
+	install -m 644 "$_live/luna-welcome.desktop" "$ROOT/usr/local/etc/xdg/autostart/luna-welcome.desktop"
 	install -m 755 "$_live/rc.local" "$ROOT/etc/rc.local"
 	install -m 644 "$_live/rc.conf" "$ROOT/etc/rc.conf"
 	sed -i '' "s/@HOSTNAME@/$LIVE_HOSTNAME/" "$ROOT/etc/rc.conf"
@@ -277,8 +277,8 @@ step_configure() {
 	# program, and crash without NVIDIA's kernel module: X died in GLX
 	# initialisation (libnvidia-egl-gbm) on a machine without NVIDIA.
 	# Installations only get them on NVIDIA machines; the live system puts
-	# them back at start when the NVIDIA driver runs (iso/live/lumen_live).
-	_off=$ROOT/usr/local/share/lumen-live/nvidia-off
+	# them back at start when the NVIDIA driver runs (iso/live/luna_live).
+	_off=$ROOT/usr/local/share/luna-live/nvidia-off
 	for _f in share/glvnd/egl_vendor.d/10_nvidia.json share/vulkan/icd.d/nvidia_icd.json \
 		share/vulkan/implicit_layer.d/nvidia_layers.json; do
 		[ -f "$ROOT/usr/local/$_f" ] || continue
@@ -295,7 +295,7 @@ step_configure() {
 	_home="$ROOT/home/$LIVE_USER"
 	(cd "$_live/home" && tar -cf - .) | tar -xf - -C "$_home"
 	mkdir -p "$_home/Desktop"
-	install -m 755 "$REPO_DIR/installer/lumen-installer.desktop" "$_home/Desktop/install-$DISTRO_ID.desktop"
+	install -m 755 "$REPO_DIR/installer/luna-installer.desktop" "$_home/Desktop/install-$DISTRO_ID.desktop"
 	chroot "$ROOT" chown -R "$LIVE_USER:$LIVE_USER" "/home/$LIVE_USER"
 
 	# The installer checks the base system it downloads against this list
@@ -349,7 +349,7 @@ step_image() {
 	log "Compressing the system image (zstd-$ZSTD_LEVEL: slow, once)"
 	pool_open
 	pool_mounts_off
-	mkdir -p "$CD/lumen"
+	mkdir -p "$CD/luna"
 	zfs destroy "$BPOOL@live" 2>/dev/null || true
 	zfs snapshot "$BPOOL@live"
 	# Every block rewritten at the final level, in a second pool: an
@@ -361,11 +361,11 @@ step_image() {
 	_imd=$(mdconfig -a -t vnode -f "$WORK/image.img")
 	zpool create -f -m none -O atime=off "$IPOOL" "/dev/$_imd"
 	zfs send -p "$BPOOL@live" | zfs receive -u -F -o compression="zstd-$ZSTD_LEVEL" "$IPOOL"
-	zfs send -p -c -e "$IPOOL@live" > "$CD/lumen/system.zfs"
+	zfs send -p -c -e "$IPOOL@live" > "$CD/luna/system.zfs"
 	zpool destroy -f "$IPOOL"
 	mdconfig -d -u "$_imd"
 	rm -f "$WORK/image.img"
-	_sz=$(stat -f %z "$CD/lumen/system.zfs")
+	_sz=$(stat -f %z "$CD/luna/system.zfs")
 	[ "$_sz" -lt 4294967295 ] || die "the system image is $((_sz / 1048576)) MB: an ISO 9660 file must stay under 4 GB"
 	log "system image: $((_sz / 1048576)) MB"
 }
@@ -382,8 +382,8 @@ step_ramdisk() {
 	cp "$ROOT/etc/login.conf" "$_rd/etc/login.conf"
 	: > "$_rd/etc/fstab"
 	makefs -t ffs -B little -o version=2 -b 10% -f 10% "$WORK/ramdisk.ufs" "$_rd"
-	mkdir -p "$CD/lumen"
-	gzip -9 -c "$WORK/ramdisk.ufs" > "$CD/lumen/ramdisk.ufs.gz"
+	mkdir -p "$CD/luna"
+	gzip -9 -c "$WORK/ramdisk.ufs" > "$CD/luna/ramdisk.ufs.gz"
 }
 
 step_iso() {
@@ -400,8 +400,8 @@ step_iso() {
 	kldxref "$CD/boot/kernel"
 	install -m 444 "$HERE/boot/loader.conf" "$CD/boot/loader.conf"
 	install -m 444 "$HERE/boot/local.lua" "$CD/boot/lua/local.lua"
-	install -m 444 "$REPO_DIR/branding/loader/brand-lumen.lua" "$CD/boot/lua/brand-lumen.lua"
-	install -m 444 "$REPO_DIR/branding/loader/logo-lumen.lua" "$CD/boot/lua/logo-lumen.lua"
+	install -m 444 "$REPO_DIR/branding/loader/brand-luna.lua" "$CD/boot/lua/brand-luna.lua"
+	install -m 444 "$REPO_DIR/branding/loader/logo-luna.lua" "$CD/boot/lua/logo-luna.lua"
 	cp "$ROOT/COPYRIGHT" "$CD/COPYRIGHT" 2>/dev/null || true
 	printf '%s %s (%s) - %s\n' "$DISTRO_NAME" "$DISTRO_VERSION" "$REL" "$DISTRO_URL" > "$CD/README.TXT"
 

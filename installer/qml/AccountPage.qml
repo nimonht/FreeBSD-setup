@@ -1,5 +1,5 @@
 // The user account, the computer's name and the administrator password.
-// The rules are install.sh's (checked by installer/lumen_installer/backend.py).
+// The rules are install.sh's (checked by installer/luna_installer/backend.py).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
