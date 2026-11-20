@@ -46,8 +46,9 @@ things the desktops expect from Linux.
 > **Status: 0.1 "Dawn", a preview.** What installs the system and sets up
 > the desktop is FreeBSD-setup's tested code. The live ISO and the graphical
 > installer are new: the ISO has been built and started in a virtual machine
-> (UEFI), where it loaded into memory and brought up the installer on the
-> basic framebuffer, whose hardware check ran there. Not tried yet: the live
+> (UEFI, as a DVD and as a USB stick), where it loaded into memory and
+> brought up the installer on the basic framebuffer; its hardware and disk
+> check ran there and offered the empty disk, never the stick itself. Not tried yet: the live
 > KDE session (it needs a real graphics card, which virtual machines do not
 > have on FreeBSD), an installation started from the ISO, and anything on
 > real hardware. Please report what happens on yours.
