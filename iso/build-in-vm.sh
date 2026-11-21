@@ -99,16 +99,23 @@ fi
 
 # iso/build.sh's settings, passed on when set here.
 envs=""
-for v in FREEBSD_RELEASE PKG_BRANCH PKG_SITE DIST_SITE PATCH_BASE ZSTD_LEVEL STEPS; do
+for v in FREEBSD_RELEASE PKG_BRANCH PKG_SITE DIST_SITE PATCH_BASE ZSTD_LEVEL STEPS SECURE_BOOT; do
 	eval "_v=\${$v:-}"
 	# shellcheck disable=SC2154
 	[ -n "$_v" ] && envs="$envs $v='$_v'"
 done
 [ -n "${EXTRA_CA:-}" ] && envs="$envs EXTRA_CA=/root/build-ca.pem SSL_CA_CERT_FILE=/root/build-ca.pem"
+# The Secure Boot signing key goes in for the build and is removed after.
+if [ -n "${SB_KEY:-}" ] && [ -n "${SB_CERT:-}" ]; then
+	$SSH 'umask 077 && mkdir -p /root/sb && cat > /root/sb/key.pem' < "$SB_KEY"
+	$SSH 'cat > /root/sb/cert.pem' < "$SB_CERT"
+	envs="$envs SB_KEY=/root/sb/key.pem SB_CERT=/root/sb/cert.pem"
+fi
 [ -n "${BUILD_PROXY:-}" ] && envs="$envs HTTPS_PROXY='$BUILD_PROXY' https_proxy='$BUILD_PROXY'"
 
 log "Building (output follows)"
 $SSH "cd /root/luna && env WORK=/build/work OUT=/build/out $envs sh iso/build.sh"
+$SSH 'rm -rf /root/sb'
 
 log "Copying the ISO out"
 for f in $($SSH 'ls /build/out'); do

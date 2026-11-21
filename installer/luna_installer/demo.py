@@ -37,6 +37,7 @@ PROBE = "\n".join([
     "report\tNO\tFingerprint reader: Synaptics FS7605 - not supported",
     "min_gb\t30",
     "bitlocker\tno",
+    "secureboot\ton\tshim\t",
     "disk\tnda0\t%d\tSamsung SSD 980 PRO 1TB\tno\tWindows/data (2) EFI \tMicrosoft\t%d\tyes\t\tyes" % (1000 * GB, 238 * GB),
     "boot\tnda0\tnone\tno\tno\tno\tyes\tWindows Boot Manager\tWindows Boot Manager",
     "disk\tda0\t%d\tWD Elements 25A2\tyes\tWindows/data (1) \t\t0\tno\tthere is no EFI system partition on this disk\tyes" % (2000 * GB),
@@ -48,6 +49,14 @@ WIFI_SCAN = "-38\twpa\tHome Network\n-55\twpa\tNeighbours 5G\n-71\topen\tCafe Gu
 RESULT = """%(DISTRO_NAME)s is installed.
 
 Remove the USB stick and restart the computer.
+
+Secure Boot stays on. Once, at the first start, a blue screen says
+"Press any key to perform MOK management": press a key, choose
+Enroll MOK, then Continue, then Yes, type this code and press Enter:
+
+    40718263
+
+then choose Reboot. (Missed it? It comes back at the next start.)
 Start %(DISTRO_NAME)s from:
   - 'FreeBSD' in the firmware boot menu (F12, F11, F8 or Esc right after power-on)
   - %(DISTRO_NAME)s's own boot menu: 'Start Windows Boot Manager' (key L)"""

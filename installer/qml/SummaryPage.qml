@@ -25,7 +25,8 @@ LPage {
         installer.languages.forEach(function (l) { if (l.code === app.language) langLabel = l.label })
         installer.layouts.forEach(function (l) { if (l.xkb === app.layout) lay = l.label })
         var hyp = app.desktop === "hyprland" || app.desktop === "both"
-        return [
+        var sb = installer.secureBoot()
+        var r = [
             ["Disk", d.descr + " (" + d.name + ", " + d.gb + " GB)"],
             ["What happens", app.installMode === "erase" ? "The whole disk is erased"
                              : "Added in the free space (" + app.sizeGb + " GB); nothing existing is changed"],
@@ -38,6 +39,8 @@ LPage {
             ["Updates", app.pkgBranch === "latest" || hyp ? "Newest packages (latest)" : "Quarterly packages"],
             ["Extras", extras.length ? extras.join(", ") : "none"]
         ]
+        if (sb.short !== "") r.push(["Secure Boot", sb.short])
+        return r
     }
 
     ColumnLayout {

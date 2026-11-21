@@ -106,7 +106,8 @@ def _yes(v):
 def parse_probe(text):
     """The tab-separated lines of install.sh --probe -> a dict."""
     p = {"distro": {}, "hw": {}, "report": [], "disks": [], "boot": {}, "other": {},
-         "bitlocker": False, "min_gb": 30, "net": None}
+         "bitlocker": False, "min_gb": 30, "net": None,
+         "secureboot": {"state": "unsupported", "plan": "none", "why": ""}}
     for line in text.splitlines():
         f = line.split("\t")
         kind = f[0]
@@ -137,7 +138,49 @@ def parse_probe(text):
                                "chain": f[7], "default": f[8]}
         elif kind == "other" and len(f) >= 4:
             p["other"][f[1]] = {"name": f[2], "chainable": _yes(f[3])}
+        elif kind == "secureboot" and len(f) >= 3:
+            p["secureboot"] = {"state": f[1], "plan": f[2], "why": f[3] if len(f) > 3 else ""}
     return p
+
+
+def secureboot_summary(sb, distro_name="LunaBSD"):
+    """What happens with Secure Boot, in words: {"status": OK/NOTE/NO or
+    "" (nothing to say), "short": for the summary, "text": the full
+    sentence}. Mirrors install.sh's plan_text."""
+    state, plan = sb.get("state", "unsupported"), sb.get("plan", "none")
+    if plan == "shim":
+        return {"status": "OK", "short": "Stays on; you confirm this computer's key once at the first start",
+                "text": "Secure Boot is on, and stays on: %s starts through a boot program signed by "
+                        "Microsoft. At the first start a blue screen asks you once to confirm this computer's "
+                        "key with a code, shown at the end of the installation." % distro_name}
+    if plan == "own":
+        return {"status": "OK", "short": "Setup Mode: this computer's own keys are enrolled, with Microsoft's",
+                "text": "The firmware is in Secure Boot Setup Mode: this computer gets its own keys, next to "
+                        "Microsoft's (so Windows and graphics cards keep working), and Secure Boot is on "
+                        "from the next start."}
+    if state == "on":
+        why = sb.get("why") or "it cannot be kept"
+        return {"status": "NO", "short": "Must be switched off in the firmware settings (%s)" % why,
+                "text": "Secure Boot is on but cannot be kept (%s). Switch it off in the firmware settings, "
+                        "or %s will not start." % (why, distro_name)}
+    if state == "off":
+        return {"status": "NOTE", "short": "Off (it can be switched on later: doas secureboot enable)",
+                "text": "Secure Boot is off. %s starts with it off; to switch it on later, run "
+                        "doas secureboot enable first." % distro_name}
+    return {"status": "", "short": "", "text": ""}
+
+
+def mok_code(text):
+    """The code install.sh asks to type in MokManager, or ""."""
+    m = re.search(r"type this code[^\n]*\n\s*\n?\s*(\d{8})\s*$", text, re.M)
+    return m.group(1) if m else ""
+
+
+def drop_mok(text):
+    """The final message without its MokManager paragraph (the installer
+    shows the steps and the code on their own)."""
+    out = re.sub(r"Secure Boot stays on\. Once, at the first start.*?then choose Reboot\.[^\n]*\n*", "", text, flags=re.S)
+    return out.strip()
 
 
 def default_disk(disks, min_gb=0):
@@ -267,7 +310,7 @@ ANSWER_KEYS = [
     "ENCRYPT", "ENCRYPT_PASSPHRASE", "TIMEZONE", "RTC_LOCAL", "BOOT_DEFAULT",
     "WIZ_LANG", "KEYBOARD_LAYOUT", "DESKTOP", "INPUT_METHODS", "TERMINAL_STYLE",
     "INSTALL_APPS", "INSTALL_PRINTING", "INSTALL_GAMING", "INSTALL_DEVTOOLS",
-    "FIREWALL", "AUTO_SNAPSHOTS", "PKG_BRANCH",
+    "FIREWALL", "AUTO_SNAPSHOTS", "PKG_BRANCH", "SECURE_BOOT",
 ]
 
 
@@ -306,6 +349,9 @@ def build_answers(a):
         raise ValueError("Unknown package branch '%s'." % branch)
     if desktop in ("hyprland", "both"):
         branch = "latest"          # Hyprland and Caelestia need it
+    secure_boot = a.get("secure_boot", "auto")
+    if secure_boot not in ("auto", "off"):
+        raise ValueError("Unknown Secure Boot choice '%s'." % secure_boot)
 
     values = {
         "INSTALL_DISK": disk,
@@ -335,6 +381,7 @@ def build_answers(a):
         "FIREWALL": yn(a.get("firewall", True)),
         "AUTO_SNAPSHOTS": yn(a.get("snapshots", True)),
         "PKG_BRANCH": branch,
+        "SECURE_BOOT": secure_boot,
     }
     lines = ["# Answers for install.sh, written by the LunaBSD graphical installer."]
     lines += ["%s=%s" % (k, sh(values[k])) for k in ANSWER_KEYS]

@@ -14,6 +14,7 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "installer"))
 
 from luna_installer import backend, demo  # noqa: E402
@@ -188,6 +189,51 @@ class Answers(unittest.TestCase):
         text = backend.build_answers(self.BASE)
         for k in backend.ANSWER_KEYS:
             self.assertIn("\n%s=" % k, text)
+
+    def test_secure_boot_answer(self):
+        self.assertEqual(source_answers(backend.build_answers(self.BASE))["SECURE_BOOT"], "auto")
+        self.assertEqual(source_answers(backend.build_answers(dict(self.BASE, secure_boot="off")))["SECURE_BOOT"], "off")
+        with self.assertRaises(ValueError):
+            backend.build_answers(dict(self.BASE, secure_boot="maybe"))
+        # install.sh accepts exactly these (sb_decide)
+        with open(os.path.join(REPO, "install.sh")) as f:
+            body = f.read()
+        self.assertIn('case "$SECURE_BOOT" in\n\tauto) ;;\n\toff)', body)
+
+
+class SecureBootTest(unittest.TestCase):
+    def test_probe_line(self):
+        p = backend.parse_probe("secureboot\ton\tshim\t\n")
+        self.assertEqual(p["secureboot"], {"state": "on", "plan": "shim", "why": ""})
+        p = backend.parse_probe("secureboot\ton\tnone\tthis installer cannot sign the boot loader\n")
+        self.assertEqual(p["secureboot"]["why"], "this installer cannot sign the boot loader")
+        self.assertEqual(backend.parse_probe("")["secureboot"]["plan"], "none")
+
+    def test_install_sh_prints_it(self):
+        with open(os.path.join(REPO, "install.sh")) as f:
+            body = f.read()
+        self.assertIn("printf 'secureboot\\t%s\\t%s\\t%s\\n' \"$SB_STATE\" \"$SB_PLAN\"", body)
+
+    def test_words(self):
+        s = backend.secureboot_summary
+        self.assertEqual(s({"state": "on", "plan": "shim"})["status"], "OK")
+        self.assertIn("code", s({"state": "on", "plan": "shim"})["text"])
+        self.assertIn("Setup Mode", s({"state": "setup", "plan": "own"})["short"])
+        self.assertEqual(s({"state": "on", "plan": "none", "why": "x"})["status"], "NO")
+        self.assertIn("secureboot enable", s({"state": "off", "plan": "none"})["text"])
+        self.assertEqual(s({"state": "unsupported", "plan": "none"})["status"], "")
+
+    def test_code_from_install_sh_message(self):
+        text = demo.RESULT % backend.read_distro()
+        self.assertEqual(backend.mok_code(backend.result_details(text, "LunaBSD")), "40718263")
+        rest = backend.drop_mok(backend.result_details(text, "LunaBSD"))
+        self.assertNotIn("40718263", rest)
+        self.assertIn("firmware boot menu", rest)
+        self.assertEqual(backend.mok_code("nothing here"), "")
+        # the demo text is what install.sh writes
+        with open(os.path.join(REPO, "install.sh")) as f:
+            body = f.read()
+        self.assertIn("Enroll MOK, then Continue, then Yes, type this code and press Enter:", body)
 
 
 class ProgressTest(unittest.TestCase):

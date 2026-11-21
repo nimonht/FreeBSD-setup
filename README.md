@@ -89,6 +89,7 @@ less software, and no distribution can change that.
 | Steam games | Yes (Proton) | Yes | Some: the Linux Steam client through a compatibility layer; many games run, anti-cheat games don't, things break more often |
 | Snapshots and undo | Yes (Btrfs) | System Restore / Time Machine | Yes: ZFS snapshots and boot environments |
 | Disk encryption | Yes | BitLocker / FileVault | Yes, optional: FreeBSD's whole partition (GELI, AES-256); the passphrase is typed at every start |
+| Secure Boot | Yes (signed shim) | Yes | Off for now; on with the computer's own keys from Setup Mode; Fedora's signed shim being tested ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)). FreeBSD's loader does not check the kernel |
 
 LunaBSD suits you if you like its design and ZFS, your hardware is in the
 supported range, and you mostly use open-source software and web apps. It does
@@ -103,8 +104,14 @@ other system for those.
 - A real graphics card for the desktop: Intel HD/UHD/Iris/Arc integrated
   graphics, an AMD Radeon, or an NVIDIA GeForce GTX 750 or newer
 - UEFI firmware to install next to Windows/Linux (legacy BIOS: whole disk only)
-- Secure Boot switched off in the firmware setup (FreeBSD's boot loader is
-  not signed by Microsoft)
+- Secure Boot switched off in the firmware setup, for now (FreeBSD's boot
+  loader is not signed by Microsoft). LunaBSD can keep it on
+  ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)): with the firmware in *Setup
+  Mode* the installer enrolls the computer's own keys next to Microsoft's
+  (tested on a virtual machine's UEFI firmware, not yet on a real PC); the
+  way that needs no firmware change at all (Fedora's Microsoft-signed shim,
+  one confirmation at the first start) is built but not yet in the
+  published ISO, until it has passed its boot test
 - An internet connection during installation (Ethernet, Wi-Fi with a
   supported card, or a phone's USB tethering)
 - A USB stick of 4 GB or more
