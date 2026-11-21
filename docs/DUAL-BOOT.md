@@ -60,14 +60,15 @@ erased.
 - Switch off *Fast Startup* in Windows (Control Panel → Power Options →
   *Choose what the power buttons do*). With it on, Windows never really shuts
   down and leaves its disk half-mounted.
-- BitLocker / device encryption: FreeBSD needs Secure Boot off, and
-  Windows then asks once for its 48-digit recovery key. Save the key first
-  (<https://aka.ms/myrecoverykey>). To avoid the prompt, suspend BitLocker for
-  a few restarts right before switching Secure Boot off, in an administrator
-  prompt: `manage-bde -protectors -disable C: -RebootCount 3`. Starting
-  Windows from FreeBSD's menu (key L) may ask for the key every time: keep
-  Windows as the default, or start it from the firmware boot menu. The
-  installer detects BitLocker and asks whether you have the key.
+- BitLocker / device encryption: LunaBSD keeps Secure Boot on
+  ([SECUREBOOT.md](SECUREBOOT.md)), so Windows starts as before. Save the
+  48-digit recovery key anyway (<https://aka.ms/myrecoverykey>): Windows asks
+  for it if Secure Boot is ever switched off (to avoid that, suspend
+  BitLocker for a few restarts first, in an administrator prompt:
+  `manage-bde -protectors -disable C: -RebootCount 3`), and may ask every
+  time it is started from FreeBSD's menu (key L): keep Windows as the
+  default, or start it from the firmware boot menu. The installer detects
+  BitLocker and says what applies.
 - Clock: Windows keeps the hardware clock in local time. The installer asks
   and sets FreeBSD to match (`/etc/wall_cmos_clock`).
 - Starting FreeBSD: with Windows as the default, use the firmware boot menu

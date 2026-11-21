@@ -59,7 +59,9 @@ where each piece is used: [docs/BRANDING.md](docs/BRANDING.md).
 > installer are new: the ISO has been built and started in a virtual machine
 > (UEFI, as a DVD and as a USB stick), where it loaded into memory and
 > brought up the installer on the basic framebuffer; its hardware and disk
-> check ran there and offered the empty disk, never the stick itself. Not tried yet: the live
+> check ran there and offered the empty disk, never the stick itself. Secure
+> Boot ran there too, on the VM's UEFI firmware: with Microsoft's keys
+> (shim, the key confirmed in MokManager) and in Setup Mode. Not tried yet: the live
 > KDE session (it needs a real graphics card, which virtual machines do not
 > have on FreeBSD), an installation started from the ISO, and anything on
 > real hardware. Please report what happens on yours.
@@ -89,7 +91,7 @@ less software, and no distribution can change that.
 | Steam games | Yes (Proton) | Yes | Some: the Linux Steam client through a compatibility layer; many games run, anti-cheat games don't, things break more often |
 | Snapshots and undo | Yes (Btrfs) | System Restore / Time Machine | Yes: ZFS snapshots and boot environments |
 | Disk encryption | Yes | BitLocker / FileVault | Yes, optional: FreeBSD's whole partition (GELI, AES-256); the passphrase is typed at every start |
-| Secure Boot | Yes (signed shim) | Yes | Off for now; on with the computer's own keys from Setup Mode; Fedora's signed shim being tested ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)). FreeBSD's loader does not check the kernel |
+| Secure Boot | Yes (signed shim) | Yes | Yes, stays on: Fedora's Microsoft-signed shim and the computer's own key, confirmed once on a blue screen; or the computer's own keys from Setup Mode ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)). Tested in a VM's firmware only. FreeBSD's loader does not check the kernel |
 
 LunaBSD suits you if you like its design and ZFS, your hardware is in the
 supported range, and you mostly use open-source software and web apps. It does
@@ -104,14 +106,10 @@ other system for those.
 - A real graphics card for the desktop: Intel HD/UHD/Iris/Arc integrated
   graphics, an AMD Radeon, or an NVIDIA GeForce GTX 750 or newer
 - UEFI firmware to install next to Windows/Linux (legacy BIOS: whole disk only)
-- Secure Boot switched off in the firmware setup, for now (FreeBSD's boot
-  loader is not signed by Microsoft). LunaBSD can keep it on
-  ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)): with the firmware in *Setup
-  Mode* the installer enrolls the computer's own keys next to Microsoft's
-  (tested on a virtual machine's UEFI firmware, not yet on a real PC); the
-  way that needs no firmware change at all (Fedora's Microsoft-signed shim,
-  one confirmation at the first start) is built but not yet in the
-  published ISO, until it has passed its boot test
+- Secure Boot can stay on: the stick and the installed system each ask
+  once, on a blue screen, to trust their key
+  ([docs/SECUREBOOT.md](docs/SECUREBOOT.md); tested on a virtual machine's
+  UEFI firmware, not yet on a real PC). Switching it off works too
 - An internet connection during installation (Ethernet, Wi-Fi with a
   supported card, or a phone's USB tethering)
 - A USB stick of 4 GB or more
@@ -126,7 +124,8 @@ anything else, and nothing is written before the very last confirmation.
 Back up everything you cannot lose. If you keep Windows, switch off Fast
 Startup (Control Panel → Power Options → "Choose what the power buttons do")
 and save the BitLocker recovery key (<https://aka.ms/myrecoverykey>):
-Windows asks for it once after Secure Boot is switched off. See
+Windows asks for it if Secure Boot gets switched off (LunaBSD does not need
+that) and may ask when started from LunaBSD's own menu. See
 [docs/DUAL-BOOT.md](docs/DUAL-BOOT.md#windows) for how to avoid the prompt.
 
 ### 2. Make room (only when keeping another system)
@@ -158,6 +157,12 @@ Check the download first if you can: `sha256sum -c lunabsd-0.1-amd64.iso.sha256`
 
 Restart with the stick plugged in and open the boot menu (usually F12, F8,
 F11 or Esc right after power-on; on Macs hold Option). Pick the USB stick.
+With Secure Boot on, the first start from a stick shows a blue screen once
+(*Verification failed*, then *Shim UEFI key management*): press OK, then any
+key, choose **Enroll key from disk**, the stick (*EFISYS*),
+**ENROLL_THIS_KEY_IN_MOKMANAGER.cer**, **Continue**, **Yes** and **Reboot**,
+and start from the stick again ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)).
+
 LunaBSD's boot menu starts by itself after 5 seconds. It copies the system
 into memory (a minute or two; afterwards the stick could be removed), then:
 

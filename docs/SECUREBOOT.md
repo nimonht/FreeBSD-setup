@@ -13,19 +13,24 @@ Linux distributions without their own Microsoft signature do it (Arch's
 |---|---|
 | Setup Mode: keys enrolled from the live system with Microsoft's; then the loader signed with the computer's key starts and FreeBSD's unsigned loader is refused (*Access Denied*) | In QEMU on EDK2's UEFI firmware (OVMF), `tests/vm/run-secureboot-test.sh ISO setup` |
 | The `.sbat` section, signatures, MOK request and key lists, byte for byte against efitools and sbsigntool | `tests/secureboot-test.py`, `tests/secureboot-sh-test.sh` (CI) |
-| Fedora's shim starting FreeBSD's loader; MokManager taking the stick's key file and the installer's request | Not yet: `run-secureboot-test.sh ISO mok` is written; until it passes, the published ISO is built without shim (`SECURE_BOOT=no`), so the stick needs Secure Boot off or the firmware in Setup Mode |
+| Secure Boot on with Microsoft's keys: Fedora's shim starts, refuses the unknown loader, MokManager enrolls the stick's key file, then shim starts FreeBSD's loader and the live system (Secure Boot reported on); a MOK request written from FreeBSD with `efivar` is taken by MokManager with its 8-digit code, and both keys are then in shim's list | In QEMU on OVMF with Microsoft's keys, `tests/vm/run-secureboot-test.sh ISO mok` |
+| The stick with Secure Boot off (shim starts the loader without checking) | The usual live test, `tests/vm/run-live-test.sh` |
+| A whole installation with Secure Boot on, to the installed system's first start | Not yet as one run (each step above ran on its own) |
 | Any of it on a real PC | Not yet |
 
 ## What you see
 
-**Starting the USB stick with Secure Boot on**, once per computer:
+**Starting the USB stick with Secure Boot on**, once per computer (and once
+more for each newer ISO, which has a key of its own):
 
-1. A blue screen, *Shim UEFI key management* (MokManager). It may first say
-   that verification failed: that is expected, the computer does not know
-   LunaBSD's key yet.
-2. Choose **Enroll key from disk**, then the USB stick (often the first
-   entry), then **ENROLL_THIS_KEY_IN_MOKMANAGER.cer**.
-3. **Continue**, **Yes**, then **Reboot**. Start from the stick again; from
+1. A blue box says *Verification failed: (0x1A) Security Violation*. That is
+   expected: the computer does not know this stick's key yet. Press Enter
+   (OK).
+2. *Press any key to perform MOK management* (10 seconds): press a key. The
+   menu *Perform MOK management* opens (this is MokManager).
+3. Choose **Enroll key from disk**, then **EFISYS** (the stick), then
+   **ENROLL_THIS_KEY_IN_MOKMANAGER.cer**.
+4. **Continue**, **Yes**, then **Reboot**. Start from the stick again; from
    now on it starts directly.
 
 **After installing**, once:
@@ -62,8 +67,12 @@ loader    ------------------------> FreeBSD's kernel
   signed with both Microsoft's 2011 and 2023 certificates (so it starts on
   older PCs and on new ones that trust only the 2023 one), checked by its
   SHA-256 before use (`lib/secureboot.sh`).
-- **The live USB's loader** is signed with the LunaBSD project key; its
-  certificate is the `.cer` file on the stick.
+- **The live USB's loader** is signed with a key made for that ISO alone;
+  its certificate is the `.cer` file on the stick. The private half is
+  deleted as soon as the loader is signed, so nobody, the project included,
+  can sign anything else with it. A newer ISO has a new key, enrolled once
+  more the first time it starts (installed systems are not affected: they
+  have their own keys).
 - **An installed system** makes its own keys at installation
   (`/var/db/lunabsd-secureboot`, readable by root only), signs FreeBSD's
   loader with them and asks shim to add the key (what `mokutil --import`
@@ -102,10 +111,12 @@ is used then; the loader is signed with this computer's db key.
   GRUB and kernels) starts on a computer that runs this shim, as on any PC
   with Fedora installed. This is the same trade-off Arch's `shim-signed`
   makes.
-- **The project key on the live USB** is one key for everyone who enrolled
-  it: whoever has it can sign programs those computers start. It is kept
-  out of this repository (`SB_KEY`/`SB_CERT` when building the ISO);
-  development builds use a key made for that build.
+- **No Microsoft key is used to sign anything.** The firmware holds only
+  Microsoft's *certificates*, which check signatures; the private keys that
+  make them stay with Microsoft, which signs shims for distributions after a
+  review. That is why a distribution without its own reviewed shim borrows
+  one (here Fedora's) and brings its own key for what comes after it, and
+  why sbctl makes your own keys instead of using Microsoft's.
 - A signature by LunaBSD's own Microsoft-signed shim (no blue screen at
   all, as on Ubuntu) needs an organisation, the shim review board and
   Microsoft's signing service. It is on the roadmap

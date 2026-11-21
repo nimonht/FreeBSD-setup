@@ -27,7 +27,12 @@ Start here:
 
 - **The stick does not appear in the boot menu, or "no bootable device".**
   Write the ISO again with Rufus in *DD image* mode or with balenaEtcher (ISO
-  mode in Rufus copies files and loses the boot code). Switch Secure Boot off.
+  mode in Rufus copies files and loses the boot code).
+- **A blue screen: "Verification failed: (0x1A) Security Violation".** Secure
+  Boot is on and this computer does not know the stick's key yet: press OK,
+  then any key, and enroll `ENROLL_THIS_KEY_IN_MOKMANAGER.cer` from the stick
+  ([SECUREBOOT.md](SECUREBOOT.md), *What you see*). Each new LunaBSD ISO has
+  its own key and asks once.
 - **"LunaBSD could not start: the USB stick or DVD was not found".** The
   kernel did not see the stick: try another USB port (a USB 2 port, or one
   directly on the computer instead of a hub).
@@ -103,11 +108,13 @@ prompt `lsdev` lists them.
 **FreeBSD stopped starting** ("Secure Boot violation", "image verification
 failed", or the firmware skips FreeBSD) after a firmware update, a reset of
 the firmware settings, or after Secure Boot was switched on for Windows 11:
-FreeBSD's boot loader is not signed for Secure Boot. Switch Secure Boot off
-again in the firmware setup (often under Boot or Security), or set LunaBSD up
-to start with it on: [SECUREBOOT.md](SECUREBOOT.md) (`doas secureboot enable`). If Windows uses
-BitLocker it will ask for its recovery key once; see
-[DUAL-BOOT.md](DUAL-BOOT.md#windows).
+the system was installed with Secure Boot off, so its boot loader is not
+signed. Start it with Secure Boot off once, run `doas secureboot enable`,
+restart and confirm the key with the code it shows; then Secure Boot can stay
+on ([SECUREBOOT.md](SECUREBOOT.md)). A blue screen asking to enroll a key at
+every start means the key was never confirmed: the same command gives a new
+code. If Windows uses BitLocker, switching Secure Boot off makes it ask for
+its recovery key once; see [DUAL-BOOT.md](DUAL-BOOT.md#windows).
 
 **Limine stops with "CHECKSUM MISMATCH FOR CONFIG FILE"** (installed with an
 older FreeBSD-setup, next to CachyOS or another Linux whose Limine checks its
