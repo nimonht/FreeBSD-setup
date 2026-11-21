@@ -28,6 +28,8 @@ if [ "$BASE" = yes ]; then
 	echo "==> freebsd-update"
 	freebsd-update fetch
 	freebsd-update install || true
+	# With Secure Boot set up, a new boot loader must be signed to start.
+	if [ -x /usr/local/sbin/secureboot ]; then /usr/local/sbin/secureboot refresh; fi
 fi
 
 # Prune old automatic environments, never the active ones.

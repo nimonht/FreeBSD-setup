@@ -50,6 +50,7 @@ fi
 # sysup: update the whole system with a safety net (new boot environment).
 install_file "$REPO_DIR/files/bin/sysup" /usr/local/sbin/sysup 755
 install_file "$REPO_DIR/files/bin/snap" /usr/local/sbin/snap 755
+install_file "$REPO_DIR/files/bin/secureboot" /usr/local/sbin/secureboot 755
 pkg_try httm
 say "installed 'sysup' (safe system upgrade) and 'snap' (manual snapshots/rollback)"
 

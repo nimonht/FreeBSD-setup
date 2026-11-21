@@ -29,6 +29,7 @@ D-Bus and SSH but not yet on a real screen.
 | `setup.sh` | Runs the stages in `stages/` in order. `setup.sh STAGE...` runs only some. |
 | `stages/*.sh` | One concern each (drivers, desktop, kde, hyprland, caelestia, ...). Sourced, not executed. |
 | `lib/hw.sh` | Hardware detection (the `HW_*` variables) and the hardware report. |
+| `lib/secureboot.sh`, `lib/secureboot.py`, `files/bin/secureboot` | Secure Boot ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)): firmware state, this computer's keys, signing FreeBSD's loader (with an `.sbat` section), shim on the EFI partition, the MOK request, Setup Mode enrollment with Microsoft's certificates (`files/secureboot/microsoft/`). |
 | `lib/common.sh` | Helpers: `pkg_install`, `pkg_try`, `svc`, `kld_add`, `loader_set`, `sysctl_set`, `say`, `warn`. |
 | `lib/wizard.sh`, `lib/ui.sh` | Questions, and how answers resolve into `WANT_KDE`, `DISPLAY_MANAGER`, ... |
 | `files/` | Files installed onto the system: helper commands in `files/bin`, rc scripts in `files/rc.d`, configs. |
@@ -84,6 +85,8 @@ sh tests/efiboot-test.sh        # reading efibootmgr -v (FreeBSD 15 and later la
 sh tests/timedate-test.sh       # timedate1 D-Bus service for KDE's Date & Time (needs python3-gobject, dbus)
 sh tests/live-test.sh           # live USB: which graphics driver / why only the installer, per machine
 python3 tests/installer-test.py # graphical installer logic: probe parsing, checks, answers file (sourced by sh)
+python3 tests/secureboot-test.py # PE .sbat, signature lists, MOK request, authenticated variables (vs efitools, sbsigntool)
+sh tests/secureboot-sh-test.sh  # lib/secureboot.sh against a pretend firmware (keys, chain, MOK request, Setup Mode)
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python3 installer/luna-installer --screenshots /tmp/shots
                                 # every installer page renders; fails on any QML warning (pip install PyQt6)
 python3 iso/size.py             # live image size from FreeBSD's package catalogue
@@ -94,6 +97,8 @@ shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
   iso/live/rc.local installer/luna-wifi lib/live.sh
 shellcheck -s bash -S warning files/shell/bash.bashrc
 sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-erase-kde.conf
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso setup  # OVMF Setup Mode: enroll, signed starts, unsigned refused
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso mok    # OVMF + Microsoft keys: shim, MokManager, MOK request
 ```
 
 Everything but the last line runs on Linux, as CI does. The ISO:
@@ -182,6 +187,16 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
     needs cgroups and cannot. ksystemstats has no lm-sensors plugin, and its
     GPU page only sees NVIDIA cards (`nvidia-smi`). Discover has no AppStream
     catalogue for FreeBSD's package repositories.
+- Secure Boot ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)): Fedora's
+  Microsoft-signed shim (16.1-7, signed by the 2011 and 2023 UEFI CAs,
+  pinned by SHA-256) starts FreeBSD's `loader.efi` as `grubx64.efi`, signed
+  with the computer's own key (`/var/db/lunabsd-secureboot`) that the user
+  confirms once in MokManager; the live USB's loader is signed with the
+  project key (`SB_KEY`/`SB_CERT`, never in the repository). shim refuses a
+  second stage without an `.sbat` section. In Setup Mode the computer's keys
+  are enrolled with Microsoft's, appended, never replacing what is there.
+  FreeBSD's loader does not verify the kernel. Changing a signed loader
+  needs `secureboot refresh` (`sysup` runs it).
 - Hibernate (S4) does not exist on FreeBSD amd64 (only S4BIOS, which almost no
   machine has); never offer it. `zzz` is suspend to RAM.
 - `dmesg` needs root: `stages/security.sh` sets

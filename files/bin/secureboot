@@ -1,0 +1,156 @@
+#!/bin/sh
+# Written by FreeBSD-setup
+# secureboot - keep this system starting with UEFI Secure Boot switched on
+# (docs/SECUREBOOT.md).
+#
+#   secureboot            what the firmware and this system do now
+#   secureboot enable     set it up on a system installed with Secure Boot
+#                         off: this computer's key, the signed boot loader
+#                         and Fedora's Microsoft-signed shim; at the next
+#                         start a blue screen asks to confirm the key with
+#                         a code (or, in Setup Mode, the keys are enrolled)
+#   secureboot refresh    sign FreeBSD's boot loader again after an update
+#                         put a new one in /boot (sysup runs this; nothing
+#                         happens when it has not changed or Secure Boot
+#                         was never set up). --force signs it anyway.
+set -eu
+[ "$(id -u)" -eq 0 ] || exec doas "$0" "$@"
+
+REPO_DIR=/usr/local/share/freebsd-setup
+. "$REPO_DIR/distro.conf"
+LOG=""
+. "$REPO_DIR/lib/common.sh"
+. "$REPO_DIR/lib/secureboot.sh"
+ESP=/boot/efi
+
+esp_ready() {
+	mount -p | awk -v e="$ESP" '$2 == e { f = 1 } END { exit !f }' && return 0
+	mount "$ESP" 2>/dev/null && return 0
+	die "the EFI partition is not mounted at $ESP (and could not be mounted from /etc/fstab)"
+}
+
+mode_read() {
+	MODE="" FALLBACK=no
+	# shellcheck disable=SC1091
+	[ -f "$SB_KEYS/mode" ] && . "$SB_KEYS/mode"
+	return 0
+}
+
+cmd_status() {
+	_st=$(sb_state)
+	case "$_st" in
+	on) echo "Firmware:    Secure Boot is on" ;;
+	off) echo "Firmware:    Secure Boot is off" ;;
+	setup) echo "Firmware:    Setup Mode (no platform key: keys can be enrolled; Secure Boot is not enforced)" ;;
+	*) echo "Firmware:    no UEFI Secure Boot (started in BIOS mode, or the firmware does not say)"; return 0 ;;
+	esac
+	mode_read
+	case "$MODE" in
+	shim)
+		echo "This system: starts through shim (Fedora's, signed by Microsoft) and a loader signed with this computer's key"
+		if sb_mok_has "$SB_KEYS/db.cer"; then echo "Key:         confirmed (in shim's MOK list)"
+		elif [ -n "$(sb_var "$SB_SHIM_GUID-MokNew")" ]; then echo "Key:         waiting to be confirmed at the next start (blue screen, Enroll MOK)"
+		else echo "Key:         not confirmed: run  doas secureboot enable  for a new code"; fi ;;
+	own) echo "This system: its own keys are in the firmware (Setup Mode was used); the loader is signed with them" ;;
+	*) echo "This system: not set up for Secure Boot. To keep it starting with Secure Boot on: doas secureboot enable" ;;
+	esac
+	if [ -n "$MODE" ] && [ "$(sb_sha256 /boot/loader.efi)" != "$(cat "$SB_KEYS/loader.sha256" 2>/dev/null)" ]; then
+		echo "Loader:      /boot/loader.efi changed since it was signed: run  doas secureboot refresh"
+	fi
+}
+
+# The firmware entry "FreeBSD" on this EFI partition starts shim instead of
+# the loader, keeping its place in the boot order.
+entry_to_shim() {
+	_uuid=$(efi_part_uuid "$(efibootmgr -v 2>/dev/null | efi_entries | awk -F'|' '$2 == "FreeBSD" { print $3; exit }')")
+	_order=$(efibootmgr | awk -F': *' '/^BootOrder/ { gsub(/ /, "", $2); print $2 }')
+	_old=$(efibootmgr -v 2>/dev/null | efi_entries | awk -F'|' -v u="$_uuid" '
+		$2 == "FreeBSD" && (u == "" || index(tolower($3), u)) { print $1 }')
+	_before=$(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}/ { sub(/^[ +]*Boot/, ""); print substr($0, 1, 4) }')
+	efibootmgr -c -a -l "$ESP/EFI/freebsd/shimx64.efi" -L FreeBSD >/dev/null || return 1
+	_new=""
+	for _b in $(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}/ { sub(/^[ +]*Boot/, ""); print substr($0, 1, 4) }'); do
+		echo "$_before" | grep -qx "$_b" || _new=$_b
+	done
+	[ -n "$_new" ] || return 1
+	_first=$(echo "$_old" | head -1)
+	if [ -n "$_first" ]; then
+		_order=$(echo "$_order" | tr ',' '\n' | sed "s/^$_first\$/$_new/" | grep -vx "$(echo "$_old" | tail -n +2)" | paste -sd, -)
+		for _b in $_old; do efibootmgr -B -b "$_b" >/dev/null 2>&1 || true; done
+	else
+		_order="$_new${_order:+,$_order}"
+	fi
+	efibootmgr -o "$_order" >/dev/null || true
+}
+
+cmd_enable() {
+	_st=$(sb_state)
+	[ "$_st" = unsupported ] && die "this computer started without UEFI Secure Boot support (BIOS mode): there is nothing to set up"
+	_plan=shim; [ "$_st" = setup ] && _plan=own
+	esp_ready
+	sb_keys "$SB_KEYS" "$(hostname -s)" || die "could not create this computer's keys"
+	if [ "$_plan" = shim ]; then
+		say "getting Fedora's Microsoft-signed shim"
+		sb_fetch_shim "$SB_SHARE" || die "could not get the shim (internet connection?)"
+	fi
+	sb_sign_loader "$SB_KEYS" /boot/loader.efi "$SB_KEYS/loader.efi" || die "could not sign the boot loader"
+	# The firmware's fallback path is ours when it starts FreeBSD's loader.
+	_fb=no
+	if [ -f "$ESP/EFI/BOOT/BOOTX64.EFI" ] && { cmp -s "$ESP/EFI/BOOT/BOOTX64.EFI" "$ESP/EFI/freebsd/loader.efi" ||
+		cmp -s "$ESP/EFI/BOOT/BOOTX64.EFI" /boot/loader.efi; }; then _fb=yes; fi
+	sb_install_chain "$ESP" "$SB_KEYS/loader.efi" "$SB_KEYS" "$_plan" "$_fb" "$SB_SHARE"
+	sb_sha256 /boot/loader.efi > "$SB_KEYS/loader.sha256"
+	printf '# Written by FreeBSD-setup\nMODE=%s\nFALLBACK=%s\n' "$_plan" "$_fb" > "$SB_KEYS/mode"
+	if [ "$_plan" = own ]; then
+		sb_enroll_own "$SB_KEYS" || die "the firmware did not accept the keys"
+		echo
+		echo "This computer's keys are in the firmware now, next to Microsoft's."
+		echo "Secure Boot is on from the next start, if it is enabled in the firmware settings."
+		return 0
+	fi
+	entry_to_shim || warn "could not change the firmware boot entry; choose EFI/freebsd/shimx64.efi in the firmware settings"
+	if sb_mok_has "$SB_KEYS/db.cer"; then
+		echo "Done: this computer's key is already confirmed."
+		return 0
+	fi
+	_code=$(sb_code)
+	sb_mok_request "$SB_KEYS/db.cer" "$_code" || die "could not ask shim to add the key"
+	cat <<EOF
+
+Restart the computer. Once, a blue screen says "Press any key to perform
+MOK management": press a key, choose Enroll MOK, then Continue, then Yes,
+type this code and press Enter:
+
+    $_code
+
+then choose Reboot. After that you can switch Secure Boot on in the
+firmware settings (if it is off), and $DISTRO_NAME keeps starting.
+EOF
+}
+
+cmd_refresh() {
+	mode_read
+	[ -n "$MODE" ] || return 0
+	if [ "${1:-}" != --force ] && [ "$(sb_sha256 /boot/loader.efi)" = "$(cat "$SB_KEYS/loader.sha256" 2>/dev/null)" ]; then
+		return 0
+	fi
+	esp_ready
+	sb_sign_loader "$SB_KEYS" /boot/loader.efi "$SB_KEYS/loader.efi" || die "could not sign the boot loader"
+	for _f in EFI/freebsd/loader.efi EFI/freebsd/grubx64.efi; do
+		[ -f "$ESP/$_f" ] && cp "$SB_KEYS/loader.efi" "$ESP/$_f"
+	done
+	if [ "$FALLBACK" = yes ]; then
+		if [ "$MODE" = shim ]; then cp "$SB_KEYS/loader.efi" "$ESP/EFI/BOOT/grubx64.efi"
+		else cp "$SB_KEYS/loader.efi" "$ESP/EFI/BOOT/BOOTX64.EFI"; fi
+	fi
+	sb_sha256 /boot/loader.efi > "$SB_KEYS/loader.sha256"
+	echo "==> the new boot loader is signed for Secure Boot"
+}
+
+case "${1:-status}" in
+status) cmd_status ;;
+enable) cmd_enable ;;
+refresh) cmd_refresh "${2:-}" ;;
+-h|--help|help) awk 'NR > 2 && /^#/ { sub(/^# ?/, ""); print; next } NR > 2 { exit }' "$0" ;;
+*) echo "usage: secureboot [status|enable|refresh [--force]]" >&2; exit 2 ;;
+esac

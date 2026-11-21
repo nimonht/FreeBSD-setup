@@ -107,5 +107,27 @@ LPage {
                 }
             }
         }
+
+        Panel {
+            readonly property var sb: app.probe ? installer.secureBoot() : null
+            visible: !installer.probing && sb !== null && sb.status !== ""
+            Layout.fillWidth: true
+            title: "Secure Boot"
+            RowLayout {
+                width: parent.width
+                spacing: 16
+                StatusTag {
+                    status: parent.parent.sb ? parent.parent.sb.status : ""
+                    Layout.alignment: Qt.AlignTop
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: parent.parent.sb ? parent.parent.sb.text : ""
+                    color: app.cInk
+                    wrapMode: Text.Wrap
+                    lineHeight: 1.15
+                }
+            }
+        }
     }
 }

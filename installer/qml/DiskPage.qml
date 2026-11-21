@@ -176,8 +176,11 @@ LPage {
                 wrapMode: Text.Wrap
                 color: app.cInk
                 lineHeight: 1.2
-                text: "Because " + app.distroName + " needs Secure Boot switched off, Windows will ask once for its 48-digit "
-                      + "recovery key. Have it ready: aka.ms/myrecoverykey"
+                text: (app.probe.secureboot && app.probe.secureboot.plan === "shim")
+                      ? "Secure Boot stays on, so Windows starts as before. Started from " + app.distroName
+                        + "'s own menu (key L) it may ask for its 48-digit recovery key: have it ready (aka.ms/myrecoverykey)."
+                      : "Because " + app.distroName + " needs Secure Boot switched off, Windows will ask once for its 48-digit "
+                        + "recovery key. Have it ready: aka.ms/myrecoverykey"
             }
         }
 

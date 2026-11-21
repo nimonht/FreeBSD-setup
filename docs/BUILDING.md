@@ -24,6 +24,25 @@ intercepts TLS, and `STEPS` to repeat single steps while developing:
 doas env STEPS="configure trim image ramdisk iso" sh iso/build.sh   # after editing iso/live/
 ```
 
+`SECURE_BOOT=yes` builds an ISO that starts with UEFI Secure Boot on
+([SECUREBOOT.md](SECUREBOOT.md)): the fetch step downloads Fedora's
+Microsoft-signed shim (checked by SHA-256), the iso step puts it on the EFI
+image as `BOOTX64.EFI`, with FreeBSD's loader (with an `.sbat` section)
+signed as `grubx64.efi`, MokManager and `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`.
+The signing key is `SB_KEY` and `SB_CERT` (PEM files; `build-in-vm.sh` copies
+them into the build VM and removes them afterwards). Without them a key is
+made for the work directory, fine for testing and never for a release: every
+computer that enrolls a release key trusts whatever it signs, so keep that
+key off the repository and out of CI logs. Make one with:
+
+```sh
+openssl req -new -x509 -newkey rsa:2048 -nodes -sha256 -days 10950 \
+  -subj "/O=LunaBSD/CN=LunaBSD live media" -keyout lunabsd-sb.key -out lunabsd-sb.pem
+```
+
+The default is `SECURE_BOOT=no` until `tests/vm/run-secureboot-test.sh ISO
+mok` has passed.
+
 ### On Linux (or in CI)
 
 ```sh
@@ -151,6 +170,8 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
   python3 installer/luna-installer --screenshots /tmp/shots   # every page, fails on QML warnings (needs PyQt6)
 python3 installer/luna-installer --demo                       # click through it (nothing is changed)
 sh tests/vm/run-live-test.sh iso/out/lunabsd-*.iso uefi        # boot the ISO in QEMU
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso setup # Secure Boot, Setup Mode (OVMF)
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso mok   # Secure Boot with shim (SECURE_BOOT=yes ISO)
 ```
 
 `run-live-test.sh` boots the ISO in QEMU (UEFI by default, `bios` as second

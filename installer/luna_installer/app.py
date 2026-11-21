@@ -336,6 +336,18 @@ class Installer(QObject):
     def bootPlaces(self, disk):
         return backend.boot_places(self._probe.get("boot", {}).get(disk, {}), self._distro["DISTRO_NAME"])
 
+    @pyqtSlot(result="QVariant")
+    def secureBoot(self):
+        return backend.secureboot_summary(self._probe.get("secureboot", {}), self._distro["DISTRO_NAME"])
+
+    @pyqtSlot(str, result=str)
+    def mokCode(self, text):
+        return backend.mok_code(text)
+
+    @pyqtSlot(str, result=str)
+    def withoutMok(self, text):
+        return backend.drop_mok(text)
+
     @pyqtSlot(str, result=str)
     def zoneFor(self, lang):
         return backend.LANG_ZONES.get(lang, "UTC")

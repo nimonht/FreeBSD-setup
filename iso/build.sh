@@ -35,6 +35,13 @@
 #                     everything is recompressed once in the image step)
 #   EXTRA_CA=FILE     CA bundle for a TLS-intercepting proxy; used while
 #                     building only, never put on the ISO
+#   SECURE_BOOT=yes   start with UEFI Secure Boot on (docs/SECUREBOOT.md):
+#                     Fedora's Microsoft-signed shim starts FreeBSD's loader,
+#                     signed with the project key below; the first start
+#                     asks to enroll that key once (MokManager)
+#   SB_KEY=FILE SB_CERT=FILE   the project's signing key and certificate
+#                     (PEM). Default: a key made for this work directory
+#                     (development builds; keep a release key secret)
 #   STEPS="..."       run only these steps, on the work directory of an
 #                     earlier run (for development): fetch root packages
 #                     configure trim image ramdisk iso
@@ -43,11 +50,13 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO_DIR=$(dirname "$HERE")
 . "$REPO_DIR/distro.conf"
+. "$REPO_DIR/lib/secureboot.sh"
 REL=${FREEBSD_RELEASE}
 BRANCH=${PKG_BRANCH:-$LIVE_PKG_BRANCH}
 PKG_SITE=${PKG_SITE:-pkg+https://pkg.FreeBSD.org}
 DIST_SITE=${DIST_SITE:-https://download.freebsd.org/releases/amd64}
 ZSTD_LEVEL=${ZSTD_LEVEL:-19}
+SECURE_BOOT=${SECURE_BOOT:-no}
 WORK=${WORK:-$HERE/work}
 OUT=${OUT:-$HERE/out}
 ROOT=$WORK/root          # the live system, a ZFS pool in a file
@@ -150,6 +159,10 @@ step_fetch() {
 		fetch -o "$_d/$_s.txz" "$DIST_SITE/$REL/$_s.txz" || die "download of $_s.txz failed"
 		[ "$(sha256 -q "$_d/$_s.txz")" = "$_want" ] || die "$_s.txz does not match its checksum"
 	done
+	if [ "$SECURE_BOOT" = yes ]; then
+		log "Downloading the Microsoft-signed shim (Fedora's)"
+		sb_fetch_shim "$WORK/shim" || die "could not get the shim"
+	fi
 }
 
 step_root() {
@@ -235,6 +248,13 @@ step_configure() {
 	(cd "$REPO_DIR" && tar -cf - --exclude ./.git --exclude ./iso/work --exclude ./iso/out \
 		--exclude ./tests/vm/work --exclude '__pycache__' .) | tar -xf - -C "$ROOT$_share"
 	ln -sf "$_share/setup.sh" "$ROOT/usr/local/sbin/freebsd-setup"
+	# Secure Boot: the installer puts shim on the new system's EFI partition.
+	rm -rf "${ROOT:?}$SB_SHARE"
+	if [ "$SECURE_BOOT" = yes ]; then
+		sb_shim_ok "$WORK/shim" || die "the shim is missing: run the fetch step"
+		mkdir -p "$ROOT$SB_SHARE"
+		install -m 444 "$WORK/shim/shimx64.efi" "$WORK/shim/mmx64.efi" "$ROOT$SB_SHARE/"
+	fi
 
 	# Branding: boot menu, wallpaper, About page, os-release.
 	. "$REPO_DIR/lib/branding.sh"
@@ -386,6 +406,22 @@ step_ramdisk() {
 	gzip -9 -c "$WORK/ramdisk.ufs" > "$CD/luna/ramdisk.ufs.gz"
 }
 
+# The key the live media's loader is signed with: SB_KEY/SB_CERT, or one
+# made once for this work directory.
+sb_project_key() {
+	if [ -n "${SB_KEY:-}" ] || [ -n "${SB_CERT:-}" ]; then
+		[ -f "${SB_KEY:-}" ] && [ -f "${SB_CERT:-}" ] || die "SB_KEY and SB_CERT must both name files"
+		return 0
+	fi
+	SB_KEY=$WORK/secureboot/project.key SB_CERT=$WORK/secureboot/project.pem
+	[ -f "$SB_KEY" ] && [ -f "$SB_CERT" ] && return 0
+	mkdir -p "$WORK/secureboot"; chmod 700 "$WORK/secureboot"
+	(umask 077 && openssl req -new -x509 -newkey rsa:2048 -nodes -sha256 -days 10950 \
+		-subj "/O=$DISTRO_NAME/CN=$DISTRO_NAME live media (development build)" \
+		-keyout "$SB_KEY" -out "$SB_CERT") >/dev/null 2>&1 || die "could not make a signing key"
+	printf 'build.sh: note: signed with a development key (%s); set SB_KEY and SB_CERT for a release\n' "$SB_CERT" >&2
+}
+
 step_iso() {
 	log "Building the ISO"
 	pool_open
@@ -411,14 +447,36 @@ step_iso() {
 	printf '%s %s (%s) - %s\n' "$DISTRO_NAME" "$DISTRO_VERSION" "$REL" "$DISTRO_URL" > "$CD/README.TXT"
 
 	# UEFI: a small FAT image with the loader, as FreeBSD's own media have
-	# (FAT16: FAT12 cannot address 4 MB in 512-byte clusters; makefs then
-	# writes a broken file system that UEFI firmware cannot read).
+	# (FAT16: FAT12 cannot address its size in 512-byte clusters; makefs
+	# then writes a broken file system that UEFI firmware cannot read).
 	_esp=$WORK/esp
 	rm -rf "$_esp"; mkdir -p "$_esp/EFI/BOOT"
-	cp "$ROOT/boot/loader.efi" "$_esp/EFI/BOOT/BOOTX64.EFI"
+	if [ "$SECURE_BOOT" = yes ]; then
+		# shim (signed by Microsoft) -> grubx64.efi next to it: FreeBSD's
+		# loader with SBAT data, signed with the project key. MokManager and
+		# the key file are there for the first start with Secure Boot on.
+		sb_project_key
+		sb_shim_ok "$WORK/shim" || die "the shim is missing: run the fetch step"
+		_sbw=$ROOT/tmp/lunabsd-sb
+		rm -rf "$_sbw"; mkdir -p "$_sbw"
+		cp "$REPO_DIR/lib/secureboot.py" "$ROOT/boot/loader.efi" "$_sbw/"
+		# (python3 of the live system: the build host needs none)
+		chroot "$ROOT" /usr/local/bin/python3 /tmp/lunabsd-sb/secureboot.py sbat \
+			/tmp/lunabsd-sb/loader.efi /tmp/lunabsd-sb/loader-sbat.efi "${REL%%-*}" ||
+			die "could not add SBAT data to the loader"
+		uefisign -k "$SB_KEY" -c "$SB_CERT" -o "$_esp/EFI/BOOT/grubx64.efi" "$_sbw/loader-sbat.efi" >/dev/null ||
+			die "could not sign the loader"
+		rm -rf "$_sbw"
+		cp "$WORK/shim/shimx64.efi" "$_esp/EFI/BOOT/BOOTX64.EFI"
+		cp "$WORK/shim/mmx64.efi" "$_esp/EFI/BOOT/mmx64.efi"
+		openssl x509 -in "$SB_CERT" -outform DER -out "$_esp/$SB_KEYFILE"
+		cp "$_esp/$SB_KEYFILE" "$CD/$SB_KEYFILE"
+	else
+		cp "$ROOT/boot/loader.efi" "$_esp/EFI/BOOT/BOOTX64.EFI"
+	fi
 	rm -f "$WORK/efiboot.img"
 	makefs -t msdos -o fat_type=16 -o sectors_per_cluster=1 -o volume_label=EFISYS \
-		-s 4096k "$WORK/efiboot.img" "$_esp"
+		-s 8192k "$WORK/efiboot.img" "$_esp"
 
 	_iso=$OUT/$ISO_NAME.iso
 	rm -f "$_iso"
