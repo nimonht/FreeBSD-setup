@@ -98,7 +98,7 @@ shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
 shellcheck -s bash -S warning files/shell/bash.bashrc
 sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-erase-kde.conf
 sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso setup  # OVMF Setup Mode: enroll, signed starts, unsigned refused
-sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso mok    # OVMF + Microsoft keys: shim, MokManager, MOK request
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso mok    # OVMF + Microsoft keys: shim, MokManager (read by OCR: tesseract), MOK request
 ```
 
 Everything but the last line runs on Linux, as CI does. The ISO:
@@ -191,8 +191,9 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
   Microsoft-signed shim (16.1-7, signed by the 2011 and 2023 UEFI CAs,
   pinned by SHA-256) starts FreeBSD's `loader.efi` as `grubx64.efi`, signed
   with the computer's own key (`/var/db/lunabsd-secureboot`) that the user
-  confirms once in MokManager; the live USB's loader is signed with the
-  project key (`SB_KEY`/`SB_CERT`, never in the repository). shim refuses a
+  confirms once in MokManager; the live USB's loader is signed with a
+  one-time key per build (private half deleted after signing; `SB_KEY`/
+  `SB_CERT` to keep one, never in the repository). shim refuses a
   second stage without an `.sbat` section. In Setup Mode the computer's keys
   are enrolled with Microsoft's, appended, never replacing what is there.
   FreeBSD's loader does not verify the kernel. Changing a signed loader

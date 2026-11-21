@@ -35,13 +35,15 @@
 #                     everything is recompressed once in the image step)
 #   EXTRA_CA=FILE     CA bundle for a TLS-intercepting proxy; used while
 #                     building only, never put on the ISO
-#   SECURE_BOOT=yes   start with UEFI Secure Boot on (docs/SECUREBOOT.md):
-#                     Fedora's Microsoft-signed shim starts FreeBSD's loader,
-#                     signed with the project key below; the first start
-#                     asks to enroll that key once (MokManager)
-#   SB_KEY=FILE SB_CERT=FILE   the project's signing key and certificate
-#                     (PEM). Default: a key made for this work directory
-#                     (development builds; keep a release key secret)
+#   SECURE_BOOT=no    FreeBSD's loader alone, unsigned (needs Secure Boot
+#                     off). Default yes (docs/SECUREBOOT.md): Fedora's
+#                     Microsoft-signed shim starts FreeBSD's loader, signed
+#                     with a key made for this build alone (its private half
+#                     is deleted right after signing); the first start with
+#                     Secure Boot on asks to enroll its certificate once
+#   SB_KEY=FILE SB_CERT=FILE   sign with this key instead (PEM), to keep one
+#                     key across releases; whoever holds it can sign programs
+#                     every computer that enrolled it will start
 #   STEPS="..."       run only these steps, on the work directory of an
 #                     earlier run (for development): fetch root packages
 #                     configure trim image ramdisk iso
@@ -56,7 +58,7 @@ BRANCH=${PKG_BRANCH:-$LIVE_PKG_BRANCH}
 PKG_SITE=${PKG_SITE:-pkg+https://pkg.FreeBSD.org}
 DIST_SITE=${DIST_SITE:-https://download.freebsd.org/releases/amd64}
 ZSTD_LEVEL=${ZSTD_LEVEL:-19}
-SECURE_BOOT=${SECURE_BOOT:-no}
+SECURE_BOOT=${SECURE_BOOT:-yes}
 WORK=${WORK:-$HERE/work}
 OUT=${OUT:-$HERE/out}
 ROOT=$WORK/root          # the live system, a ZFS pool in a file
@@ -96,7 +98,8 @@ pool_close() {
 	rm -f "$WORK/image.img"
 	return 0
 }
-trap 'pool_close' EXIT
+# (and a one-time signing key never outlives the build, even a failed one)
+trap 'pool_close; [ -z "${SB_ONE_TIME:-}" ] || rm -rf "$SB_ONE_TIME"' EXIT
 trap 'exit 130' INT TERM
 
 pool_open() {
@@ -406,20 +409,27 @@ step_ramdisk() {
 	gzip -9 -c "$WORK/ramdisk.ufs" > "$CD/luna/ramdisk.ufs.gz"
 }
 
-# The key the live media's loader is signed with: SB_KEY/SB_CERT, or one
-# made once for this work directory.
+# The key the live media's loader is signed with: SB_KEY/SB_CERT, or, by
+# default, one made for this build alone. Its private half only signs this
+# loader and is deleted right after (sb_project_key_done), so nothing can be
+# signed with it later. The cost: each new ISO's certificate is enrolled
+# once more (installed systems use their own keys and are not affected).
+SB_ONE_TIME=""
 sb_project_key() {
 	if [ -n "${SB_KEY:-}" ] || [ -n "${SB_CERT:-}" ]; then
 		[ -f "${SB_KEY:-}" ] && [ -f "${SB_CERT:-}" ] || die "SB_KEY and SB_CERT must both name files"
 		return 0
 	fi
-	SB_KEY=$WORK/secureboot/project.key SB_CERT=$WORK/secureboot/project.pem
-	[ -f "$SB_KEY" ] && [ -f "$SB_CERT" ] && return 0
-	mkdir -p "$WORK/secureboot"; chmod 700 "$WORK/secureboot"
+	SB_ONE_TIME=$(mktemp -d "$WORK/sbkey.XXXXXX")
+	SB_KEY=$SB_ONE_TIME/key.pem SB_CERT=$SB_ONE_TIME/cert.pem
 	(umask 077 && openssl req -new -x509 -newkey rsa:2048 -nodes -sha256 -days 10950 \
-		-subj "/O=$DISTRO_NAME/CN=$DISTRO_NAME live media (development build)" \
+		-subj "/O=$DISTRO_NAME/CN=$DISTRO_NAME $DISTRO_VERSION live media ($(date -u +%Y-%m-%d))" \
 		-keyout "$SB_KEY" -out "$SB_CERT") >/dev/null 2>&1 || die "could not make a signing key"
-	printf 'build.sh: note: signed with a development key (%s); set SB_KEY and SB_CERT for a release\n' "$SB_CERT" >&2
+}
+sb_project_key_done() {
+	[ -n "$SB_ONE_TIME" ] || return 0
+	rm -rf "$SB_ONE_TIME"
+	SB_ONE_TIME="" SB_KEY="" SB_CERT=""
 }
 
 step_iso() {
@@ -471,6 +481,7 @@ step_iso() {
 		cp "$WORK/shim/mmx64.efi" "$_esp/EFI/BOOT/mmx64.efi"
 		openssl x509 -in "$SB_CERT" -outform DER -out "$_esp/$SB_KEYFILE"
 		cp "$_esp/$SB_KEYFILE" "$CD/$SB_KEYFILE"
+		sb_project_key_done
 	else
 		cp "$ROOT/boot/loader.efi" "$_esp/EFI/BOOT/BOOTX64.EFI"
 	fi

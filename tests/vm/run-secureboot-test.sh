@@ -8,12 +8,12 @@
 #       enrolls them with Microsoft's (lib/secureboot.sh, sb_enroll_own), then
 #       writes FreeBSD's loader signed with its db key to a disk, and an
 #       unsigned copy. With Secure Boot then enforced, the firmware must start
-#       the signed loader and refuse the unsigned one. Uses no shim: give it
-#       an ISO built with SECURE_BOOT=no (the live system has the same tools).
+#       the signed loader and refuse the unsigned one. (In Setup Mode nothing
+#       is enforced: the stick starts through shim without any question.)
 #
 #   sh tests/vm/run-secureboot-test.sh ISO mok
-#       Secure Boot on with Microsoft's keys (OVMF_VARS_4M.ms.fd), an ISO
-#       built with SECURE_BOOT=yes. Fedora's shim starts; the loader's key is
+#       Secure Boot on with Microsoft's keys (OVMF_VARS_4M.ms.fd), the ISO
+#       as built by default (SECURE_BOOT=yes). Fedora's shim starts; the loader's key is
 #       unknown, so MokManager comes up; the key file on the stick is
 #       enrolled; the live system starts with Secure Boot on and makes a MOK
 #       request for a new key (sb_mok_request, as the installer does); after a
@@ -22,7 +22,8 @@
 #
 # Needs qemu-system-x86_64, OVMF with Secure Boot (Ubuntu's ovmf:
 # OVMF_CODE_4M.secboot.fd, OVMF_VARS_4M.fd, OVMF_VARS_4M.ms.fd), mtools,
-# python3. Without KVM it is slow (minutes for each start of the live
+# python3 with PIL, bsdtar, and tesseract (MokManager draws on the screen
+# only: tests/vm/mokmanager.py reads it by OCR). Without KVM it is slow (minutes for each start of the live
 # system). Result in tests/vm/sb-work/: serial logs and screenshots; exit 0
 # when every check passed.
 set -eu
@@ -72,13 +73,16 @@ steps() {
 drive() { python3 "$HERE/drive.py" "$W/ser.sock" "$W/$1" "$W/$2" --stop; }
 
 LIB='REPO_DIR=/usr/local/share/freebsd-setup; . $REPO_DIR/distro.conf; . $REPO_DIR/lib/secureboot.sh'
-# boot_and_run FILE COMMANDS AFTER   from the boot menu to a root shell (the
-# kernel's console on the serial line too), run COMMANDS, then AFTER.
-# "CHECKS-%s DONE" so that the echo of the typed line does not match.
+# boot_and_run FILE COMMANDS AFTER   from the boot menu to a root shell, run
+# COMMANDS, then AFTER. Nothing is typed at the loader prompt: with the
+# console "Dual (Serial primary)", which OVMF sometimes gives, the loader
+# reads the serial line twice over and typed commands arrive garbled. Enter
+# in the menu starts at once; the kernel's console is dual too, so the
+# login comes on the serial line. "CHECKS-%s DONE" so that the echo of the
+# typed line does not match.
 CR=$(printf '\r')
 boot_and_run() {
-	steps "$1" "Escape to loader prompt" "3" 900 "OK" "set console=\"comconsole,efi\"$CR" 300 \
-		"OK" "boot$CR" 60 "login:" "root$CR" 5400 '#\s*$' "$2; printf 'CHECKS-%s\\n' DONE$CR" 300 \
+	steps "$1" "Autoboot in" "$CR" 900 "login:" "root$CR" 5400 '#\s*$' "$2; printf 'CHECKS-%s\\n' DONE$CR" 300 \
 		'CHECKS-DONE' "$3$CR" 1800
 }
 
@@ -132,7 +136,7 @@ python3 "$HERE/mokmanager.py" "$W/ser.sock" "$W/serial-1.log" from-disk ||
 	{ shot mok1-fail; vm_stop live; echo "FAIL: could not enroll the key from the stick (see $W/serial-1.log, mok1-fail.png)"; exit 1; }
 echo "ok:   MokManager came up and took the key file from the stick"
 # 2. The stick again (now trusted): the live system, a MOK request, restart.
-boot_and_run m2.json "$LIB; echo STATE=\$(sb_state); sb_keys /tmp/k vmtest >/dev/null && sb_mok_request /tmp/k/db.cer 31415926 && echo REQUEST=yes" "shutdown -r now"
+boot_and_run m2.json "$LIB; echo STATE=\$(sb_state); sb_keys /tmp/k vmtest >/dev/null && sb_mok_request /tmp/k/db.cer 31415926 && echo REQUEST=yes; echo NEWKEY=\$(sb_sha256 /tmp/k/db.cer)" "shutdown -r now"
 drive serial-2.log m2.json || { shot live-fail; vm_stop live; echo "FAIL: the live system did not start after enrolling (see $W/serial-2.log)"; exit 1; }
 check "the live system started through shim, Secure Boot on" '^STATE=on' "$W/serial-2.log"
 check "MOK request written from FreeBSD (efivar)" '^REQUEST=yes' "$W/serial-2.log"
@@ -140,9 +144,13 @@ check "MOK request written from FreeBSD (efivar)" '^REQUEST=yes' "$W/serial-2.lo
 python3 "$HERE/mokmanager.py" "$W/ser.sock" "$W/serial-3.log" request 31415926 ||
 	{ shot mok3-fail; vm_stop live; echo "FAIL: could not confirm the request (see $W/serial-3.log)"; exit 1; }
 echo "ok:   MokManager took the request with the code"
-# 4. The live system again: two keys in the MOK list (the stick's and the new one).
-boot_and_run m4.json "$LIB; sb_var $SHIM-MokListRT > /tmp/mok; echo MOKKEYS=\$(sb_py esl-certs /tmp/mok | wc -l)" "shutdown -p now"
+# 4. The live system again: the stick's key and the new one are in shim's
+#    list (which also shows the certificate built into Fedora's shim).
+boot_and_run m4.json "$LIB; sb_var $SHIM-MokListRT > /tmp/mok; sb_py esl-certs /tmp/mok | sed 's/^/MOKCERT=/'" "shutdown -p now"
 drive serial-4.log m4.json || { shot end-fail; vm_stop live; echo "FAIL: the live system did not start after confirming (see $W/serial-4.log)"; exit 1; }
 sleep 30; vm_stop live
-check "both keys are in shim's MOK list" '^MOKKEYS= *2' "$W/serial-4.log"
+stick=$(bsdtar -xOf "$ISO" ENROLL_THIS_KEY_IN_MOKMANAGER.cer | sha256sum | cut -c1-64)
+new=$(tr -d '\r' < "$W/serial-2.log" | sed -n 's/^NEWKEY=\([0-9a-f]\{64\}\)$/\1/p' | tail -1)
+check "the stick's key is in shim's MOK list" "^MOKCERT=$stick\$" "$W/serial-4.log"
+check "the key requested from FreeBSD is in shim's MOK list" "^MOKCERT=${new:-none}\$" "$W/serial-4.log"
 exit "$fail"

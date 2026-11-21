@@ -24,24 +24,18 @@ intercepts TLS, and `STEPS` to repeat single steps while developing:
 doas env STEPS="configure trim image ramdisk iso" sh iso/build.sh   # after editing iso/live/
 ```
 
-`SECURE_BOOT=yes` builds an ISO that starts with UEFI Secure Boot on
-([SECUREBOOT.md](SECUREBOOT.md)): the fetch step downloads Fedora's
+The ISO starts with UEFI Secure Boot on ([SECUREBOOT.md](SECUREBOOT.md);
+`SECURE_BOOT=no` builds one with FreeBSD's loader alone): the fetch step downloads Fedora's
 Microsoft-signed shim (checked by SHA-256), the iso step puts it on the EFI
 image as `BOOTX64.EFI`, with FreeBSD's loader (with an `.sbat` section)
 signed as `grubx64.efi`, MokManager and `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`.
-The signing key is `SB_KEY` and `SB_CERT` (PEM files; `build-in-vm.sh` copies
-them into the build VM and removes them afterwards). Without them a key is
-made for the work directory, fine for testing and never for a release: every
-computer that enrolls a release key trusts whatever it signs, so keep that
-key off the repository and out of CI logs. Make one with:
-
-```sh
-openssl req -new -x509 -newkey rsa:2048 -nodes -sha256 -days 10950 \
-  -subj "/O=LunaBSD/CN=LunaBSD live media" -keyout lunabsd-sb.key -out lunabsd-sb.pem
-```
-
-The default is `SECURE_BOOT=no` until `tests/vm/run-secureboot-test.sh ISO
-mok` has passed.
+There is no key to create or guard: each build makes a key for itself,
+signs the loader and deletes the private half (also when the build fails),
+so nothing else can ever be signed with it. Every new ISO therefore asks to
+enroll its certificate once. To keep one key across releases instead (no
+new enrollment per ISO, but a secret to keep: every computer that enrolled
+it starts whatever it signs), pass `SB_KEY` and `SB_CERT` (PEM files;
+`build-in-vm.sh` copies them into the build VM and removes them afterwards).
 
 ### On Linux (or in CI)
 
@@ -171,7 +165,7 @@ QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
 python3 installer/luna-installer --demo                       # click through it (nothing is changed)
 sh tests/vm/run-live-test.sh iso/out/lunabsd-*.iso uefi        # boot the ISO in QEMU
 sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso setup # Secure Boot, Setup Mode (OVMF)
-sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso mok   # Secure Boot with shim (SECURE_BOOT=yes ISO)
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso mok   # Secure Boot with shim and MokManager (needs tesseract)
 ```
 
 `run-live-test.sh` boots the ISO in QEMU (UEFI by default, `bios` as second
