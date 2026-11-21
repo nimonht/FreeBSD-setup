@@ -1359,7 +1359,7 @@ EOF
 
 then:  sudo update-grub                               (Ubuntu, Debian, Mint)
 or:    sudo grub2-mkconfig -o /boot/grub2/grub.cfg    (Fedora, openSUSE)
-More: https://github.com/nimonht/FreeBSD-setup/blob/main/docs/DUAL-BOOT.md"
+More: https://github.com/nimonht/LunaBSD/blob/main/docs/DUAL-BOOT.md"
 fi
 if [ "$INSTALL_MODE" = alongside ] && [ "${LIMINE_LOCKED:-no}" = yes ]; then
 	_done="$_done
@@ -1371,7 +1371,7 @@ To add FreeBSD to it, start Linux and run:
 It prints \"Updated: ...limine.conf\" when it worked. If it prints nothing, the
 EFI partition is not at /boot: findmnt -t vfat shows where it is; use that
 folder instead of /boot. (Without limine-entry-tool:
-https://github.com/nimonht/FreeBSD-setup/blob/main/docs/DUAL-BOOT.md)"
+https://github.com/nimonht/LunaBSD/blob/main/docs/DUAL-BOOT.md)"
 fi
 if [ -n "$WARNINGS" ]; then
 	_done="$_done

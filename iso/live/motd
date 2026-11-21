@@ -3,5 +3,5 @@ Welcome to the LunaBSD live system.
 
   Install LunaBSD:        luna-installer   (or the "Install LunaBSD" icon)
   Text-mode installer:     doas /usr/local/share/freebsd-setup/install.sh
-  Help and known issues:   https://github.com/nimonht/FreeBSD-setup
+  Help and known issues:   https://github.com/nimonht/LunaBSD
 

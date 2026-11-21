@@ -147,7 +147,7 @@ def sbat_text(version):
     someone ever revokes this loader."""
     return ("sbat,1,SBAT Version,sbat,1,https://github.com/rhboot/shim/blob/main/SBAT.md\n"
             "freebsd.loader,1,The FreeBSD Project,loader.efi,%s,https://www.freebsd.org/\n"
-            "freebsd.loader.lunabsd,1,LunaBSD,loader.efi,%s,https://github.com/nimonht/FreeBSD-setup\n"
+            "freebsd.loader.lunabsd,1,LunaBSD,loader.efi,%s,https://github.com/nimonht/LunaBSD\n"
             % (version, version)).encode("ascii")
 
 
