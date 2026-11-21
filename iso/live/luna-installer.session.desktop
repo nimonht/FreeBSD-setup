@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=XSession
+Name=LunaBSD Installer
+Comment=The installer alone, on a basic framebuffer (no graphics driver needed)
+Exec=/usr/local/libexec/luna-installer-session

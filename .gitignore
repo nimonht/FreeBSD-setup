@@ -1,3 +1,8 @@
 tests/vm/work/
 __pycache__/
 *.pyc
+iso/work/
+iso/out/
+iso/vm/
+tests/vm/live-work*/
+tests/vm/sb-work*/

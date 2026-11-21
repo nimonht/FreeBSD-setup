@@ -1,0 +1,21 @@
+#!/rescue/sh
+#
+# /etc/rc of the LunaBSD ramdisk: init.sh has copied the live system into
+# the memory pool; switch to it (reboot -r starts init(8) again, on the
+# new root). Single-user mode stops in the ramdisk instead.
+
+# shellcheck disable=SC2123  # only /rescue exists in the ramdisk
+PATH=/rescue
+export PATH
+if [ ! -e /dev/md1 ]; then
+	echo "==> no live system in memory; starting a shell (type halt -p to stop)"
+	exec /rescue/sh
+fi
+kenv -u init_path
+kenv -u init_script
+kenv -u init_shell
+kenv -u init_chroot 2>/dev/null
+zpool export lunalive
+umount -f /cdrom 2>/dev/null
+kenv vfs.root.mountfrom=zfs:lunalive
+reboot -r

@@ -23,6 +23,37 @@ Start here:
   environment from it).
 - **Re-run** a part: `doas freebsd-setup <stage>` (`freebsd-setup --list`).
 
+## The LunaBSD USB stick
+
+- **The stick does not appear in the boot menu, or "no bootable device".**
+  Write the ISO again with Rufus in *DD image* mode or with balenaEtcher (ISO
+  mode in Rufus copies files and loses the boot code).
+- **A blue screen: "Verification failed: (0x1A) Security Violation".** Secure
+  Boot is on and this computer does not know the stick's key yet: press OK,
+  then any key, and enroll `ENROLL_THIS_KEY_IN_MOKMANAGER.cer` from the stick
+  ([SECUREBOOT.md](SECUREBOOT.md), *What you see*). Each new LunaBSD ISO has
+  its own key and asks once.
+- **"LunaBSD could not start: the USB stick or DVD was not found".** The
+  kernel did not see the stick: try another USB port (a USB 2 port, or one
+  directly on the computer instead of a hub).
+- **"...needs at least ... MB" of memory.** The live system runs from memory
+  and needs 4 GB. On a computer with less, use the text installer from
+  FreeBSD's own install media instead (README, *Without the ISO*).
+- **Black screen or a freeze where KDE Plasma should appear.** Restart, press
+  **T** in the LunaBSD boot menu and choose *basic graphics*: the graphics
+  driver is skipped and the installer starts on a simple framebuffer. The
+  installed system decides its driver again; if its desktop does not start
+  either, see [The desktop does not start](#the-desktop-does-not-start).
+- **Only the installer appears, no desktop.** On purpose: its first page
+  says why (a virtual machine, a graphics card FreeBSD has no driver for, an
+  NVIDIA card older than the driver on the stick). The installation is the
+  same. For the record: `cat /var/run/luna-live/reason`.
+- **No graphics at all.** *Troubleshooting* > *text-mode installer* runs the
+  text version of the same installer on the console.
+- **The Wi-Fi list stays empty.** The card may have no FreeBSD driver (see
+  the installer's *Your computer* page). Plug in a cable or use a phone's USB
+  tethering, then choose *Check again*.
+
 ## Installer
 
 **"doas: not found" after the first start**: the desktop setup stopped
@@ -77,10 +108,13 @@ prompt `lsdev` lists them.
 **FreeBSD stopped starting** ("Secure Boot violation", "image verification
 failed", or the firmware skips FreeBSD) after a firmware update, a reset of
 the firmware settings, or after Secure Boot was switched on for Windows 11:
-FreeBSD's boot loader is not signed for Secure Boot. Switch Secure Boot off
-again in the firmware setup (often under Boot or Security). If Windows uses
-BitLocker it will ask for its recovery key once; see
-[DUAL-BOOT.md](DUAL-BOOT.md#windows).
+the system was installed with Secure Boot off, so its boot loader is not
+signed. Start it with Secure Boot off once, run `doas secureboot enable`,
+restart and confirm the key with the code it shows; then Secure Boot can stay
+on ([SECUREBOOT.md](SECUREBOOT.md)). A blue screen asking to enroll a key at
+every start means the key was never confirmed: the same command gives a new
+code. If Windows uses BitLocker, switching Secure Boot off makes it ask for
+its recovery key once; see [DUAL-BOOT.md](DUAL-BOOT.md#windows).
 
 **Limine stops with "CHECKSUM MISMATCH FOR CONFIG FILE"** (installed with an
 older FreeBSD-setup, next to CachyOS or another Linux whose Limine checks its
@@ -272,7 +306,7 @@ and log out and in. (Mounting USB drives needs no group.)
 Fixes to FreeBSD-setup reach an installed system only through the install
 one-liner: `doas freebsd-setup` runs the copy that was installed with it. Where
 an entry below says "update FreeBSD-setup", run (as your user, in a terminal):
-`fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh -s -- hyprland caelestia finish`
+`fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/main/bootstrap.sh | sh -s -- hyprland caelestia finish`
 
 - **The lock screen refuses your password** (installed before 2026-11-18):
   the lock screen checked passwords in a way that cannot work on FreeBSD.
@@ -352,7 +386,7 @@ removes one.
 
 ## Reporting a problem
 
-Open an issue at <https://github.com/nimonht/FreeBSD-setup/issues> with: what
+Open an issue at <https://github.com/nimonht/LunaBSD/issues> with: what
 you did, what happened, `freebsd-setup --report`, and the end of
 `/var/log/freebsd-setup.log`. For a desktop problem, also run
 `sh /usr/local/share/freebsd-setup/tests/desktop-probe.sh` in a terminal inside

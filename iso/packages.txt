@@ -1,0 +1,62 @@
+# Packages on the LunaBSD live image, one per line ("#" starts a comment).
+# The live image is for trying LunaBSD and for installing it; installations
+# download their own, newest packages (stages/), so this list stays small.
+# Size check before a build: python3 iso/size.py (needs no FreeBSD).
+
+pkg
+
+# KDE Plasma (Wayland), the smallest set that is a complete desktop
+plasma6-plasma-desktop
+plasma6-plasma-workspace
+plasma6-kwin
+plasma6-systemsettings
+plasma6-powerdevil
+plasma6-plasma-pa
+plasma6-kscreen
+plasma6-kinfocenter
+plasma6-xdg-desktop-portal-kde
+konsole
+dolphin
+kate
+firefox
+
+# Login screen and the X11 fallback (installer on a basic framebuffer, for
+# graphics cards without a FreeBSD driver and virtual machines)
+sddm
+xorg-minimal
+xf86-video-scfb
+xf86-video-vesa
+xf86-input-libinput
+setxkbmap
+xsetroot
+openbox
+
+# Graphics drivers: Intel, AMD (drm-kmod picks the version for this FreeBSD),
+# all their firmware, and NVIDIA's current driver (GTX 16xx / RTX). Older
+# NVIDIA cards start the installer on the basic framebuffer instead; the
+# installed system gets the right driver branch. build.sh replaces the two
+# meta packages drm-kmod and nvidia-drm-kmod by the flavours for one DRM
+# version (drm-612-kmod and nvidia-drm-612-kmod, say).
+drm-kmod
+gpu-firmware-kmod
+nvidia-drm-kmod
+nvidia-driver
+mesa-dri
+mesa-libs
+
+# Network: all Wi-Fi firmware, the tray tool
+wifi-firmware-kmod
+networkmgr
+
+# Sound, fonts
+pipewire
+wireplumber
+pipewire-spa-oss
+noto-basic
+dejavu
+plex-ttf
+
+# The graphical installer (Python + Qt 6 QML) and its helpers
+py312-qt6-pyqt
+python3
+doas

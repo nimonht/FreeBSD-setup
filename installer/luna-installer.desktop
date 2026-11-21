@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install LunaBSD
+Comment=Install LunaBSD on this computer
+Exec=luna-installer
+Icon=lunabsd
+Terminal=false
+Categories=System;

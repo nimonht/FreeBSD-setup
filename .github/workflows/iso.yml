@@ -1,0 +1,92 @@
+name: ISO
+
+# Builds the LunaBSD live ISO in a FreeBSD virtual machine (KVM) and boots
+# it once in QEMU. Run by hand (Actions > ISO > Run workflow), or by pushing
+# a tag like v0.1: then the ISO is also published as a release. An ISO that
+# passed the boot tests gets a signed build attestation (Sigstore, no key to
+# keep): anyone can check it came from this workflow and commit with
+# `gh attestation verify ISO -R nimonht/LunaBSD`.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write          # the attestation's signing certificate
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make room on the runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Allow KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils genisoimage xz-utils ovmf python3-pil \
+            mtools libarchive-tools tesseract-ocr
+
+      - name: Build the ISO
+        env:
+          VM_MEM: "12288"
+        run: sh iso/build-in-vm.sh
+
+      - name: Boot the ISO (UEFI, as a DVD)
+        run: sh tests/vm/run-live-test.sh iso/out/*.iso uefi
+
+      - name: Boot the ISO (UEFI, as a USB stick)
+        env:
+          MEDIA: usb
+          WORK: tests/vm/live-work-usb
+        run: sh tests/vm/run-live-test.sh iso/out/*.iso uefi
+
+      - name: Secure Boot in Setup Mode (own keys enrolled; signed loader starts, unsigned refused)
+        run: sh tests/vm/run-secureboot-test.sh iso/out/*.iso setup
+
+      - name: Secure Boot with Microsoft's keys (shim, MokManager, MOK request)
+        env:
+          WORK: tests/vm/sb-work-mok
+        run: sh tests/vm/run-secureboot-test.sh iso/out/*.iso mok
+
+      # Only reached when every boot test above passed.
+      - name: Sign where the ISO came from (build attestation)
+        uses: actions/attest@v4
+        with:
+          subject-path: 'iso/out/*.iso'
+
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lunabsd-iso
+          path: |
+            iso/out/
+            tests/vm/live-work*/serial.log
+            tests/vm/live-work*/screen.png
+            tests/vm/sb-work*/*.log
+            tests/vm/sb-work*/*.png
+          compression-level: 0
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" iso/out/* --title "LunaBSD $GITHUB_REF_NAME" \
+            --notes "Write the ISO to a USB stick (Rufus in DD mode, balenaEtcher or dd) and start the computer from it. Check the download: sha256sum -c *.sha256 (catches a broken download). To check that this ISO was built by the project's own workflow, with GitHub's command-line tool: gh attestation verify lunabsd-*.iso -R nimonht/LunaBSD"

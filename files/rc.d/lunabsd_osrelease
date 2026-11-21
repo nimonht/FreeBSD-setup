@@ -1,0 +1,54 @@
+#!/bin/sh
+#
+# PROVIDE: lunabsd_osrelease
+# REQUIRE: os-release
+# BEFORE: LOGIN
+#
+# Written by FreeBSD-setup: /etc/os-release (a link to /var/run/os-release,
+# which FreeBSD writes at every start) names the distribution, so the
+# desktop's "About this System", fastfetch and the like say LunaBSD. The
+# FreeBSD version stays in it, and ID_LIKE=freebsd tells programs that this
+# is FreeBSD underneath.
+#
+# Off:  sysrc lunabsd_osrelease_enable=NO  (then FreeBSD's own file stays)
+
+. /etc/rc.subr
+
+name="lunabsd_osrelease"
+desc="Name the distribution in /var/run/os-release"
+rcvar="lunabsd_osrelease_enable"
+start_cmd="lunabsd_osrelease_start"
+stop_cmd=":"
+
+: "${lunabsd_osrelease_enable:=YES}"
+: "${lunabsd_osrelease_conf:=/usr/local/share/freebsd-setup/distro.conf}"
+
+lunabsd_osrelease_start()
+{
+	local _fv _t
+	[ -r "$lunabsd_osrelease_conf" ] || return 0
+	. "$lunabsd_osrelease_conf"
+	_fv=$(freebsd-version -u)
+	_t=$(mktemp -t os-release) || return 1
+	cat > "$_t" <<__EOF__
+NAME="$DISTRO_NAME"
+VERSION="$DISTRO_VERSION $DISTRO_CODENAME (FreeBSD $_fv)"
+VERSION_ID="$DISTRO_VERSION"
+VERSION_CODENAME="$(echo "$DISTRO_CODENAME" | tr 'A-Z' 'a-z')"
+ID=$DISTRO_ID
+ID_LIKE=freebsd
+PRETTY_NAME="$DISTRO_NAME $DISTRO_VERSION (FreeBSD $_fv)"
+LOGO=$DISTRO_ID
+ANSI_COLOR="0;33"
+CPE_NAME="cpe:/o:freebsd:freebsd:${_fv%%[^0-9.]*}"
+HOME_URL="$DISTRO_URL"
+DOCUMENTATION_URL="$DISTRO_DOCS_URL"
+BUG_REPORT_URL="$DISTRO_BUG_URL"
+FREEBSD_VERSION="$_fv"
+__EOF__
+	install -C -o root -g wheel -m 444 "$_t" /var/run/os-release
+	rm -f "$_t"
+}
+
+load_rc_config $name
+run_rc_command "$1"

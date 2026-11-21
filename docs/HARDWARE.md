@@ -7,7 +7,7 @@ buying or installing, and lists machines people have tried.
 Run the check yourself on an installed FreeBSD 15:
 
 ```sh
-fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh -s -- --report
+fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/main/bootstrap.sh | sh -s -- --report
 # or, when FreeBSD-setup is already installed:
 freebsd-setup --report
 ```

@@ -21,23 +21,31 @@
 #   --dry-run       ask everything, show the plan, write nothing
 #   --base-only     install FreeBSD only; run the desktop setup later
 #   --force         allow running from an installed system (testing)
+#   --probe         print what the graphical installer needs to know (disks,
+#                   hardware report, keyboard layouts...) as tab-separated
+#                   lines, and exit without asking or changing anything
+#
+# FBS_RESULT_FILE=FILE   write the final message (where the system starts
+#                        from, what needs attention) to FILE as well
 
 set -eu
 
 REPO_DIR=$(cd "$(dirname "$0")" && pwd)
 FBS_LIB="$REPO_DIR/lib"
+. "$REPO_DIR/distro.conf"
 . "$FBS_LIB/common.sh"
 . "$FBS_LIB/hw.sh"
 . "$FBS_LIB/ui.sh"
 . "$FBS_LIB/wizard.sh"
+. "$FBS_LIB/secureboot.sh"
 . "$FBS_LIB/defaults.conf"
 
 LOG=/tmp/freebsd-install.log
 : > "$LOG"
-UI_TITLE="FreeBSD-setup installer"
+UI_TITLE="$DISTRO_NAME installer"
 MNT=/mnt
 ESP_TMP=/tmp/fbs-esp
-CONFIG_FILE="" ASSUME_YES=no DRY_RUN=no BASE_ONLY=no FORCE=no
+CONFIG_FILE="" ASSUME_YES=no DRY_RUN=no BASE_ONLY=no FORCE=no PROBE=no
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--config) CONFIG_FILE=${2:?}; shift ;;
@@ -45,6 +53,7 @@ while [ $# -gt 0 ]; do
 	--dry-run) DRY_RUN=yes ;;
 	--base-only) BASE_ONLY=yes ;;
 	--force) FORCE=yes ;;
+	--probe) PROBE=yes ;;
 	-h|--help) awk 'NR > 2 && /^#/ { sub(/^# ?/, ""); print; next } NR > 2 { exit }' "$0"; exit 0 ;;
 	*) die "unknown option $1" ;;
 	esac
@@ -59,6 +68,8 @@ HOSTNAME_NEW="" USERNAME="" USER_FULLNAME="" USER_PASSWORD="" ROOT_PASSWORD=""
 USER_PASSWORD_HASH="" ROOT_PASSWORD_HASH=""
 TIMEZONE="" RTC_LOCAL="auto" BOOT_DEFAULT="keep" BOOT_INTEGRATION="yes"
 ENCRYPT=no ENCRYPT_PASSPHRASE=""
+# auto: keep Secure Boot working when it is on (docs/SECUREBOOT.md); off: never
+SECURE_BOOT=auto
 WIZ_LANG="" DESKTOP_LANGUAGE=""
 MIN_GB=30
 [ -n "$CONFIG_FILE" ] && . "$CONFIG_FILE"
@@ -75,11 +86,13 @@ case "$_rootfs" in
 cd9660*|*,ro,*) LIVE_MEDIA=yes ;;
 *) LIVE_MEDIA=no ;;
 esac
+# The LunaBSD live system runs from a ZFS pool in memory (iso/ramdisk).
+[ "$(mount -p | awk '$2 == "/" { print $1; exit }')" = lunalive ] && LIVE_MEDIA=yes
 [ "$LIVE_MEDIA" = yes ] || [ "$FORCE" = yes ] ||
 	die "this is meant to run from the FreeBSD USB stick's Live System, not from an installed FreeBSD. To set up the desktop on this system instead, run: setup.sh"
 kldload -n zfs 2>/dev/null || true
 ui_init
-if [ "$UI_MODE" = auto ] && [ -z "$CONFIG_FILE" ]; then
+if [ "$UI_MODE" = auto ] && [ -z "$CONFIG_FILE" ] && [ "$PROBE" != yes ]; then
 	die "unattended mode needs --config FILE with the answers"
 fi
 
@@ -143,6 +156,10 @@ disk_candidates() {
 		_media=$(echo "$_media" | sed -E 's/(p|s)[0-9]+[a-z]?$//') ;;
 	/dev/*) _media=$(echo "${_dev#/dev/}" | sed -E 's/(p|s)[0-9]+[a-z]?$//') ;;
 	esac
+	# The LunaBSD stick or DVD itself: not mounted any more once the live
+	# system runs from memory, but still the installer's own disk.
+	_stick=$(glabel status -s 2>/dev/null | awk -v l="iso9660/$ISO_LABEL" '$1 == l { print $3; exit }' |
+		sed -E 's/(p|s)[0-9]+[a-z]?$//')
 	# Disks holding mounted file systems, swap or imported pools are in use.
 	_busy=$( { mount -p | awk '{ print $1 }'; swapctl -l 2>/dev/null | awk 'NR > 1 { print $1 }'
 		zpool status -P 2>/dev/null | awk '$1 ~ /^\/dev\// { print $1 }'; } |
@@ -150,6 +167,7 @@ disk_candidates() {
 	for _d in $(sysctl -n kern.disks); do
 		case "$_d" in cd*|md*) continue ;; esac
 		[ "$_d" = "$_media" ] && continue
+		[ "$_d" = "$_stick" ] && continue
 		echo "$_busy" | grep -qx "$_d" && continue
 		echo "$_d"
 	done
@@ -327,12 +345,15 @@ ask_disk() {
 		die "$INSTALL_DISK cannot be installed on: it is the installer's own disk or is in use"
 }
 
-ask_mode() {
-	SECSIZE=$(disk_secsize "$INSTALL_DISK")
-	_scheme=$(disk_scheme "$INSTALL_DISK")
-	_contents=$(disk_contents "$INSTALL_DISK")
+# alongside_check DISK   can the system go next to what is on DISK? Sets
+# SECSIZE, FREE_START, FREE_SECTORS, FREE_GB, HAS_WINDOWS, _scheme,
+# _contents, _alongside_ok (yes/no) and _why (the reason, in words).
+alongside_check() {
+	SECSIZE=$(disk_secsize "$1")
+	_scheme=$(disk_scheme "$1")
+	_contents=$(disk_contents "$1")
 	# shellcheck disable=SC2046
-	set -- $(disk_free "$INSTALL_DISK"); FREE_START=$1 FREE_SECTORS=$2
+	set -- "$1" $(disk_free "$1"); FREE_START=$2 FREE_SECTORS=$3
 	FREE_GB=$(( FREE_SECTORS * SECSIZE / 1073741824 ))
 	HAS_WINDOWS=no
 	case "$_contents" in *Windows*) HAS_WINDOWS=yes ;; esac
@@ -341,9 +362,13 @@ ask_mode() {
 	if [ "$_contents" = empty ]; then _alongside_ok=no _why="the disk is empty"
 	elif [ "$HW_BOOT" != UEFI ]; then _alongside_ok=no _why="this computer started the installer in legacy BIOS mode; installing next to other systems needs UEFI mode"
 	elif [ "$_scheme" != GPT ]; then _alongside_ok=no _why="the disk uses the old MBR partition table; only GPT disks are supported for side-by-side installs"
-	elif [ -z "$(esp_of "$INSTALL_DISK")" ]; then _alongside_ok=no _why="there is no EFI system partition on this disk"
+	elif [ -z "$(esp_of "$1")" ]; then _alongside_ok=no _why="there is no EFI system partition on this disk"
 	elif [ "$FREE_GB" -lt "$MIN_GB" ]; then _alongside_ok=no _why="only $FREE_GB GB is unallocated; at least $MIN_GB GB is needed (shrink a partition in Windows Disk Management or with GParted first)"
 	fi
+}
+
+ask_mode() {
+	alongside_check "$INSTALL_DISK"
 
 	case "$INSTALL_MODE" in ""|erase|alongside) ;;
 	*) die "INSTALL_MODE must be erase or alongside (got '$INSTALL_MODE')" ;; esac
@@ -434,7 +459,7 @@ You type it when installing software or changing system settings." yes; then
 		ROOT_PASSWORD=$USER_PASSWORD ROOT_PASSWORD_HASH=$USER_PASSWORD_HASH
 	fi
 	TARGET_USER=$USERNAME
-	HOSTNAME_NEW=${HOSTNAME_NEW:-freebsd}
+	HOSTNAME_NEW=${HOSTNAME_NEW:-$DISTRO_ID}
 	while :; do
 		HOSTNAME_NEW=$(ui_input "Computer name" "A name for this computer on the network:" "$HOSTNAME_NEW") || exit 1
 		valid_hostname "$HOSTNAME_NEW" && break
@@ -699,11 +724,37 @@ EOF
 	wiz_summary_text
 	{ [ "$INSTALL_MODE" = alongside ] || [ -n "${OTHER_SYSTEM:-}" ]; } &&
 		printf 'Boot:        %s%s\n' "$( [ "$BOOT_DEFAULT" = freebsd ] && echo "FreeBSD starts first" || echo "current default kept")" "${BOOT_SUMMARY:-}"
+	case "$SB_PLAN" in
+	shim) echo "Secure Boot: stays on; at the first start you confirm this computer's key once, with a code shown at the end" ;;
+	own) echo "Secure Boot: the firmware is in Setup Mode: this computer's own keys are enrolled (with Microsoft's, for Windows and graphics cards); Secure Boot is then on" ;;
+	*) [ "$SB_STATE" = on ] && echo "Secure Boot: on, and cannot be kept ($SB_WHY): switch it off in the firmware settings, or the new system will not start" ;;
+	esac
 	return 0
 }
 
-# Encrypted Windows (BitLocker): with Secure Boot off, which FreeBSD needs,
-# Windows asks for its recovery key once; started from FreeBSD's menu
+# Secure Boot (docs/SECUREBOOT.md). SB_STATE: on, off, setup (Setup Mode)
+# or unsupported. SB_PLAN: shim (the new system starts through Fedora's
+# Microsoft-signed shim and a loader signed with this computer's key, which
+# the user confirms once at the first start), own (Setup Mode: this
+# computer's keys and Microsoft's are enrolled) or none. SB_WHY: why
+# Secure Boot is on but cannot be kept.
+sb_decide() {
+	SB_STATE=$(sb_state) SB_PLAN=none SB_WHY="" SB_CODE=""
+	case "$SECURE_BOOT" in
+	auto) ;;
+	off) [ "$SB_STATE" = on ] && SB_WHY="SECURE_BOOT=off in the answers"; return 0 ;;
+	*) die "SECURE_BOOT must be auto or off (got '$SECURE_BOOT')" ;;
+	esac
+	SB_PLAN=$(sb_plan "$SB_STATE")
+	[ "$SB_PLAN" = none ] && return 0
+	if ! command -v uefisign >/dev/null 2>&1 || ! sb_py guid >/dev/null 2>&1; then
+		SB_PLAN=none SB_WHY="this installer cannot sign the boot loader (python3 is missing)"
+	fi
+	return 0
+}
+
+# Encrypted Windows (BitLocker): with Secure Boot off, which FreeBSD then
+# needs, Windows asks for its recovery key once; started from FreeBSD's menu
 # (key L) it may ask every time. Say so before anything is written.
 bitlocker_note() {
 	HAS_BITLOCKER=no
@@ -711,6 +762,11 @@ bitlocker_note() {
 	_skip=""; [ "$INSTALL_MODE" = erase ] && _skip=$INSTALL_DISK
 	bitlocker_found "$_skip" || return 0
 	HAS_BITLOCKER=yes
+	# Secure Boot stays on: Windows starts as before.
+	if [ "$SB_PLAN" = shim ]; then
+		say "note: Windows is BitLocker-encrypted. Secure Boot stays on, so it starts as before; started from FreeBSD's menu (key L) it may ask for its recovery key"
+		return 0
+	fi
 	[ "$UI_MODE" = auto ] && { say "note: Windows is BitLocker-encrypted; have its recovery key ready"; return 0; }
 	ui_yesno "Windows is encrypted (BitLocker)" "Windows on this computer is encrypted with BitLocker.
 
@@ -976,6 +1032,11 @@ do_boot() {
 		else
 			boot_integrate
 		fi
+		EFI_START=EFI/freebsd/loader.efi
+		if [ "$SB_PLAN" != none ] && ! sb_boot; then
+			SB_PLAN=none
+			warn "Secure Boot could not be set up (details: /var/log/freebsd-install.log). Switch Secure Boot off in the firmware settings to start $DISTRO_NAME; later, run: doas secureboot enable"
+		fi
 		if [ "$HW_BOOT" = UEFI ]; then efi_entry; fi
 		umount "$MNT/boot/efi"
 	fi
@@ -985,6 +1046,41 @@ do_boot() {
 			run gpart bootcode -b "$MNT/boot/pmbr" -p "$MNT/boot/gptzfsboot" -i "$_bi" "$INSTALL_DISK"
 		fi
 	fi
+}
+
+# Secure Boot: this computer's keys (kept in the new system, root only), the
+# loader signed with them, and either shim with a request to add the key to
+# its list (confirmed with SB_CODE at the first start) or, in Setup Mode,
+# the keys enrolled in the firmware.
+sb_boot() {
+	_k="$MNT$SB_KEYS"
+	_log "secure boot: $SB_PLAN (firmware: $SB_STATE)"
+	sb_keys "$_k" "$HOSTNAME_NEW" >> "$LOG" 2>&1 || return 1
+	if [ "$SB_PLAN" = shim ]; then
+		mkdir -p "$MNT$SB_SHARE"
+		if sb_shim_ok "$SB_SHARE"; then
+			cp "$SB_SHARE/shimx64.efi" "$SB_SHARE/mmx64.efi" "$MNT$SB_SHARE/"
+		else
+			sb_fetch_shim "$MNT$SB_SHARE" >> "$LOG" 2>&1 || return 1
+		fi
+	fi
+	sb_sign_loader "$_k" "$MNT/boot/loader.efi" "$_k/loader.efi" >> "$LOG" 2>&1 || return 1
+	_fb=no; [ "$INSTALL_MODE" = erase ] && _fb=yes
+	sb_install_chain "$MNT/boot/efi" "$_k/loader.efi" "$_k" "$SB_PLAN" "$_fb" "$MNT$SB_SHARE" || return 1
+	sb_sha256 "$MNT/boot/loader.efi" > "$_k/loader.sha256"
+	printf '# Written by FreeBSD-setup\nMODE=%s\nFALLBACK=%s\n' "$SB_PLAN" "$_fb" > "$_k/mode"
+	if [ "$SB_PLAN" = shim ]; then
+		EFI_START=EFI/freebsd/shimx64.efi
+		sb_mok_has "$_k/db.cer" && return 0
+		SB_CODE=$(sb_code)
+		sb_mok_request "$_k/db.cer" "$SB_CODE" >> "$LOG" 2>&1 || {
+			SB_CODE=""
+			warn "could not ask shim to add this computer's key; at the first start choose 'Enroll key from disk' and the file EFI/freebsd/$SB_KEYFILE (docs/SECUREBOOT.md)"
+		}
+	else
+		sb_enroll_own "$_k" >> "$LOG" 2>&1 || return 1
+	fi
+	return 0
 }
 
 # Numbers of the firmware entries named "FreeBSD" that start the loader on
@@ -1004,7 +1100,7 @@ efi_entry() {
 	done
 	_old=$(efibootmgr | awk -F': *' '/^BootOrder/ { gsub(/ /, "", $2); print $2 }')
 	_before=$(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}/ { sub(/^[ +]*Boot/, ""); print substr($0, 1, 4) }')
-	if efibootmgr -c -a -l "$MNT/boot/efi/EFI/freebsd/loader.efi" -L FreeBSD >> "$LOG" 2>&1; then
+	if efibootmgr -c -a -l "$MNT/boot/efi/$EFI_START" -L FreeBSD >> "$LOG" 2>&1; then
 		# The new entry is the one that was not there before.
 		_new=""
 		for _b in $(efibootmgr | awk '/^[ +]*Boot[0-9A-Fa-f]{4}/ { sub(/^[ +]*Boot/, ""); print substr($0, 1, 4) }'); do
@@ -1112,16 +1208,74 @@ do_finish() {
 	step "Finishing"
 	cp "$LOG" "$MNT/var/log/freebsd-install.log" 2>/dev/null || true
 	zfs snapshot -r "$POOL@installed" 2>/dev/null || true
-	zfs unmount -a 2>/dev/null || true
+	# Only the new pool: the LunaBSD live system itself runs from ZFS.
+	zfs list -H -o name -r "$POOL" 2>/dev/null | sort -r | while read -r _ds; do
+		zfs unmount "$_ds" 2>/dev/null || true
+	done
 	zpool export "$POOL" >> "$LOG" 2>&1 || warn "could not export the pool cleanly; it is still fine to reboot"
+}
+
+# ------------------------------------------------------------------ probe ---
+
+# probe   everything the graphical installer (installer/) shows and asks
+# about, as tab-separated lines; changes nothing. Line types:
+#   distro  NAME VERSION                     hw     KEY VALUE
+#   report  OK|WARN|NO|INFO TEXT             net    yes|no
+#   lang    CODE LOCALE LABEL                layout XKB KEYMAP LABEL
+#   disk    NAME BYTES DESCRIPTION REMOVABLE(yes/no) CONTENTS EFI-SYSTEMS
+#           FREE-BYTES ALONGSIDE(yes/no) WHY-NOT HAS-WINDOWS(yes/no)
+#   boot    DISK LIMINE(none/yes/locked) SYSTEMD-BOOT REFIND GRUB WINDOWS CHAIN-NAME DEFAULT-NAME
+#   other   DISK NAME CHAINABLE(yes/no)     (erasing DISK: a system on another disk)
+#   bitlocker yes|no                         min_gb N
+#   secureboot STATE(on/off/setup/unsupported) PLAN(shim/own/none) WHY-NOT
+_pt() { printf '%s' "$1" | tr '\t\n' '  '; }
+probe() {
+	printf 'distro\t%s\t%s\n' "$DISTRO_NAME" "$DISTRO_VERSION"
+	for _k in HW_BOOT HW_VM HW_RAM_MB HW_DESKTOP HW_DESKTOP_WHY HW_GPU_PRIMARY HW_LAPTOP \
+		HW_VENDOR HW_MODEL HW_CPU HW_NVIDIA_BRANCH HW_OSREL; do
+		eval "printf 'hw\t%s\t%s\n' $_k \"\$(_pt \"\${$_k:-}\")\""
+	done
+	hw_report | sed -nE 's/^  \[ ?(OK|WARN|NO|INFO) ?\]  (.*)$/report\t\1\t\2/p'
+	printf 'min_gb\t%s\n' "$MIN_GB"
+	printf '%s\n' "$WIZ_LANGS" | awk -F'|' '{ printf "lang\t%s\t%s\t%s\n", $1, $2, $3 }'
+	printf '%s\n' "$WIZ_LAYOUTS" | awk -F'|' '{ printf "layout\t%s\t%s\t%s\n", $1, $2, $3 }'
+	_bl=no; bitlocker_found && _bl=yes
+	printf 'bitlocker\t%s\n' "$_bl"
+	sb_decide
+	printf 'secureboot\t%s\t%s\t%s\n' "$SB_STATE" "$SB_PLAN" "$(_pt "$SB_WHY")"
+	for _d in $(disk_candidates); do
+		_rem=no; disk_removable "$_d" && _rem=yes
+		alongside_check "$_d"
+		printf 'disk\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_d" "$(disk_bytes "$_d")" \
+			"$(_pt "$(disk_descr "$_d")")" "$_rem" "$(_pt "$_contents")" "$(_pt "$(disk_efi_systems "$_d")")" \
+			"$(( FREE_SECTORS * SECSIZE ))" "$_alongside_ok" "$(_pt "$_why")" "$HAS_WINDOWS"
+		if [ "$_alongside_ok" = yes ]; then
+			INSTALL_DISK=$_d
+			detect_boot
+			_lim=none
+			[ -n "$LIMINE_CONF" ] && { _lim=yes; [ "$LIMINE_LOCKED" = yes ] && _lim=locked; }
+			printf 'boot\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_d" "$_lim" "$HAS_SDBOOT" "$HAS_REFIND" \
+				"$HAS_GRUB" "$HAS_WINBOOT" "$(_pt "$CHAIN_NAME")" "$(_pt "$DEFAULT_NAME")"
+		fi
+		_o=$(efi_systems "$_d" elsewhere | head -1)
+		if [ -n "$_o" ]; then
+			_ch=no; chain_ok "$(printf '%s' "$_o" | cut -d'|' -f3)" && _ch=yes
+			printf 'other\t%s\t%s\t%s\n' "$_d" "$(_pt "$(printf '%s' "$_o" | cut -d'|' -f2)")" "$_ch"
+		fi
+	done
+	_net=no
+	fetch -q -T 10 -o /dev/null "$DIST_URL/MANIFEST" 2>/dev/null && _net=yes
+	printf 'net\t%s\n' "$_net"
 }
 
 # --------------------------------------------------------------------- main ---
 
+if [ "$PROBE" = yes ]; then probe; exit 0; fi
+
 if [ "$UI_MODE" != auto ]; then
 	_rep=$(mktemp)
 	{
-		echo "Welcome! This installs FreeBSD with a ready-to-use desktop."
+		echo "Welcome! This installs $DISTRO_NAME: FreeBSD with a ready-to-use desktop."
 		echo "First, what was found in this computer:"
 		echo
 		hw_report
@@ -1140,6 +1294,7 @@ ask_account
 ask_encrypt
 ask_region
 [ "$BASE_ONLY" = yes ] || ask_desktop
+sb_decide
 bitlocker_note
 ask_boot
 resolve_config
@@ -1157,9 +1312,30 @@ do_finish
 
 # (Built with ifs: under set -e a failing $(...) in an assignment would end
 # the script right here.)
-_done="FreeBSD is installed.
+_done="$DISTRO_NAME is installed.
 
 Remove the USB stick and restart the computer."
+if [ "$SB_PLAN" = shim ] && [ -n "$SB_CODE" ]; then
+	_done="$_done
+
+Secure Boot stays on. Once, at the first start, a blue screen says
+\"Press any key to perform MOK management\": press a key, choose
+Enroll MOK, then Continue, then Yes, type this code and press Enter:
+
+    $SB_CODE
+
+then choose Reboot. (Missed it? It comes back at the next start.)"
+elif [ "$SB_PLAN" = shim ]; then
+	_done="$_done
+
+Secure Boot stays on. This computer's key is already known to shim."
+elif [ "$SB_PLAN" = own ]; then
+	_done="$_done
+
+Secure Boot: this computer's own keys are now in the firmware, next to
+Microsoft's (so Windows and graphics cards keep working). Secure Boot is on
+from the next start, if it is enabled in the firmware settings."
+fi
 if [ "$BOOT_DEFAULT" != freebsd ] && { [ "$INSTALL_MODE" = alongside ] || [ -n "${OTHER_SYSTEM:-}" ]; }; then
 	_done="$_done
 Start FreeBSD from:${BOOT_SUMMARY:-
@@ -1183,7 +1359,7 @@ EOF
 
 then:  sudo update-grub                               (Ubuntu, Debian, Mint)
 or:    sudo grub2-mkconfig -o /boot/grub2/grub.cfg    (Fedora, openSUSE)
-More: https://github.com/nimonht/FreeBSD-setup/blob/main/docs/DUAL-BOOT.md"
+More: https://github.com/nimonht/LunaBSD/blob/main/docs/DUAL-BOOT.md"
 fi
 if [ "$INSTALL_MODE" = alongside ] && [ "${LIMINE_LOCKED:-no}" = yes ]; then
 	_done="$_done
@@ -1195,7 +1371,7 @@ To add FreeBSD to it, start Linux and run:
 It prints \"Updated: ...limine.conf\" when it worked. If it prints nothing, the
 EFI partition is not at /boot: findmnt -t vfat shows where it is; use that
 folder instead of /boot. (Without limine-entry-tool:
-https://github.com/nimonht/FreeBSD-setup/blob/main/docs/DUAL-BOOT.md)"
+https://github.com/nimonht/LunaBSD/blob/main/docs/DUAL-BOOT.md)"
 fi
 if [ -n "$WARNINGS" ]; then
 	_done="$_done
@@ -1203,6 +1379,7 @@ if [ -n "$WARNINGS" ]; then
 Things that need attention:$WARNINGS"
 fi
 PHASE=finished
+[ -n "${FBS_RESULT_FILE:-}" ] && printf '%s\n' "$_done" > "$FBS_RESULT_FILE"
 ui_msg "Done" "$_done"
 printf '%s\n' "$_done"
 if [ "$UI_MODE" != auto ] && ui_yesno "Restart" "Restart now?" yes; then shutdown -r now; fi

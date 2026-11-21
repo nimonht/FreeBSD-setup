@@ -1,12 +1,21 @@
-# FreeBSD-setup
+# LunaBSD (repository: nimonht/LunaBSD, formerly FreeBSD-setup)
 
-A guided installer (`install.sh`) and desktop setup wizard (`setup.sh`) that turn
-the **official** FreeBSD 15 install image into a ready-to-use desktop: KDE Plasma
-and/or Hyprland with the Caelestia shell. No custom ISO: everything is scripts,
-packages and small compatibility shims on top of stock FreeBSD.
+The repository was renamed; the project's internal name was not. The
+`freebsd-setup` command, `/usr/local/share/freebsd-setup`, the saved answers
+and log, and the marker `Written by FreeBSD-setup` stay as they are: installed
+systems depend on them.
+
+LunaBSD is a desktop distribution of FreeBSD 15: a live ISO (KDE Plasma from
+RAM, `iso/`), a graphical installer (`installer/`, PyQt6 + QML), and the setup
+that turns FreeBSD into a desktop (`setup.sh`, `stages/`): KDE Plasma and/or
+Hyprland with the Caelestia shell. Underneath it is stock FreeBSD: no kernel
+or base patches, only packages, scripts and small compatibility shims. The
+text installer (`install.sh`) still runs from FreeBSD's own install media
+(`bootstrap.sh`); the graphical installer runs that same `install.sh`.
 
 The goal is a friendly, preconfigured FreeBSD desktop that works out of the box
-the way Ubuntu, Fedora or CachyOS do. What does not work, and why, is in the
+the way Ubuntu, Fedora or CachyOS do ([docs/DISTRO.md](docs/DISTRO.md) is the
+roadmap). What does not work, and why, is in the
 README's comparison table and [docs/HARDWARE.md](docs/HARDWARE.md); keep both
 true when behaviour changes. Many desktop-side pieces (power profiles, Date &
 Time, lock before suspend, the Caelestia lock screen) have run in a VM over
@@ -16,11 +25,16 @@ D-Bus and SSH but not yet on a real screen.
 
 | Path | What it is |
 |---|---|
+| `distro.conf` | The distribution's name, version, FreeBSD release, live package branch, ISO label. Everything reads it; renaming happens here. |
+| `iso/` | The live ISO: `build.sh` (on FreeBSD), `build-in-vm.sh` (from Linux/CI), `packages.txt`, `size.py`, the ramdisk (`ramdisk/`), boot menu (`boot/`), live session (`live/`). See docs/BUILDING.md. |
+| `installer/` | The graphical installer: `luna_installer/backend.py` (pure Python, tested), `app.py` (Qt glue), `qml/` (pages and the design system: Qt's Basic style, every control drawn by our components; colours and fonts at the top of `Main.qml`), `luna-wifi` (Wi-Fi helper). |
+| `branding/`, `lib/branding.sh` | All artwork, drawn by `branding/make-art.py` (run it, commit the output); `lib/branding.sh` installs it (also `stages/branding.sh`). The rules: [docs/BRANDING.md](docs/BRANDING.md). |
 | `bootstrap.sh` | The one-liner entry: downloads the repo, runs `install.sh` on the live USB or `setup.sh` on an installed system. `FBS_REF=<branch>` picks a branch. |
 | `install.sh` | Guided installer (ZFS, whole disk or next to other systems, optional GELI). Ends by running `setup.sh --chroot` inside the new system. |
 | `setup.sh` | Runs the stages in `stages/` in order. `setup.sh STAGE...` runs only some. |
 | `stages/*.sh` | One concern each (drivers, desktop, kde, hyprland, caelestia, ...). Sourced, not executed. |
 | `lib/hw.sh` | Hardware detection (the `HW_*` variables) and the hardware report. |
+| `lib/secureboot.sh`, `lib/secureboot.py`, `files/bin/secureboot` | Secure Boot ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)): firmware state, this computer's keys, signing FreeBSD's loader (with an `.sbat` section), shim on the EFI partition, the MOK request, Setup Mode enrollment with Microsoft's certificates (`files/secureboot/microsoft/`). |
 | `lib/common.sh` | Helpers: `pkg_install`, `pkg_try`, `svc`, `kld_add`, `loader_set`, `sysctl_set`, `say`, `warn`. |
 | `lib/wizard.sh`, `lib/ui.sh` | Questions, and how answers resolve into `WANT_KDE`, `DISPLAY_MANAGER`, ... |
 | `files/` | Files installed onto the system: helper commands in `files/bin`, rc scripts in `files/rc.d`, configs. |
@@ -29,6 +43,16 @@ D-Bus and SSH but not yet on a real screen.
 
 ## Rules that are easy to break
 
+- **One installer backend.** The graphical installer only asks questions and
+  shows progress; `install.sh --probe` tells it the facts and
+  `install.sh --config FILE --yes` does the work. Never reimplement a disk,
+  boot or encryption decision in Python or QML; extend `--probe` instead.
+  Validation in `backend.py` mirrors `install.sh` (tests check it).
+- **The live ISO decides hardware at boot** (`iso/live/luna_live`), like the
+  installed system; nothing hardware-specific is baked into the image.
+- **The name "FreeBSD" is a trademark**: user-facing identity is
+  `$DISTRO_NAME` from `distro.conf`. FreeBSD's own technical names stay
+  (`/EFI/freebsd`, the `FreeBSD` firmware entry, `freebsd-update`).
 - **POSIX `sh` only** (FreeBSD `/bin/sh`), tabs for indentation. No bashisms;
   `local` is the one tolerated extension. CI runs ShellCheck with `-s sh`.
 - **Two targets.** `FBS_TARGET=live` is a running system; `FBS_TARGET=chroot` is a
@@ -64,14 +88,30 @@ sh tests/limine-test.sh         # never edit a checksum-protected limine.conf
 sh tests/pkg-retry-test.sh      # broken package downloads are retried
 sh tests/efiboot-test.sh        # reading efibootmgr -v (FreeBSD 15 and later layouts)
 sh tests/timedate-test.sh       # timedate1 D-Bus service for KDE's Date & Time (needs python3-gobject, dbus)
+sh tests/live-test.sh           # live USB: which graphics driver / why only the installer, per machine
+python3 tests/installer-test.py # graphical installer logic: probe parsing, checks, answers file (sourced by sh)
+python3 tests/secureboot-test.py # PE .sbat, signature lists, MOK request, authenticated variables (vs efitools, sbsigntool)
+sh tests/secureboot-sh-test.sh  # lib/secureboot.sh against a pretend firmware (keys, chain, MOK request, Setup Mode)
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python3 installer/luna-installer --screenshots /tmp/shots
+                                # every installer page renders; fails on any QML warning (pip install PyQt6)
+python3 iso/size.py             # live image size from FreeBSD's package catalogue
 shellcheck -s sh -S warning -e SC1090,SC1091,SC2034,SC2154,SC3043 \
   setup.sh install.sh bootstrap.sh lib/*.sh stages/*.sh files/bin/* \
-  caelestia/build.sh files/rc.d/* tests/*.sh tests/vm/*.sh files/shell/fbs-terminal-greeting
+  caelestia/build.sh files/rc.d/* tests/*.sh tests/vm/*.sh files/shell/fbs-terminal-greeting \
+  iso/*.sh iso/ramdisk/init.sh iso/ramdisk/rc iso/live/luna_live iso/live/luna-installer-session \
+  iso/live/rc.local installer/luna-wifi lib/live.sh
 shellcheck -s bash -S warning files/shell/bash.bashrc
 sh tests/vm/run-iso-test.sh FreeBSD-15.1-RELEASE-amd64-disc1.iso tests/install-erase-kde.conf
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso setup  # OVMF Setup Mode: enroll, signed starts, unsigned refused
+sh tests/vm/run-secureboot-test.sh iso/out/lunabsd-*.iso mok    # OVMF + Microsoft keys: shim, MokManager (read by OCR: tesseract), MOK request
 ```
 
-Everything but the last line runs on Linux, as CI does. The last one installs
+Everything but the last line runs on Linux, as CI does. The ISO:
+`sh iso/build-in-vm.sh` (Linux, QEMU; KVM makes it fast) or `doas sh iso/build.sh`
+(FreeBSD), then `sh tests/vm/run-live-test.sh iso/out/lunabsd-*.iso uefi`
+(`MEDIA=usb` for the USB-stick path), which
+boots it to the installer session (QEMU has no KMS, so never to KDE) and saves a
+screenshot. The live KDE session can only be tested on real hardware. The last one installs
 FreeBSD in QEMU through the serial console (slow: mostly package downloads); it
 proves the installer and stages finish, not that the desktop works: a plain
 QEMU guest has no KMS graphics. On an Arch-style host pass
@@ -93,11 +133,28 @@ machine records it into `tests/fixtures/NAME/`.
 To try a branch on an installed FreeBSD machine:
 
 ```sh
-fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootstrap.sh | FBS_REF=BRANCH sh -s -- STAGE...
+fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/BRANCH/bootstrap.sh | FBS_REF=BRANCH sh -s -- STAGE...
 ```
 
 ## Facts worth knowing before changing things
 
+- The live ISO boots a ramdisk that copies `luna/system.zfs` into a ZFS pool
+  `lunalive` in memory and re-roots into it (GhostBSD's method). Reading the
+  system from the stick instead does not work: `reboot -r` force-unmounts
+  everything except init's temporary copy (sys/kern/kern_shutdown.c,
+  kern_reroot), so it needs RAM of about the image size (4 GB minimum).
+  `install.sh` treats a `lunalive` root as live media and never offers the
+  disk carrying the `iso9660/$ISO_LABEL` label.
+  The ramdisk's and the start scripts' messages appear on the screen only
+  (the video console is primary), never on a serial line: tests log in on
+  the serial console and check the result (`/var/run/luna-live/`).
+- `drm-kmod` and `nvidia-drm-kmod` are separate meta packages and have
+  pointed at different DRM versions (6.12 and 5.15), which conflict. The ISO
+  build and `stages/drivers.sh` install NVIDIA's module for drm-kmod's version
+  (`nvidia-drm-612-kmod`).
+- `lunabsd_osrelease` (rc.d) rewrites `/var/run/os-release` after FreeBSD's
+  `os-release` script: `ID=lunabsd`, `ID_LIKE=freebsd`, FreeBSD's version in
+  `FREEBSD_VERSION` and `PRETTY_NAME`.
 - The installed copy of this repo lives in `/usr/local/share/freebsd-setup`;
   `freebsd-setup` is a symlink to its `setup.sh`. Saved answers:
   `/usr/local/etc/freebsd-setup.conf`. Log: `/var/log/freebsd-setup.log`.
@@ -107,7 +164,8 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
   (lib/common.sh) checks this; test with
   `DISK_SETUP=dualboot LIMINE_ENROLL=yes ... tests/install-alongside-limine.conf`.
 - KDE Plasma in FreeBSD packages is Wayland-only (6.8 on "latest", 6.7.5 on
-  "quarterly", which KDE-only installs use). The SDDM login screen
+  "quarterly", which KDE-only installs from the text installer use; the
+  graphical installer asks, "latest" by default). The SDDM login screen
   still runs on X11.
 - Hyprland + Caelestia need the `latest` package branch; KDE alone uses
   `quarterly`. Kernel modules come from the `FreeBSD-ports-kmods` repository
@@ -134,6 +192,17 @@ fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootst
     needs cgroups and cannot. ksystemstats has no lm-sensors plugin, and its
     GPU page only sees NVIDIA cards (`nvidia-smi`). Discover has no AppStream
     catalogue for FreeBSD's package repositories.
+- Secure Boot ([docs/SECUREBOOT.md](docs/SECUREBOOT.md)): Fedora's
+  Microsoft-signed shim (16.1-7, signed by the 2011 and 2023 UEFI CAs,
+  pinned by SHA-256) starts FreeBSD's `loader.efi` as `grubx64.efi`, signed
+  with the computer's own key (`/var/db/lunabsd-secureboot`) that the user
+  confirms once in MokManager; the live USB's loader is signed with a
+  one-time key per build (private half deleted after signing; `SB_KEY`/
+  `SB_CERT` to keep one, never in the repository). shim refuses a
+  second stage without an `.sbat` section. In Setup Mode the computer's keys
+  are enrolled with Microsoft's, appended, never replacing what is there.
+  FreeBSD's loader does not verify the kernel. Changing a signed loader
+  needs `secureboot refresh` (`sysup` runs it).
 - Hibernate (S4) does not exist on FreeBSD amd64 (only S4BIOS, which almost no
   machine has); never offer it. `zzz` is suspend to RAM.
 - `dmesg` needs root: `stages/security.sh` sets

@@ -1,0 +1,14 @@
+#!/bin/sh
+#
+# Written by FreeBSD-setup: the X11 session of the LunaBSD live media when
+# KDE Plasma cannot start (a virtual machine, or a graphics card FreeBSD has
+# no driver for): a light window manager and the installer, full screen.
+# Closing the installer starts it again; it has its own Restart / Power off.
+
+xsetroot -solid '#0B1020' 2>/dev/null
+setxkbmap us 2>/dev/null
+openbox --config-file /usr/local/share/freebsd-setup/iso/live/openbox-rc.xml &
+while :; do
+	/usr/local/bin/luna-installer --kiosk
+	sleep 1
+done

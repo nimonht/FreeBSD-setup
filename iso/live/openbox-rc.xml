@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Written by FreeBSD-setup: openbox for the LunaBSD installer session:
+     windows open centred, nothing else to configure. -->
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <placement><policy>Smart</policy><center>yes</center></placement>
+  <theme><name>Clearlooks</name></theme>
+  <desktops><number>1</number></desktops>
+  <keyboard/>
+  <mouse/>
+  <menu/>
+</openbox_config>

@@ -1,0 +1,106 @@
+#!/bin/sh
+#
+# luna-wifi - Wi-Fi for the LunaBSD installer (runs as root).
+#
+#   luna-wifi devices          Wi-Fi cards FreeBSD has a driver for
+#   luna-wifi scan             networks in range: SIGNAL<TAB>SECURITY<TAB>SSID
+#                               (SECURITY: open or wpa), strongest first
+#   luna-wifi connect SSID     connect; the password (if any) is read from
+#                               standard input. Exit 0 once an address is set
+#   luna-wifi status           STATE<TAB>SSID<TAB>IP of the Wi-Fi interface
+#
+# The connection is also written where install.sh takes the network settings
+# of the live system from (/tmp/bsdinstall_etc, as bsdinstall does), so the
+# installed system is online on its first start too.
+set -u
+
+CONF=/etc/wpa_supplicant.conf
+CARRY=/tmp/bsdinstall_etc
+
+die() { echo "luna-wifi: $*" >&2; exit 1; }
+
+# The first Wi-Fi interface, created (and its wpa_supplicant started) when
+# the card appeared after the system started.
+wlan_if() {
+	_w=$(ifconfig -l | tr ' ' '\n' | grep '^wlan' | head -1)
+	if [ -z "$_w" ]; then
+		_dev=$(sysctl -n net.wlan.devices 2>/dev/null | awk '{ print $1 }')
+		[ -n "$_dev" ] || return 1
+		[ -f "$CONF" ] || printf 'ctrl_interface=/var/run/wpa_supplicant\nctrl_interface_group=wheel\nupdate_config=1\n' > "$CONF"
+		sysrc "wlans_$_dev=wlan0" "ifconfig_wlan0=WPA DHCP" > /dev/null
+		service netif start wlan0 > /dev/null 2>&1 || true
+		_w=wlan0
+	fi
+	ifconfig "$_w" up 2>/dev/null
+	# wpa_supplicant must be running for wpa_cli
+	if ! wpa_cli -i "$_w" ping > /dev/null 2>&1; then
+		wpa_supplicant -B -i "$_w" -c "$CONF" -D bsd > /dev/null 2>&1 || true
+		sleep 1
+	fi
+	echo "$_w"
+}
+
+hex() { printf '%s' "$1" | od -An -v -tx1 | tr -d ' \n'; }
+
+case "${1:-}" in
+devices)
+	sysctl -n net.wlan.devices 2>/dev/null | tr ' ' '\n' | grep . || true
+	;;
+scan)
+	w=$(wlan_if) || die "no Wi-Fi card with a driver"
+	wpa_cli -i "$w" scan > /dev/null 2>&1
+	sleep 5
+	# bssid freq signal flags ssid -> one line per network name, strongest
+	wpa_cli -i "$w" scan_results 2>/dev/null | awk -F'\t' 'NR > 1 && $5 != "" {
+		sec = ($4 ~ /WPA|RSN|SAE/) ? "wpa" : (($4 ~ /WEP/) ? "wep" : "open")
+		if (!($5 in best) || $3 > best[$5]) { best[$5] = $3; s[$5] = sec }
+	} END { for (n in best) printf "%d\t%s\t%s\n", best[n], s[n], n }' | sort -rn
+	;;
+connect)
+	ssid=${2:-}
+	[ -n "$ssid" ] || die "usage: luna-wifi connect SSID < password"
+	w=$(wlan_if) || die "no Wi-Fi card with a driver"
+	IFS= read -r pass || true
+	# Remove an earlier attempt for the same network.
+	for id in $(wpa_cli -i "$w" list_networks 2>/dev/null | awk -F'\t' -v s="$ssid" 'NR > 1 && $2 == s { print $1 }'); do
+		wpa_cli -i "$w" remove_network "$id" > /dev/null
+	done
+	id=$(wpa_cli -i "$w" add_network | tail -1)
+	case "$id" in *[!0-9]*|"") die "wpa_supplicant is not answering" ;; esac
+	wpa_cli -i "$w" set_network "$id" ssid "$(hex "$ssid")" > /dev/null
+	wpa_cli -i "$w" set_network "$id" scan_ssid 1 > /dev/null
+	if [ -n "$pass" ]; then
+		# the passphrase as its hash: no quoting trouble with any character
+		psk=$(printf '%s\n' "$pass" | wpa_passphrase "$ssid" 2>/dev/null | awk -F= '$1 ~ /^[[:space:]]*psk$/ { print $2 }')
+		[ -n "$psk" ] || die "the password must be 8 to 63 characters"
+		wpa_cli -i "$w" set_network "$id" psk "$psk" > /dev/null
+	else
+		wpa_cli -i "$w" set_network "$id" key_mgmt NONE > /dev/null
+	fi
+	wpa_cli -i "$w" select_network "$id" > /dev/null
+	wpa_cli -i "$w" save_config > /dev/null
+	i=0
+	while [ $i -lt 30 ]; do
+		st=$(wpa_cli -i "$w" status 2>/dev/null | awk -F= '$1 == "wpa_state" { print $2 }')
+		[ "$st" = COMPLETED ] && break
+		sleep 1; i=$((i + 1))
+	done
+	[ "$st" = COMPLETED ] || die "could not connect (wrong password, or the network is out of range)"
+	dhclient "$w" > /dev/null 2>&1 || true
+	# carry the connection over to the installed system
+	mkdir -p "$CARRY"
+	install -m 600 "$CONF" "$CARRY/wpa_supplicant.conf"
+	_dev=$(sysctl -n "net.wlan.${w#wlan}.%parent" 2>/dev/null)
+	printf 'wlans_%s="%s"\nifconfig_%s="WPA DHCP"\n' "${_dev:-iwlwifi0}" "$w" "$w" > "$CARRY/rc.conf.net"
+	;;
+status)
+	w=$(ifconfig -l | tr ' ' '\n' | grep '^wlan' | head -1)
+	[ -n "$w" ] || { printf 'none\t\t\n'; exit 0; }
+	wpa_cli -i "$w" status 2>/dev/null | awk -F= '
+		$1 == "wpa_state" { st = $2 } $1 == "ssid" { ss = $2 } $1 == "ip_address" { ip = $2 }
+		END { printf "%s\t%s\t%s\n", (st == "" ? "DISCONNECTED" : st), ss, ip }'
+	;;
+*)
+	sed -n '3,15s/^# \{0,1\}//p' "$0"
+	exit 2 ;;
+esac

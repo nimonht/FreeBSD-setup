@@ -1,0 +1,8 @@
+{
+    "KPlugin": {
+        "Authors": [ { "Name": "LunaBSD" } ],
+        "Id": "LunaBSD",
+        "License": "BSD-2-Clause",
+        "Name": "LunaBSD Crescent"
+    }
+}

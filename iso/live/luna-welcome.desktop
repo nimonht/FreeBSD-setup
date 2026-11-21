@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to LunaBSD
+Comment=Try LunaBSD or install it
+Exec=luna-installer --welcome
+Icon=lunabsd
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
