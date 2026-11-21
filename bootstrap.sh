@@ -2,19 +2,19 @@
 #
 # bootstrap.sh - the one-line start for FreeBSD-setup:
 #
-#   fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
+#   fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/main/bootstrap.sh | sh
 #
 # On the FreeBSD 15 USB stick's "Live System" it starts the guided installer;
 # on an installed FreeBSD it starts the desktop setup wizard. Any arguments
 # are passed on:   ... | sh -s -- --dry-run
 #
 # Environment: FBS_REPO=owner/name, FBS_REF=branch/tag/commit (defaults:
-# nimonht/FreeBSD-setup, main). For a reproducible install, pin what runs:
+# nimonht/LunaBSD, main). For a reproducible install, pin what runs:
 #   FBS_REF=<tag or full commit id>     that exact version instead of "main"
 #   FBS_SHA256=<sha256 of the archive>  refuse to run anything else
 set -eu
 
-REPO="${FBS_REPO:-nimonht/FreeBSD-setup}"
+REPO="${FBS_REPO:-nimonht/LunaBSD}"
 REF="${FBS_REF:-main}"
 URL="https://github.com/$REPO/archive/$REF.tar.gz"
 DIR="/tmp/freebsd-setup"

@@ -8,7 +8,7 @@
 <policyconfig>
 
   <vendor>FreeBSD-setup (power-profiles-daemon interface)</vendor>
-  <vendor_url>https://github.com/nimonht/FreeBSD-setup</vendor_url>
+  <vendor_url>https://github.com/nimonht/LunaBSD</vendor_url>
 
   <action id="org.freedesktop.UPower.PowerProfiles.switch-profile">
     <description>Switch Power Profile</description>

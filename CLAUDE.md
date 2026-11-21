@@ -1,4 +1,9 @@
-# LunaBSD (repository: FreeBSD-setup)
+# LunaBSD (repository: nimonht/LunaBSD, formerly FreeBSD-setup)
+
+The repository was renamed; the project's internal name was not. The
+`freebsd-setup` command, `/usr/local/share/freebsd-setup`, the saved answers
+and log, and the marker `Written by FreeBSD-setup` stay as they are: installed
+systems depend on them.
 
 LunaBSD is a desktop distribution of FreeBSD 15: a live ISO (KDE Plasma from
 RAM, `iso/`), a graphical installer (`installer/`, PyQt6 + QML), and the setup
@@ -128,7 +133,7 @@ machine records it into `tests/fixtures/NAME/`.
 To try a branch on an installed FreeBSD machine:
 
 ```sh
-fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/BRANCH/bootstrap.sh | FBS_REF=BRANCH sh -s -- STAGE...
+fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/BRANCH/bootstrap.sh | FBS_REF=BRANCH sh -s -- STAGE...
 ```
 
 ## Facts worth knowing before changing things

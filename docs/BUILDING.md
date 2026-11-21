@@ -8,7 +8,7 @@ and test it. Users do not need any of this: they download the ISO.
 ### On FreeBSD 15
 
 ```sh
-git clone https://github.com/nimonht/FreeBSD-setup && cd FreeBSD-setup
+git clone https://github.com/nimonht/LunaBSD && cd LunaBSD
 doas sh iso/build.sh
 ```
 
@@ -56,6 +56,22 @@ GitHub Actions does the same: the *ISO* workflow
 the ISO as a download. Pushing a tag such as `v0.1` also publishes it as a
 release. GitHub limits a release file to 2 GiB; the ISO is about 1.5 to
 2 GB, so watch its size when adding packages.
+
+An ISO that passed the workflow's boot tests also gets a build attestation
+([`actions/attest`](https://github.com/actions/attest)): a Sigstore
+signature, made without any key to keep, saying which workflow run and
+commit produced exactly these bytes. Check one with GitHub's CLI:
+
+```sh
+gh attestation verify lunabsd-0.1-amd64.iso -R nimonht/LunaBSD
+```
+
+The `.sha256` file next to the ISO only shows that a download is not broken
+(whoever can replace the ISO can replace it too); the attestation shows who
+built it. The Secure Boot signature on the loader is a third, separate thing
+([SECUREBOOT.md](SECUREBOOT.md)). The attestation step has not run yet: it
+is set up, and the first run of the workflow on `main` will show whether it
+works.
 
 ### New FreeBSD release
 

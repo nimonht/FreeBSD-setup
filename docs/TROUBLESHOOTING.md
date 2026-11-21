@@ -306,7 +306,7 @@ and log out and in. (Mounting USB drives needs no group.)
 Fixes to FreeBSD-setup reach an installed system only through the install
 one-liner: `doas freebsd-setup` runs the copy that was installed with it. Where
 an entry below says "update FreeBSD-setup", run (as your user, in a terminal):
-`fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh -s -- hyprland caelestia finish`
+`fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/main/bootstrap.sh | sh -s -- hyprland caelestia finish`
 
 - **The lock screen refuses your password** (installed before 2026-11-18):
   the lock screen checked passwords in a way that cannot work on FreeBSD.
@@ -386,7 +386,7 @@ removes one.
 
 ## Reporting a problem
 
-Open an issue at <https://github.com/nimonht/FreeBSD-setup/issues> with: what
+Open an issue at <https://github.com/nimonht/LunaBSD/issues> with: what
 you did, what happened, `freebsd-setup --report`, and the end of
 `/var/log/freebsd-setup.log`. For a desktop problem, also run
 `sh /usr/local/share/freebsd-setup/tests/desktop-probe.sh` in a terminal inside

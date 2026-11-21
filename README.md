@@ -141,7 +141,7 @@ partitions there and never touches existing ones.
 ### 3. Write the USB stick
 
 Download `lunabsd-0.1-amd64.iso` and its `.sha256` file from the
-[Releases page](https://github.com/nimonht/FreeBSD-setup/releases) (or build
+[Releases page](https://github.com/nimonht/LunaBSD/releases) (or build
 it yourself: [docs/BUILDING.md](docs/BUILDING.md)), then write it to the
 stick. This erases the stick.
 
@@ -152,6 +152,9 @@ stick. This erases the stick.
 
 Check the download first if you can: `sha256sum -c lunabsd-0.1-amd64.iso.sha256`
 (Windows: `certutil -hashfile lunabsd-0.1-amd64.iso SHA256` and compare).
+To check that the ISO was built by this project's own build machine, and
+not changed after: `gh attestation verify lunabsd-0.1-amd64.iso -R nimonht/LunaBSD`
+(needs GitHub's [`gh`](https://cli.github.com) tool).
 
 ### 4. Start from the stick
 
@@ -223,7 +226,7 @@ password; run `kbdmap` first for a non-US keyboard), connect with
 `env BSDINSTALL_CONFIGCURRENT=yes bsdinstall netconfig`, then run:
 
 ```sh
-fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
+fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/main/bootstrap.sh | sh
 ```
 
 This is the text-mode version of the same installer, with the same result.
@@ -234,14 +237,14 @@ Run the same one-liner on an installed FreeBSD. It starts the setup wizard
 instead of the installer:
 
 ```sh
-fetch -qo- https://raw.githubusercontent.com/nimonht/FreeBSD-setup/main/bootstrap.sh | sh
+fetch -qo- https://raw.githubusercontent.com/nimonht/LunaBSD/main/bootstrap.sh | sh
 ```
 
 It asks for the root password through `doas`, `sudo` or `su`. On a fresh
 FreeBSD, `su` only works for members of the `wheel` group; if it answers
 *Sorry*, log in as `root` on a text console and run the same command there.
 To use git instead, as root: `pkg install git`, then
-`git clone https://github.com/nimonht/FreeBSD-setup && sh FreeBSD-setup/setup.sh`.
+`git clone https://github.com/nimonht/LunaBSD && sh LunaBSD/setup.sh`.
 The first time it runs, it creates a ZFS boot environment `pre-setup-<date>`:
 choosing it in the boot menu brings the system (not your home folder) back to
 how it was before. Later runs do not make a new one; run `sysup` or
